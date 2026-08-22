@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Gatekeep</string>
+    <string name="accessibility_service_description">Gatekeep monitors which app is in the foreground to enforce your screen time limits and show session timers.</string>
+    <string name="enforcement_notification_title">Gatekeep active</string>
+    <string name="enforcement_notification_text">Monitoring app usage limits</string>
+    <string name="channel_enforcement">Enforcement</string>
+    <string name="channel_warnings">Warnings</string>
+</resources>
