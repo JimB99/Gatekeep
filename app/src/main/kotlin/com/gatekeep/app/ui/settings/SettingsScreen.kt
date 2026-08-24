@@ -24,12 +24,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.admin.GatekeepDeviceAdminReceiver
@@ -46,6 +48,12 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsState()
     val context = LocalContext.current
     var pin by remember { mutableStateOf("") }
+    var quietStart by remember(settings.quietHoursStartMinute) {
+        mutableIntStateOf(settings.quietHoursStartMinute ?: 22 * 60)
+    }
+    var quietEnd by remember(settings.quietHoursEndMinute) {
+        mutableIntStateOf(settings.quietHoursEndMinute ?: 7 * 60)
+    }
 
     Scaffold(
         topBar = {
@@ -67,35 +75,67 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            SettingToggle("Session HUD enabled", settings.hudEnabled) {
-                viewModel.update { s -> s.copy(hudEnabled = it) }
-            }
-            SettingToggle("Strict mode", settings.strictMode) {
-                viewModel.update { s -> s.copy(strictMode = it) }
-            }
-            SettingToggle("Enforcement enabled", settings.enforcementEnabled) {
-                viewModel.update { s -> s.copy(enforcementEnabled = it) }
-            }
-            SettingToggle("App lock", settings.appLockEnabled) {
+            Text("App lock", style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
+            SettingToggle("Require PIN to open Gatekeep", settings.appLockEnabled) {
                 viewModel.update { s -> s.copy(appLockEnabled = it) }
             }
             OutlinedTextField(
                 value = pin,
                 onValueChange = { pin = it },
-                label = { Text("App PIN") },
+                label = { Text("App admin PIN") },
+                visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
             )
             androidx.compose.material3.Button(
                 onClick = {
                     if (pin.isNotBlank()) {
                         viewModel.update { s -> s.copy(appPasswordHash = PasswordHasher.hash(pin)) }
+                        pin = ""
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Save PIN") }
+            ) { Text("Save app PIN") }
 
+            Text("Notifications", style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
+            SettingToggle("Session timer in notification shade", settings.showSessionTimerNotification) {
+                viewModel.update { s -> s.copy(showSessionTimerNotification = it, hudEnabled = it) }
+            }
+            SettingToggle("Limit warning alerts", settings.warningAlertsEnabled) {
+                viewModel.update { s -> s.copy(warningAlertsEnabled = it) }
+            }
+            SettingToggle("Weekly report", settings.weeklyReportEnabled) {
+                viewModel.update { s -> s.copy(weeklyReportEnabled = it) }
+            }
+            OutlinedTextField(
+                value = (quietStart / 60).toString(),
+                onValueChange = { quietStart = (it.toIntOrNull()?.coerceIn(0, 23) ?: 0) * 60 + quietStart % 60 },
+                label = { Text("Quiet hours start (hour 0–23)") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = (quietEnd / 60).toString(),
+                onValueChange = { quietEnd = (it.toIntOrNull()?.coerceIn(0, 23) ?: 0) * 60 + quietEnd % 60 },
+                label = { Text("Quiet hours end (hour 0–23)") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            androidx.compose.material3.Button(
+                onClick = {
+                    viewModel.update { s ->
+                        s.copy(quietHoursStartMinute = quietStart, quietHoursEndMinute = quietEnd)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Save quiet hours") }
+
+            Text("Enforcement", style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
+            SettingToggle("Strict mode", settings.strictMode) {
+                viewModel.update { s -> s.copy(strictMode = it) }
+            }
+            SettingToggle("Enforcement enabled", settings.enforcementEnabled) {
+                viewModel.update { s -> s.copy(enforcementEnabled = it) }
+            }
             SettingToggle("Device admin (uninstall deterrent)", settings.deviceAdminEnabled) { enabled ->
-                if (enabled) enableDeviceAdmin(context) else viewModel.update { it.copy(deviceAdminEnabled = enabled) }
+                if (enabled) enableDeviceAdmin(context)
                 viewModel.update { it.copy(deviceAdminEnabled = enabled) }
             }
 
@@ -104,8 +144,11 @@ fun SettingsScreen(
             }
 
             Text(
-                "Backup/restore: export profiles from the Profiles screen (JSON). " +
-                    "Weekly report notification runs every Sunday via WorkManager.",
+                if (viewModel.lastEnforcementError() != null) {
+                    "Last error: ${viewModel.lastEnforcementError()}"
+                } else {
+                    "No recent enforcement errors"
+                },
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
             )
         }

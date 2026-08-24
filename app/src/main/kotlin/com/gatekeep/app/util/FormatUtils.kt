@@ -12,7 +12,11 @@ object PasswordHasher {
     fun verify(password: String, hash: String): Boolean = hash(password) == hash
 }
 
-fun formatDurationMs(ms: Long?): String {
+fun formatDurationMs(ms: Long?): String = formatDurationMs(ms, includeSeconds = true)
+
+fun formatDurationMinutes(ms: Long?): String = formatDurationMs(ms, includeSeconds = false)
+
+private fun formatDurationMs(ms: Long?, includeSeconds: Boolean): String {
     if (ms == null) return "∞"
     val totalSeconds = (ms / 1000).coerceAtLeast(0)
     val hours = totalSeconds / 3600
@@ -20,8 +24,8 @@ fun formatDurationMs(ms: Long?): String {
     val seconds = totalSeconds % 60
     return when {
         hours > 0 -> "${hours}h ${minutes}m"
-        minutes > 0 -> "${minutes}m ${seconds}s"
-        else -> "${seconds}s"
+        minutes > 0 -> if (includeSeconds) "${minutes}m ${seconds}s" else "${minutes}m"
+        else -> if (includeSeconds) "${seconds}s" else "0m"
     }
 }
 

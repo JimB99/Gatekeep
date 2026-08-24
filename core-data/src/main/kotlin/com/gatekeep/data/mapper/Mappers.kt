@@ -31,6 +31,11 @@ fun ProfileEntity.toDomain() = Profile(
     gradualTighteningEnabled = gradualTighteningEnabled,
     gradualTighteningTargetDailyMs = gradualTighteningTargetDailyMs,
     gradualTighteningPercentPerWeek = gradualTighteningPercentPerWeek,
+    dailyLimitMs = dailyLimitMs,
+    hourlyLimitMs = hourlyLimitMs,
+    weeklyLimitMs = weeklyLimitMs,
+    sessionLimitMs = sessionLimitMs,
+    breakDurationMs = breakDurationMs,
 )
 
 fun Profile.toEntity() = ProfileEntity(
@@ -47,6 +52,11 @@ fun Profile.toEntity() = ProfileEntity(
     gradualTighteningEnabled = gradualTighteningEnabled,
     gradualTighteningTargetDailyMs = gradualTighteningTargetDailyMs,
     gradualTighteningPercentPerWeek = gradualTighteningPercentPerWeek,
+    dailyLimitMs = dailyLimitMs,
+    hourlyLimitMs = hourlyLimitMs,
+    weeklyLimitMs = weeklyLimitMs,
+    sessionLimitMs = sessionLimitMs,
+    breakDurationMs = breakDurationMs,
 )
 
 fun MonitoredAppEntity.toDomain() = MonitoredApp(

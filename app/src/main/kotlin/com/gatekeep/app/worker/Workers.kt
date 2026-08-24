@@ -8,13 +8,15 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.gatekeep.app.enforcement.GatekeepNotificationHelper
+import com.gatekeep.app.util.UsageStatsCollector
 import com.gatekeep.data.repository.ProfileRepository
+import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
-import com.gatekeep.domain.UsageAggregator
 import com.gatekeep.domain.UsageSessionRecord
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 @HiltWorker
@@ -23,16 +25,35 @@ class UsageSyncWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val usageRepository: UsageRepository,
     private val profileRepository: ProfileRepository,
-    private val notificationHelper: GatekeepNotificationHelper,
+    private val usageStatsCollector: UsageStatsCollector,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val profile = profileRepository.observeActiveProfile().first() ?: return Result.success()
-        val sessions = usageRepository.getRecentSessions(profile.id, 500)
-        val records = sessions.map {
-            UsageSessionRecord(it.packageName, it.profileId, it.startEpochMs, it.endEpochMs)
+        val profiles = profileRepository.observeActiveProfiles().first()
+        if (profiles.isEmpty()) return Result.success()
+
+        val dayStart = usageStatsCollector.dayStartEpochMs()
+        val now = System.currentTimeMillis()
+
+        profiles.forEach { profile ->
+            val apps = profileRepository.observeMonitoredApps(profile.id).first()
+            apps.forEach { app ->
+                val usageMs = usageStatsCollector.usageMsForPackage(app.packageName, dayStart, now)
+                if (usageMs > 0) {
+                    usageRepository.recordSession(
+                        packageName = app.packageName,
+                        profileId = profile.id,
+                        startEpochMs = dayStart,
+                        endEpochMs = dayStart + usageMs,
+                    )
+                }
+            }
+            val sessions = usageRepository.getRecentSessions(profile.id, 500)
+            val records = sessions.map {
+                UsageSessionRecord(it.packageName, it.profileId, it.startEpochMs, it.endEpochMs)
+            }
+            usageRepository.aggregateAndStore(records)
         }
-        usageRepository.aggregateAndStore(records)
         return Result.success()
     }
 
@@ -55,9 +76,16 @@ class WeeklyReportWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val notificationHelper: GatekeepNotificationHelper,
+    private val settingsRepository: SettingsRepository,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        val settings = settingsRepository.settings.first()
+        if (!settings.weeklyReportEnabled) return Result.success()
+        val minuteOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY) * 60 +
+            Calendar.getInstance().get(Calendar.MINUTE)
+        if (settingsRepository.isQuietHours(minuteOfDay, settings)) return Result.success()
+
         notificationHelper.showWarning(
             "Weekly Gatekeep Report",
             "Review your screen time stats in the app.",

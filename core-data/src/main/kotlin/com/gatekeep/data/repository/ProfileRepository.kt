@@ -24,24 +24,30 @@ class ProfileRepository(
     fun observeProfiles(): Flow<List<Profile>> =
         profileDao.observeAll().map { list -> list.map { it.toDomain() } }
 
+    fun observeActiveProfiles(): Flow<List<Profile>> =
+        profileDao.observeActiveProfiles().map { list -> list.map { it.toDomain() } }
+
     fun observeActiveProfile(): Flow<Profile?> =
         profileDao.observeActive().map { it?.toDomain() }
 
     suspend fun createProfile(name: String): Long {
-        val id = profileDao.insert(ProfileEntity(name = name, isActive = false))
-        return id
+        return profileDao.insert(ProfileEntity(name = name, isActive = false))
     }
 
-    suspend fun getFirstProfileId(): Long? =
-        profileDao.observeAll().first().firstOrNull()?.id
+    suspend fun toggleProfileActive(id: Long, active: Boolean) {
+        profileDao.setProfileActive(id, active)
+    }
 
     suspend fun activateProfile(id: Long) {
-        profileDao.deactivateAll()
-        profileDao.setActive(id)
+        profileDao.setProfileActive(id, true)
     }
 
     suspend fun deleteProfile(id: Long) {
         profileDao.delete(id)
+    }
+
+    suspend fun updateProfile(profile: Profile) {
+        profileDao.insert(profile.toEntity())
     }
 
     fun observeMonitoredApps(profileId: Long): Flow<List<MonitoredApp>> =
@@ -61,6 +67,10 @@ class ProfileRepository(
 
     suspend fun removeMonitoredApp(profileId: Long, packageName: String) {
         monitoredAppDao.delete(profileId, packageName)
+    }
+
+    suspend fun updateMonitoredApp(app: MonitoredApp) {
+        addMonitoredApp(app)
     }
 
     fun observeLimits(profileId: Long): Flow<List<AppLimit>> =

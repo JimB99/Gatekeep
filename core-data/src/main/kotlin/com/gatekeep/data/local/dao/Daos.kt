@@ -21,6 +21,9 @@ interface ProfileDao {
     @Query("SELECT * FROM profiles ORDER BY sortOrder")
     fun observeAll(): Flow<List<ProfileEntity>>
 
+    @Query("SELECT * FROM profiles WHERE isActive = 1")
+    fun observeActiveProfiles(): Flow<List<ProfileEntity>>
+
     @Query("SELECT * FROM profiles WHERE isActive = 1 LIMIT 1")
     fun observeActive(): Flow<ProfileEntity?>
 
@@ -30,11 +33,8 @@ interface ProfileDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(profile: ProfileEntity): Long
 
-    @Query("UPDATE profiles SET isActive = 0")
-    suspend fun deactivateAll()
-
-    @Query("UPDATE profiles SET isActive = 1 WHERE id = :id")
-    suspend fun setActive(id: Long)
+    @Query("UPDATE profiles SET isActive = :active WHERE id = :id")
+    suspend fun setProfileActive(id: Long, active: Boolean)
 
     @Query("DELETE FROM profiles WHERE id = :id")
     suspend fun delete(id: Long)

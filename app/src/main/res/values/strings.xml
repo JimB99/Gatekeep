@@ -5,5 +5,7 @@
     <string name="enforcement_notification_title">Gatekeep active</string>
     <string name="enforcement_notification_text">Monitoring app usage limits</string>
     <string name="channel_enforcement">Enforcement</string>
+    <string name="channel_service">Gatekeep service</string>
+    <string name="channel_session_timer">Session timer</string>
     <string name="channel_warnings">Warnings</string>
 </resources>

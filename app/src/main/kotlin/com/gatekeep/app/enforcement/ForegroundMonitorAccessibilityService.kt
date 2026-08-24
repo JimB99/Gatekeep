@@ -2,6 +2,7 @@ package com.gatekeep.app.enforcement
 
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
+import com.gatekeep.app.util.EnforcementLog
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -9,34 +10,40 @@ import javax.inject.Inject
 class ForegroundMonitorAccessibilityService : AccessibilityService() {
 
     @Inject lateinit var coordinator: EnforcementCoordinator
+    @Inject lateinit var enforcementLog: EnforcementLog
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
-        when (event.eventType) {
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-            AccessibilityEvent.TYPE_WINDOWS_CHANGED,
-            -> {
-                val packageName = event.packageName?.toString() ?: return
-                if (packageName == this.packageName) return
-                coordinator.onForegroundAppChanged(packageName)
+        try {
+            when (event.eventType) {
+                AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+                AccessibilityEvent.TYPE_WINDOWS_CHANGED,
+                -> {
+                    val packageName = event.packageName?.toString() ?: return
+                    if (packageName == this.packageName) return
+                    coordinator.onForegroundAppChanged(packageName)
+                }
             }
+        } catch (e: Exception) {
+            enforcementLog.logError("Accessibility event failed", e)
         }
     }
 
     override fun onInterrupt() {}
 
-    companion object {
-        @Volatile
-        var instance: ForegroundMonitorAccessibilityService? = null
-    }
-
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        coordinator.startEnforcementService()
     }
 
     override fun onDestroy() {
         instance = null
         super.onDestroy()
+    }
+
+    companion object {
+        @Volatile
+        var instance: ForegroundMonitorAccessibilityService? = null
     }
 }

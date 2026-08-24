@@ -2,6 +2,7 @@ package com.gatekeep.domain
 
 import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.BlockReason
+import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.RuleEvaluationContext
 import com.gatekeep.domain.model.RuleResult
@@ -12,6 +13,35 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.ZoneId
 import java.time.ZonedDateTime
+
+class ProfileMergeEngineTest {
+
+    @Test
+    fun `merged limit picks strictest caps`() {
+        val merged = ProfileMergeEngine.mergedLimitForApp(
+            listOf(
+                AppLimit(1, "com.test", dailyLimitMs = 3600_000, sessionLimitMs = 900_000, enabled = true),
+                AppLimit(2, "com.test", dailyLimitMs = 1800_000, sessionLimitMs = 600_000, breakDurationMs = 300_000, enabled = true),
+            ),
+            "com.test",
+        )
+        assertEquals(1800_000, merged?.dailyLimitMs)
+        assertEquals(600_000, merged?.sessionLimitMs)
+        assertEquals(300_000, merged?.breakDurationMs)
+    }
+
+    @Test
+    fun `merged friction prefers explicit method`() {
+        val merged = ProfileMergeEngine.mergedLimitForApp(
+            listOf(
+                AppLimit(1, "com.test", dailyLimitMs = 1000, frictionMethod = FrictionMethod.math, enabled = true),
+                AppLimit(2, "com.test", dailyLimitMs = 500, frictionMethod = FrictionMethod.waitOneMin, enabled = true),
+            ),
+            "com.test",
+        )
+        assertTrue(merged?.frictionMethod == FrictionMethod.math || merged?.frictionMethod == FrictionMethod.waitOneMin)
+    }
+}
 
 class RuleEngineTest {
 
@@ -101,6 +131,20 @@ class ScheduleEvaluatorTest {
 }
 
 class SessionTrackerTest {
+
+    @Test
+    fun `session duration resets when start time is now`() {
+        val now = 1_000_000L
+        val session = SessionTracker.startSession("com.test", now)
+        val result = SessionTracker.evaluateSession(
+            AppLimit(1, "com.test", sessionLimitMs = 15 * 60_000L),
+            session,
+            now + 1000,
+        )
+        assertTrue(result is SessionTracker.SessionCheckResult.Allowed)
+        val allowed = result as SessionTracker.SessionCheckResult.Allowed
+        assertTrue(allowed.remainingSessionMs!! > 14 * 60_000L)
+    }
 
     @Test
     fun `session exceeded triggers break`() {

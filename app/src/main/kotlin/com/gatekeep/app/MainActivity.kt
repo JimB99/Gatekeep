@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
             val profiles = profileRepository.observeProfiles().first()
             if (profiles.isEmpty()) {
                 val id = profileRepository.createProfile("Default")
-                profileRepository.activateProfile(id)
+                profileRepository.toggleProfileActive(id, true)
             }
         }
 

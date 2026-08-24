@@ -19,6 +19,11 @@ data class ProfileEntity(
     val gradualTighteningEnabled: Boolean = false,
     val gradualTighteningTargetDailyMs: Long? = null,
     val gradualTighteningPercentPerWeek: Int = 5,
+    val dailyLimitMs: Long? = null,
+    val hourlyLimitMs: Long? = null,
+    val weeklyLimitMs: Long? = null,
+    val sessionLimitMs: Long? = null,
+    val breakDurationMs: Long? = null,
 )
 
 @Entity(

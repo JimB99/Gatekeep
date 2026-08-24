@@ -1,7 +1,5 @@
 package com.gatekeep.app.ui.apps
 
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,12 +11,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -32,46 +29,34 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.gatekeep.app.ui.components.AppIcon
 import com.gatekeep.app.ui.viewmodel.AppPickerViewModel
-import com.gatekeep.app.ui.viewmodel.LimitEditorViewModel
-import com.gatekeep.app.util.minutesToMs
-import com.gatekeep.domain.AppCategories
-import com.gatekeep.domain.model.AppCategory
-import com.gatekeep.domain.model.AppLimit
-import com.gatekeep.domain.model.MonitoredApp
-
-data class InstalledApp(val packageName: String, val label: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppPickerScreen(
     profileId: Long,
     onBack: () -> Unit,
-    onEditLimit: (String) -> Unit,
     viewModel: AppPickerViewModel = hiltViewModel(),
 ) {
-    val context = LocalContext.current
-    val monitored by viewModel.monitoredApps(profileId).collectAsState()
+    val installedApps by viewModel.installedApps.collectAsState()
+    val monitored by viewModel.monitoredApps.collectAsState()
+    val scheduleAllowed by viewModel.scheduleAllowedNow.collectAsState()
     var search by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf<AppCategory?>(null) }
-    var installedApps by remember { mutableStateOf<List<InstalledApp>>(emptyList()) }
 
-    LaunchedEffect(Unit) {
-        val pm = context.packageManager
-        installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-            .filter { it.flags and ApplicationInfo.FLAG_SYSTEM == 0 || it.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0 }
-            .map { InstalledApp(it.packageName, pm.getApplicationLabel(it).toString()) }
-            .sortedBy { it.label }
+    LaunchedEffect(profileId) {
+        viewModel.bindProfile(profileId)
     }
 
     val monitoredSet = monitored.map { it.packageName }.toSet()
     val filtered = installedApps.filter { app ->
-        (search.isBlank() || app.label.contains(search, true) || app.packageName.contains(search, true)) &&
-            (selectedCategory == null || AppCategories.categoryForPackage(app.packageName) == selectedCategory)
+        search.isBlank() || app.label.contains(search, true) || app.packageName.contains(search, true)
     }
+    val selectedApps = filtered.filter { it.packageName in monitoredSet }
+    val otherApps = filtered.filter { it.packageName !in monitoredSet }
 
     Scaffold(
         topBar = {
@@ -90,48 +75,35 @@ fun AppPickerScreen(
                 value = search,
                 onValueChange = { search = it },
                 label = { Text("Search") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
-            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                FilterChip(selected = selectedCategory == null, onClick = { selectedCategory = null }, label = { Text("All") })
-                AppCategory.entries.filter { it != AppCategory.other }.forEach { cat ->
-                    FilterChip(
-                        selected = selectedCategory == cat,
-                        onClick = { selectedCategory = if (selectedCategory == cat) null else cat },
-                        label = { Text(cat.name) },
-                    )
+            LazyColumn(
+                modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
+            ) {
+                if (selectedApps.isNotEmpty()) {
+                    item { Text("Selected", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 8.dp)) }
+                    items(selectedApps, key = { "sel-${it.packageName}" }) { app ->
+                        AppPickerRow(
+                            app = app,
+                            checked = true,
+                            scheduleAllowed = scheduleAllowed[app.packageName] != false,
+                            onToggle = { checked ->
+                                viewModel.toggleApp(profileId, app, checked)
+                            },
+                        )
+                    }
                 }
-            }
-            LazyColumn(modifier = Modifier.padding(horizontal = 16.dp)) {
-                items(filtered) { app ->
-                    val isMonitored = app.packageName in monitoredSet
-                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(
-                                checked = isMonitored,
-                                onCheckedChange = { checked ->
-                                    if (checked) {
-                                        viewModel.addApp(
-                                            MonitoredApp(
-                                                profileId = profileId,
-                                                packageName = app.packageName,
-                                                label = app.label,
-                                                category = AppCategories.categoryForPackage(app.packageName),
-                                            ),
-                                        )
-                                    } else {
-                                        viewModel.removeApp(profileId, app.packageName)
-                                    }
-                                },
-                            )
-                            Column(modifier = Modifier.weight(1f).clickable { if (isMonitored) onEditLimit(app.packageName) }) {
-                                Text(app.label)
-                                Text(app.packageName, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
-                            }
-                        }
+                if (otherApps.isNotEmpty()) {
+                    item { Text("All apps", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 8.dp)) }
+                    items(otherApps, key = { "all-${it.packageName}" }) { app ->
+                        AppPickerRow(
+                            app = app,
+                            checked = false,
+                            scheduleAllowed = scheduleAllowed[app.packageName] != false,
+                            onToggle = { checked ->
+                                viewModel.toggleApp(profileId, app, checked)
+                            },
+                        )
                     }
                 }
             }
@@ -139,84 +111,31 @@ fun AppPickerScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppLimitEditorScreen(
-    profileId: Long,
-    packageName: String,
-    onBack: () -> Unit,
-    viewModel: LimitEditorViewModel = hiltViewModel(),
+private fun AppPickerRow(
+    app: com.gatekeep.app.data.InstalledAppEntry,
+    checked: Boolean,
+    scheduleAllowed: Boolean,
+    onToggle: (Boolean) -> Unit,
 ) {
-    var dailyMin by remember { mutableStateOf("60") }
-    var sessionMin by remember { mutableStateOf("15") }
-    var breakMin by remember { mutableStateOf("5") }
-    var hourlyMin by remember { mutableStateOf("") }
-    var weeklyHours by remember { mutableStateOf("") }
-    var enabled by remember { mutableStateOf(true) }
-    var isEssential by remember { mutableStateOf(false) }
-
-    LaunchedEffect(profileId, packageName) {
-        val existing = viewModel.getLimit(profileId, packageName)
-        if (existing != null) {
-            dailyMin = ((existing.dailyLimitMs ?: 0) / 60_000).toString()
-            sessionMin = ((existing.sessionLimitMs ?: 0) / 60_000).toString()
-            breakMin = ((existing.breakDurationMs ?: 0) / 60_000).toString()
-            hourlyMin = existing.hourlyLimitMs?.let { (it / 60_000).toString() } ?: ""
-            weeklyHours = existing.weeklyLimitMs?.let { (it / 3_600_000).toString() } ?: ""
-            enabled = existing.enabled
+    val contentColor = if (scheduleAllowed) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle(!checked) }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Checkbox(checked = checked, onCheckedChange = onToggle)
+        AppIcon(app.packageName, modifier = Modifier.padding(0.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(app.label, color = contentColor)
+            Text(
+                if (scheduleAllowed) app.packageName else "Not available right now",
+                style = MaterialTheme.typography.bodySmall,
+                color = contentColor,
+            )
         }
     }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Edit limits") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(packageName)
-            LimitField("Daily limit (minutes)", dailyMin) { dailyMin = it }
-            LimitField("Session limit (minutes)", sessionMin) { sessionMin = it }
-            LimitField("Break duration (minutes)", breakMin) { breakMin = it }
-            LimitField("Hourly limit (minutes, optional)", hourlyMin) { hourlyMin = it }
-            LimitField("Weekly limit (hours, optional)", weeklyHours) { weeklyHours = it }
-            androidx.compose.material3.Switch(
-                checked = isEssential,
-                onCheckedChange = { isEssential = it },
-            )
-            Text("Whitelist as essential (always allowed)")
-            androidx.compose.material3.Button(
-                onClick = {
-                    viewModel.saveLimit(
-                        AppLimit(
-                            profileId = profileId,
-                            packageName = packageName,
-                            dailyLimitMs = dailyMin.toLongOrNull()?.let { minutesToMs(it.toInt()) },
-                            sessionLimitMs = sessionMin.toLongOrNull()?.let { minutesToMs(it.toInt()) },
-                            breakDurationMs = breakMin.toLongOrNull()?.let { minutesToMs(it.toInt()) },
-                            hourlyLimitMs = hourlyMin.toLongOrNull()?.let { minutesToMs(it.toInt()) },
-                            weeklyLimitMs = weeklyHours.toLongOrNull()?.let { it * 3_600_000L },
-                            enabled = enabled,
-                        ),
-                    )
-                    onBack()
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Save") }
-        }
-    }
-}
-
-@Composable
-private fun LimitField(label: String, value: String, onChange: (String) -> Unit) {
-    OutlinedTextField(value = value, onValueChange = onChange, label = { Text(label) }, modifier = Modifier.fillMaxWidth())
 }

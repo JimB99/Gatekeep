@@ -3,6 +3,7 @@ package com.gatekeep.app.di
 import android.content.Context
 import androidx.room.Room
 import com.gatekeep.data.local.GatekeepDatabase
+import com.gatekeep.app.util.EnforcementLog
 import com.gatekeep.app.util.UsageStatsCollector
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
@@ -55,4 +56,9 @@ object AppModule {
     @Singleton
     fun provideUsageStatsCollector(@ApplicationContext context: Context): UsageStatsCollector =
         UsageStatsCollector(context)
+
+    @Provides
+    @Singleton
+    fun provideEnforcementLog(@ApplicationContext context: Context): EnforcementLog =
+        EnforcementLog(context)
 }

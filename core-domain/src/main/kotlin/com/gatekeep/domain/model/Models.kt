@@ -11,6 +11,7 @@ enum class PauseType {
 
 enum class FrictionMethod {
     math,
+    waitOneMin,
     holdButton,
     typePhrase,
     password,
@@ -51,7 +52,25 @@ data class Profile(
     val gradualTighteningEnabled: Boolean = false,
     val gradualTighteningTargetDailyMs: Long? = null,
     val gradualTighteningPercentPerWeek: Int = 5,
-)
+    val dailyLimitMs: Long? = null,
+    val hourlyLimitMs: Long? = null,
+    val weeklyLimitMs: Long? = null,
+    val sessionLimitMs: Long? = null,
+    val breakDurationMs: Long? = null,
+) {
+    fun toAppLimit(packageName: String): AppLimit = AppLimit(
+        profileId = id,
+        packageName = packageName,
+        dailyLimitMs = dailyLimitMs,
+        hourlyLimitMs = hourlyLimitMs,
+        weeklyLimitMs = weeklyLimitMs,
+        sessionLimitMs = sessionLimitMs,
+        breakDurationMs = breakDurationMs,
+        enabled = true,
+        frictionMethod = defaultFrictionMethod,
+        frictionDifficulty = defaultFrictionDifficulty,
+    )
+}
 
 data class MonitoredApp(
     val profileId: Long,

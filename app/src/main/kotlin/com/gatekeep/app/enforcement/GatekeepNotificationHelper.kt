@@ -29,43 +29,77 @@ class GatekeepNotificationHelper @Inject constructor(
     private fun createChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             notificationManager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ENFORCEMENT, context.getString(R.string.channel_enforcement), NotificationManager.IMPORTANCE_LOW),
+                NotificationChannel(
+                    CHANNEL_SERVICE,
+                    context.getString(R.string.channel_service),
+                    NotificationManager.IMPORTANCE_MIN,
+                ).apply { setShowBadge(false) },
             )
             notificationManager.createNotificationChannel(
-                NotificationChannel(CHANNEL_WARNINGS, context.getString(R.string.channel_warnings), NotificationManager.IMPORTANCE_DEFAULT),
+                NotificationChannel(
+                    CHANNEL_SESSION_TIMER,
+                    context.getString(R.string.channel_session_timer),
+                    NotificationManager.IMPORTANCE_LOW,
+                ),
+            )
+            notificationManager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_WARNINGS,
+                    context.getString(R.string.channel_warnings),
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ),
             )
         }
     }
 
-    fun buildEnforcementNotification(): Notification {
+    fun buildServiceNotification(): Notification {
         val intent = Intent(context, MainActivity::class.java)
         val pending = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
-        return NotificationCompat.Builder(context, CHANNEL_ENFORCEMENT)
+        return NotificationCompat.Builder(context, CHANNEL_SERVICE)
             .setContentTitle(context.getString(R.string.enforcement_notification_title))
             .setContentText(context.getString(R.string.enforcement_notification_text))
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentIntent(pending)
             .setOngoing(true)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
     }
 
-    fun updateCountdown(appLabel: String, remainingDailyMs: Long?, remainingSessionMs: Long?) {
-        val text = buildString {
-            append(appLabel)
-            append(" — ")
-            append("Daily: ${formatDurationMs(remainingDailyMs)}")
-            if (remainingSessionMs != null) {
-                append(" | Session: ${formatDurationMs(remainingSessionMs)}")
+    fun showCountdown(appLabel: String, dailyDeadlineMs: Long?, sessionDeadlineMs: Long?) {
+        val intent = Intent(context, MainActivity::class.java)
+        val pending = PendingIntent.getActivity(context, 1, intent, PendingIntent.FLAG_IMMUTABLE)
+        val now = System.currentTimeMillis()
+        val primaryDeadline = sessionDeadlineMs ?: dailyDeadlineMs ?: return
+        val builder = NotificationCompat.Builder(context, CHANNEL_SESSION_TIMER)
+            .setContentTitle("$appLabel — session timer")
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentIntent(pending)
+            .setOngoing(false)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setUsesChronometer(true)
+            .setChronometerCountDown(true)
+            .setWhen(primaryDeadline)
+            .setShowWhen(true)
+
+        val subtext = buildString {
+            dailyDeadlineMs?.let {
+                append("Daily: ${formatDurationMs(it - now)}")
+            }
+            sessionDeadlineMs?.let {
+                if (isNotEmpty()) append(" · ")
+                append("Session: ${formatDurationMs(it - now)}")
             }
         }
-        val notification = NotificationCompat.Builder(context, CHANNEL_ENFORCEMENT)
-            .setContentTitle(context.getString(R.string.enforcement_notification_title))
-            .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .build()
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        if (subtext.isNotEmpty()) {
+            builder.setContentText(subtext)
+        }
+        notificationManager.notify(COUNTDOWN_NOTIFICATION_ID, builder.build())
+    }
+
+    fun hideCountdown() {
+        notificationManager.cancel(COUNTDOWN_NOTIFICATION_ID)
     }
 
     fun showWarning(title: String, text: String) {
@@ -78,9 +112,14 @@ class GatekeepNotificationHelper @Inject constructor(
     }
 
     companion object {
-        const val CHANNEL_ENFORCEMENT = "enforcement"
+        const val CHANNEL_SERVICE = "gatekeep_service"
+        const val CHANNEL_SESSION_TIMER = "session_timer"
         const val CHANNEL_WARNINGS = "warnings"
-        const val NOTIFICATION_ID = 1001
+        const val SERVICE_NOTIFICATION_ID = 1001
+        const val COUNTDOWN_NOTIFICATION_ID = 1003
         const val WARNING_ID = 1002
+
+        @Deprecated("Use SERVICE_NOTIFICATION_ID", ReplaceWith("SERVICE_NOTIFICATION_ID"))
+        const val NOTIFICATION_ID = SERVICE_NOTIFICATION_ID
     }
 }

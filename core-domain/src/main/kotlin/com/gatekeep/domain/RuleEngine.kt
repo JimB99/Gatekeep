@@ -49,7 +49,7 @@ object RuleEngine {
                 packageName = context.packageName,
                 profileId = context.profile.id,
                 nowEpochMs = context.nowEpochMs,
-            )
+            ) && context.scheduleWindows.isNotEmpty()
         ) {
             return RuleResult.Blocked(
                 reason = BlockReason.outsideSchedule,
