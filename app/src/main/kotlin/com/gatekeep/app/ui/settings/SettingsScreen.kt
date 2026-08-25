@@ -16,7 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -31,10 +31,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.gatekeep.app.BuildConfig
 import com.gatekeep.app.admin.GatekeepDeviceAdminReceiver
+import com.gatekeep.app.ui.components.PinTextField
+import com.gatekeep.app.ui.components.TimeOfDayPicker
 import com.gatekeep.app.ui.viewmodel.SettingsViewModel
 import com.gatekeep.app.util.PasswordHasher
 
@@ -75,49 +77,61 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("App lock", style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
-            SettingToggle("Require PIN to open Gatekeep", settings.appLockEnabled) {
-                viewModel.update { s -> s.copy(appLockEnabled = it) }
-            }
-            OutlinedTextField(
+            Text("App lock", style = MaterialTheme.typography.titleSmall)
+            SettingToggleWithHelp(
+                label = "Require PIN to open Gatekeep",
+                help = "Locks the app when you leave Gatekeep or reopen it.",
+                checked = settings.appLockEnabled,
+            ) { viewModel.update { s -> s.copy(appLockEnabled = it) } }
+            PinTextField(
                 value = pin,
                 onValueChange = { pin = it },
-                label = { Text("App admin PIN") },
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(),
+                label = "App PIN",
             )
             androidx.compose.material3.Button(
                 onClick = {
                     if (pin.isNotBlank()) {
-                        viewModel.update { s -> s.copy(appPasswordHash = PasswordHasher.hash(pin)) }
+                        viewModel.update { s ->
+                            s.copy(
+                                appPasswordHash = PasswordHasher.hash(pin),
+                                appLockEnabled = true,
+                            )
+                        }
                         pin = ""
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Save app PIN") }
 
-            Text("Notifications", style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
-            SettingToggle("Session timer in notification shade", settings.showSessionTimerNotification) {
+            Text("Notifications", style = MaterialTheme.typography.titleSmall)
+            SettingToggleWithHelp(
+                label = "Session timer",
+                help = "Countdown while a monitored app is open. You can swipe this away.",
+                checked = settings.showSessionTimerNotification,
+            ) {
                 viewModel.update { s -> s.copy(showSessionTimerNotification = it, hudEnabled = it) }
             }
-            SettingToggle("Limit warning alerts", settings.warningAlertsEnabled) {
+            SettingToggleWithHelp(
+                label = "Limit warnings",
+                help = "Alert when approaching daily or session limits.",
+                checked = settings.warningAlertsEnabled,
+            ) {
                 viewModel.update { s -> s.copy(warningAlertsEnabled = it) }
             }
-            SettingToggle("Weekly report", settings.weeklyReportEnabled) {
+            SettingToggleWithHelp(
+                label = "Weekly report",
+                help = "Summary notification (respects quiet hours).",
+                checked = settings.weeklyReportEnabled,
+            ) {
                 viewModel.update { s -> s.copy(weeklyReportEnabled = it) }
             }
-            OutlinedTextField(
-                value = (quietStart / 60).toString(),
-                onValueChange = { quietStart = (it.toIntOrNull()?.coerceIn(0, 23) ?: 0) * 60 + quietStart % 60 },
-                label = { Text("Quiet hours start (hour 0–23)") },
-                modifier = Modifier.fillMaxWidth(),
+            Text("Quiet hours", style = MaterialTheme.typography.labelMedium)
+            Text(
+                "No notifications during the selected times.",
+                style = MaterialTheme.typography.bodySmall,
             )
-            OutlinedTextField(
-                value = (quietEnd / 60).toString(),
-                onValueChange = { quietEnd = (it.toIntOrNull()?.coerceIn(0, 23) ?: 0) * 60 + quietEnd % 60 },
-                label = { Text("Quiet hours end (hour 0–23)") },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            TimeOfDayPicker("Quiet hours start", quietStart, onTimeChange = { quietStart = it })
+            TimeOfDayPicker("Quiet hours end", quietEnd, onTimeChange = { quietEnd = it })
             androidx.compose.material3.Button(
                 onClick = {
                     viewModel.update { s ->
@@ -127,14 +141,28 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Save quiet hours") }
 
-            Text("Enforcement", style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
-            SettingToggle("Strict mode", settings.strictMode) {
-                viewModel.update { s -> s.copy(strictMode = it) }
-            }
-            SettingToggle("Enforcement enabled", settings.enforcementEnabled) {
+            Text("Enforcement", style = MaterialTheme.typography.titleSmall)
+            SettingToggleWithHelp(
+                label = "Enforcement enabled",
+                help = "Turn off all blocking and timers without uninstalling Gatekeep.",
+                checked = settings.enforcementEnabled,
+            ) {
                 viewModel.update { s -> s.copy(enforcementEnabled = it) }
             }
-            SettingToggle("Device admin (uninstall deterrent)", settings.deviceAdminEnabled) { enabled ->
+            SettingToggleWithHelp(
+                label = "Strict mode",
+                help = "Requires app PIN for profile changes, disables emergency bypass, and prompts for device admin.",
+                checked = settings.strictMode,
+            ) { enabled ->
+                if (enabled && !settings.deviceAdminEnabled) {
+                    enableDeviceAdmin(context)
+                }
+                viewModel.update { s -> s.copy(strictMode = enabled) }
+            }
+            SettingToggle(
+                label = "Device admin (uninstall deterrent)",
+                checked = settings.deviceAdminEnabled,
+            ) { enabled ->
                 if (enabled) enableDeviceAdmin(context)
                 viewModel.update { it.copy(deviceAdminEnabled = enabled) }
             }
@@ -149,7 +177,13 @@ fun SettingsScreen(
                 } else {
                     "No recent enforcement errors"
                 },
-                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall,
+            )
+
+            Text(
+                "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -162,8 +196,21 @@ private fun SettingToggle(label: String, checked: Boolean, onCheckedChange: (Boo
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label)
+        Text(label, modifier = Modifier.weight(1f).padding(end = 8.dp))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun SettingToggleWithHelp(
+    label: String,
+    help: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SettingToggle(label = label, checked = checked, onCheckedChange = onCheckedChange)
+        Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

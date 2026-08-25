@@ -57,6 +57,7 @@ data class Profile(
     val weeklyLimitMs: Long? = null,
     val sessionLimitMs: Long? = null,
     val breakDurationMs: Long? = null,
+    val waitDurationSeconds: Int = 60,
 ) {
     fun toAppLimit(packageName: String): AppLimit = AppLimit(
         profileId = id,

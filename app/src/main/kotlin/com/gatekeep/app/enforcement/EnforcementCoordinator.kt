@@ -67,6 +67,14 @@ class EnforcementCoordinator @Inject constructor(
     private var blockedPackage: String? = null
     private var monitoredPackagesCache: Set<String> = emptySet()
     private var countdownRunnable: Runnable? = null
+    private var lastMonitoredForegroundPackage: String? = null
+    private var lastMonitoredForegroundAtMs: Long = 0
+    private var sessionDeadlineMs: Long? = null
+    private var dailyDeadlineMs: Long? = null
+    private var countdownDailyLimitMs: Long? = null
+    private var countdownUsedTodayMs: Long? = null
+    private var countdownAppLabel: String? = null
+    private var countdownPackageName: String? = null
 
     private val ignoredForegroundPackages = setOf(
         "com.android.systemui",
@@ -78,8 +86,18 @@ class EnforcementCoordinator @Inject constructor(
     fun onForegroundAppChanged(packageName: String) {
         if (packageName == currentForegroundPackage) return
         if (packageName == context.packageName) return
+
+        if (packageName in ignoredForegroundPackages) {
+            if (lastMonitoredForegroundPackage != null &&
+                System.currentTimeMillis() - lastMonitoredForegroundAtMs < 3_000
+            ) {
+                return
+            }
+            if (isBlockingActive) return
+            return
+        }
+
         if (isBlockingActive) {
-            if (packageName in ignoredForegroundPackages) return
             if (blockedPackage != null && packageName != blockedPackage && packageName !in monitoredPackagesCache) {
                 return
             }
@@ -144,9 +162,33 @@ class EnforcementCoordinator @Inject constructor(
         blockOverlay.clearFrictionState()
     }
 
+    fun onAccessibilityConnected() {
+        stopEnforcementService()
+    }
+
+    fun onAccessibilityDisconnected() {
+        scope.launch {
+            val settings = settingsRepository.settings.first()
+            if (settings.enforcementEnabled) {
+                startEnforcementService()
+            }
+        }
+    }
+
     fun startEnforcementService() {
+        if (ForegroundMonitorAccessibilityService.instance != null) {
+            stopEnforcementService()
+            return
+        }
         val intent = Intent(context, EnforcementForegroundService::class.java)
         context.startForegroundService(intent)
+    }
+
+    fun stopEnforcementService() {
+        val intent = Intent(context, EnforcementForegroundService::class.java).apply {
+            action = EnforcementForegroundService.ACTION_STOP
+        }
+        context.startService(intent)
     }
 
     fun pollFallbackForeground() {
@@ -157,6 +199,12 @@ class EnforcementCoordinator @Inject constructor(
     fun stopCountdownTicker() {
         countdownRunnable?.let { mainHandler.removeCallbacks(it) }
         countdownRunnable = null
+        sessionDeadlineMs = null
+        dailyDeadlineMs = null
+        countdownDailyLimitMs = null
+        countdownUsedTodayMs = null
+        countdownAppLabel = null
+        countdownPackageName = null
         notificationHelper.hideCountdown()
     }
 
@@ -222,6 +270,9 @@ class EnforcementCoordinator @Inject constructor(
             mainHandler.post { blockOverlay.hide() }
             return
         }
+
+        lastMonitoredForegroundPackage = packageName
+        lastMonitoredForegroundAtMs = now
 
         if (isEssential) {
             stopCountdownTicker()
@@ -303,7 +354,19 @@ class EnforcementCoordinator @Inject constructor(
                 blockedPackage = null
                 mainHandler.post { blockOverlay.hide() }
                 if (settings.showSessionTimerNotification) {
-                    startCountdownTicker(appLabel, packageName, result.remainingDailyMs, result.remainingSessionMs)
+                    val dailyLimit = mergedLimit?.dailyLimitMs
+                    val remainingDaily = result.remainingDailyMs
+                    val usedToday = if (dailyLimit != null && remainingDaily != null) {
+                        (dailyLimit - remainingDaily).coerceAtLeast(0)
+                    } else null
+                    startCountdownTicker(
+                        appLabel = appLabel,
+                        packageName = packageName,
+                        remainingDailyMs = result.remainingDailyMs,
+                        remainingSessionMs = result.remainingSessionMs,
+                        dailyLimitMs = dailyLimit,
+                        usedTodayMs = usedToday,
+                    )
                 } else {
                     stopCountdownTicker()
                 }
@@ -339,25 +402,54 @@ class EnforcementCoordinator @Inject constructor(
         packageName: String,
         remainingDailyMs: Long?,
         remainingSessionMs: Long?,
+        dailyLimitMs: Long?,
+        usedTodayMs: Long?,
     ) {
         countdownRunnable?.let { mainHandler.removeCallbacks(it) }
         val now = System.currentTimeMillis()
-        val sessionDeadline = remainingSessionMs?.let { now + it }
-        val dailyDeadline = remainingDailyMs?.let { now + it }
-        notificationHelper.showCountdown(appLabel, dailyDeadline, sessionDeadline)
+        val newSessionDeadline = remainingSessionMs?.let { now + it }
+        val newDailyDeadline = remainingDailyMs?.let { now + it }
+
+        countdownAppLabel = appLabel
+        countdownPackageName = packageName
+        countdownDailyLimitMs = dailyLimitMs
+        countdownUsedTodayMs = usedTodayMs
+
+        if (newSessionDeadline != sessionDeadlineMs ||
+            newDailyDeadline != dailyDeadlineMs ||
+            dailyLimitMs != countdownDailyLimitMs ||
+            usedTodayMs != countdownUsedTodayMs
+        ) {
+            sessionDeadlineMs = newSessionDeadline
+            dailyDeadlineMs = newDailyDeadline
+            notificationHelper.showCountdown(
+                appLabel = appLabel,
+                sessionDeadlineMs = sessionDeadlineMs,
+                dailyDeadlineMs = dailyDeadlineMs,
+                dailyLimitMs = dailyLimitMs,
+                usedTodayMs = usedTodayMs,
+            )
+        }
 
         countdownRunnable = object : Runnable {
             override fun run() {
-                scope.launch {
-                    val settings = settingsRepository.settings.first()
-                    if (!settings.showSessionTimerNotification) return@launch
-                    if (currentForegroundPackage != packageName) return@launch
-                    evaluate(packageName)
-                }
+                if (currentForegroundPackage != countdownPackageName) return
+                refreshCountdownNotification()
                 mainHandler.postDelayed(this, 1000)
             }
         }
         mainHandler.postDelayed(countdownRunnable!!, 1000)
+    }
+
+    private fun refreshCountdownNotification() {
+        val label = countdownAppLabel ?: return
+        notificationHelper.showCountdown(
+            appLabel = label,
+            sessionDeadlineMs = sessionDeadlineMs,
+            dailyDeadlineMs = dailyDeadlineMs,
+            dailyLimitMs = countdownDailyLimitMs,
+            usedTodayMs = countdownUsedTodayMs,
+        )
     }
 
     private fun showPinGate(packageName: String, profile: Profile, message: String) {
@@ -373,6 +465,7 @@ class EnforcementCoordinator @Inject constructor(
                 frictionMethod = FrictionMethod.password,
                 difficulty = profile.defaultFrictionDifficulty,
                 extensionMs = 0L,
+                waitDurationSeconds = profile.waitDurationSeconds,
                 profilePasswordHash = profile.passwordHash,
                 onProfileUnlocked = { profileUnlockCache.unlock(profile.id) },
             )
@@ -401,6 +494,7 @@ class EnforcementCoordinator @Inject constructor(
                 frictionMethod = friction,
                 difficulty = difficulty,
                 extensionMs = limit?.extensionMsOnBypass ?: 5 * 60_000L,
+                waitDurationSeconds = profile.waitDurationSeconds,
                 profilePasswordHash = profile.passwordHash,
                 onProfileUnlocked = null,
             )

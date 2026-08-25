@@ -16,6 +16,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -45,7 +46,7 @@ fun ScheduleEditorScreen(
     viewModel: ScheduleViewModel = hiltViewModel(),
 ) {
     val windows by viewModel.windows(profileId).collectAsState()
-    var selectedDays by remember { mutableStateOf(setOf(1)) }
+    var selectedDays by remember { mutableStateOf(setOf(0, 1, 2, 3, 4, 5, 6)) }
     var startMinute by remember { mutableIntStateOf(9 * 60) }
     var endMinute by remember { mutableIntStateOf(17 * 60) }
     var packageName by remember { mutableStateOf("") }
@@ -53,7 +54,7 @@ fun ScheduleEditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Schedule windows") },
+                title = { Text("Allowed hours") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
@@ -67,6 +68,10 @@ fun ScheduleEditorScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    "Apps in this profile can only be used during these times.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
                 Text("Allowed days")
                 DayOfWeekSelector(selectedDays = selectedDays, onSelectionChange = { selectedDays = it })
                 TimeOfDayPicker("Start time", startMinute, onTimeChange = { startMinute = it })

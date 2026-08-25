@@ -44,6 +44,7 @@ fun PauseScreen(
     viewModel: PauseViewModel = hiltViewModel(),
 ) {
     val profiles by viewModel.profiles.collectAsState()
+    val settings by viewModel.settings.collectAsState()
     var scopeIndex by remember { mutableIntStateOf(0) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
@@ -75,7 +76,9 @@ fun PauseScreen(
             PauseButton("Pause 60 minutes") { pauseQuick(viewModel, PauseType.sixtyMin, profiles, scopeIndex) }
             PauseButton("Pause until date…") { showDatePicker = true }
             PauseButton("Focus mode (25 min)") { viewModel.activateFocusMode() }
-            PauseButton("Emergency bypass (15 min)") { viewModel.emergencyBypass() }
+            if (!settings.strictMode) {
+                PauseButton("Emergency bypass (15 min)") { viewModel.emergencyBypass() }
+            }
         }
     }
 

@@ -132,7 +132,7 @@ fun ProfilesHomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             TextButton(onClick = { onNavigateApps(profile.id) }) { Text("Apps") }
-                            TextButton(onClick = { onNavigateSchedule(profile.id) }) { Text("Schedule") }
+                            TextButton(onClick = { onNavigateSchedule(profile.id) }) { Text("Allowed hours") }
                         }
                     }
                 }

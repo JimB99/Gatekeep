@@ -24,6 +24,7 @@ data class ProfileEntity(
     val weeklyLimitMs: Long? = null,
     val sessionLimitMs: Long? = null,
     val breakDurationMs: Long? = null,
+    val waitDurationSeconds: Int = 60,
 )
 
 @Entity(

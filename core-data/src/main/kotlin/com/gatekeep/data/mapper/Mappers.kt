@@ -36,6 +36,7 @@ fun ProfileEntity.toDomain() = Profile(
     weeklyLimitMs = weeklyLimitMs,
     sessionLimitMs = sessionLimitMs,
     breakDurationMs = breakDurationMs,
+    waitDurationSeconds = waitDurationSeconds,
 )
 
 fun Profile.toEntity() = ProfileEntity(
@@ -57,6 +58,7 @@ fun Profile.toEntity() = ProfileEntity(
     weeklyLimitMs = weeklyLimitMs,
     sessionLimitMs = sessionLimitMs,
     breakDurationMs = breakDurationMs,
+    waitDurationSeconds = waitDurationSeconds,
 )
 
 fun MonitoredAppEntity.toDomain() = MonitoredApp(

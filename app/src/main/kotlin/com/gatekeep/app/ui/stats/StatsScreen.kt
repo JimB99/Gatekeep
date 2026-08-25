@@ -75,10 +75,10 @@ fun StatsScreen(
             }
             item { Text("Last 7 days") }
             item {
-                weekly.forEachIndexed { index, ms ->
-                    Text("Day ${index + 1}: ${formatDurationMs(ms)}")
+                weekly.forEach { day ->
+                    Text("${day.dayLabel}: ${formatDurationMs(day.usageMs)}")
                     LinearProgressIndicator(
-                        progress = { (ms / (2f * 3600_000)).coerceIn(0f, 1f) },
+                        progress = { (day.usageMs / (2f * 3600_000)).coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth().height(8.dp),
                     )
                 }

@@ -66,13 +66,21 @@ class GatekeepNotificationHelper @Inject constructor(
             .build()
     }
 
-    fun showCountdown(appLabel: String, dailyDeadlineMs: Long?, sessionDeadlineMs: Long?) {
+    fun showCountdown(
+        appLabel: String,
+        sessionDeadlineMs: Long?,
+        dailyDeadlineMs: Long?,
+        dailyLimitMs: Long? = null,
+        usedTodayMs: Long? = null,
+    ) {
         val intent = Intent(context, MainActivity::class.java)
         val pending = PendingIntent.getActivity(context, 1, intent, PendingIntent.FLAG_IMMUTABLE)
-        val now = System.currentTimeMillis()
         val primaryDeadline = sessionDeadlineMs ?: dailyDeadlineMs ?: return
+        val now = System.currentTimeMillis()
+        val primaryLabel = if (sessionDeadlineMs != null) "Session left" else "Daily left"
+
         val builder = NotificationCompat.Builder(context, CHANNEL_SESSION_TIMER)
-            .setContentTitle("$appLabel — session timer")
+            .setContentTitle("$appLabel — $primaryLabel")
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentIntent(pending)
             .setOngoing(false)
@@ -83,17 +91,13 @@ class GatekeepNotificationHelper @Inject constructor(
             .setWhen(primaryDeadline)
             .setShowWhen(true)
 
-        val subtext = buildString {
-            dailyDeadlineMs?.let {
-                append("Daily: ${formatDurationMs(it - now)}")
-            }
-            sessionDeadlineMs?.let {
-                if (isNotEmpty()) append(" · ")
-                append("Session: ${formatDurationMs(it - now)}")
-            }
-        }
-        if (subtext.isNotEmpty()) {
-            builder.setContentText(subtext)
+        if (dailyLimitMs != null && usedTodayMs != null) {
+            builder.setContentText(
+                "Today: ${formatDurationMs(usedTodayMs)} / ${formatDurationMs(dailyLimitMs)} limit",
+            )
+        } else {
+            val remainingMs = (primaryDeadline - now).coerceAtLeast(0)
+            builder.setContentText(formatDurationMs(remainingMs))
         }
         notificationManager.notify(COUNTDOWN_NOTIFICATION_ID, builder.build())
     }

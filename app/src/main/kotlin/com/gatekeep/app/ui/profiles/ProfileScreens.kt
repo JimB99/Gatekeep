@@ -25,6 +25,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,13 +33,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.ui.components.DurationPicker
 import com.gatekeep.app.ui.components.PinGateDialog
+import com.gatekeep.app.ui.components.PinTextField
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
 import com.gatekeep.app.util.PasswordHasher
+import com.gatekeep.domain.model.FrictionDifficulty
 import com.gatekeep.domain.model.FrictionMethod
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,8 +55,15 @@ fun ProfileDetailScreen(
     val profiles by viewModel.profiles.collectAsState()
     val profile = profiles.find { it.id == profileId }
     val appPasswordHash by viewModel.appPasswordHash.collectAsState()
+    var profileName by remember(profile?.name) { mutableStateOf(profile?.name ?: "") }
     var defaultFriction by remember(profile?.defaultFrictionMethod) {
         mutableStateOf(profile?.defaultFrictionMethod ?: FrictionMethod.math)
+    }
+    var frictionDifficulty by remember(profile?.defaultFrictionDifficulty) {
+        mutableStateOf(profile?.defaultFrictionDifficulty ?: FrictionDifficulty.medium)
+    }
+    var waitSeconds by remember(profile?.waitDurationSeconds) {
+        mutableIntStateOf(profile?.waitDurationSeconds ?: 60)
     }
     var dailyMs by remember(profile?.dailyLimitMs) { mutableLongStateOf(profile?.dailyLimitMs ?: 60 * 60_000L) }
     var sessionMs by remember(profile?.sessionLimitMs) { mutableLongStateOf(profile?.sessionLimitMs ?: 15 * 60_000L) }
@@ -64,6 +73,7 @@ fun ProfileDetailScreen(
     var pinEnabled by remember(profile?.lockEnabled) { mutableStateOf(profile?.lockEnabled == true) }
     var pin by remember { mutableStateOf("") }
     var showDeactivatePinGate by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     if (showDeactivatePinGate && profile != null) {
         PinGateDialog(
@@ -73,6 +83,26 @@ fun ProfileDetailScreen(
             onVerified = {
                 showDeactivatePinGate = false
                 viewModel.toggleProfileActive(profile.id, false)
+            },
+        )
+    }
+
+    if (showDeleteConfirm && profile != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete profile?") },
+            text = { Text("Delete ${profile.name}? This cannot be undone.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    showDeleteConfirm = false
+                    viewModel.deleteProfile(profileId)
+                    onBack()
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
             },
         )
     }
@@ -97,6 +127,20 @@ fun ProfileDetailScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            OutlinedTextField(
+                value = profileName,
+                onValueChange = { profileName = it },
+                label = { Text("Profile name") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = {
+                    profile?.copy(name = profileName.trim())?.let { viewModel.updateProfile(it) }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = profileName.isNotBlank(),
+            ) { Text("Save name") }
+
             Card(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.padding(16.dp).fillMaxWidth(),
@@ -122,7 +166,13 @@ fun ProfileDetailScreen(
                 Text("Manage apps", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Medium)
             }
             Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onEditSchedule)) {
-                Text("Schedule windows", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Medium)
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Allowed hours", fontWeight = FontWeight.Medium)
+                    Text(
+                        "Apps in this profile can only be used during these times.",
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
 
             Text("Limits (apply to all apps in profile)", fontWeight = FontWeight.SemiBold)
@@ -157,8 +207,8 @@ fun ProfileDetailScreen(
                             Text(
                                 when (method) {
                                     FrictionMethod.math -> "Math"
-                                    FrictionMethod.waitOneMin -> "Wait 1 min"
-                                    FrictionMethod.password -> "PIN"
+                                    FrictionMethod.waitOneMin -> "Wait"
+                                    FrictionMethod.password -> "Use profile PIN"
                                     else -> method.name
                                 },
                             )
@@ -166,18 +216,49 @@ fun ProfileDetailScreen(
                     )
                 }
             }
+            if (defaultFriction == FrictionMethod.math) {
+                Text("Math difficulty", fontWeight = FontWeight.Medium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FrictionDifficulty.entries.forEach { difficulty ->
+                        FilterChip(
+                            selected = frictionDifficulty == difficulty,
+                            onClick = {
+                                frictionDifficulty = difficulty
+                                profile?.copy(defaultFrictionDifficulty = difficulty)
+                                    ?.let { viewModel.updateProfile(it) }
+                            },
+                            label = {
+                                Text(difficulty.name.replaceFirstChar { it.uppercase() })
+                            },
+                        )
+                    }
+                }
+            }
+            if (defaultFriction == FrictionMethod.waitOneMin) {
+                DurationPicker(
+                    label = "Wait duration",
+                    totalMs = waitSeconds * 1000L,
+                    minuteStep = 1,
+                    onDurationChange = { ms ->
+                        waitSeconds = (ms / 1000).toInt().coerceIn(30, 5 * 60)
+                        profile?.copy(waitDurationSeconds = waitSeconds)?.let { viewModel.updateProfile(it) }
+                    },
+                )
+            }
 
             Text("Profile PIN", fontWeight = FontWeight.SemiBold)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Switch(checked = pinEnabled, onCheckedChange = { pinEnabled = it })
-                Text("Require PIN to open apps")
+                Text("Require PIN to open apps in this profile")
             }
-            OutlinedTextField(
+            PinTextField(
                 value = pin,
                 onValueChange = { pin = it },
-                label = { Text("Profile PIN") },
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(),
+                label = "Profile PIN",
+            )
+            Text(
+                "Same PIN is used if you pick 'Use profile PIN' when blocked.",
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
             )
             Button(
                 onClick = {
@@ -185,11 +266,12 @@ fun ProfileDetailScreen(
                         lockEnabled = pinEnabled,
                         passwordHash = if (pin.isNotBlank()) PasswordHasher.hash(pin) else profile.passwordHash,
                     )?.let { viewModel.updateProfile(it) }
+                    pin = ""
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Save profile PIN") }
 
-            Card(modifier = Modifier.fillMaxWidth().clickable { viewModel.deleteProfile(profileId); onBack() }) {
+            Card(modifier = Modifier.fillMaxWidth().clickable { showDeleteConfirm = true }) {
                 Text("Delete profile", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Medium)
             }
         }

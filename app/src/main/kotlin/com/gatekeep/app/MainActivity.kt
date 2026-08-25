@@ -6,12 +6,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.gatekeep.app.enforcement.EnforcementCoordinator
 import com.gatekeep.app.ui.GatekeepNavHost
@@ -53,12 +57,28 @@ class MainActivity : ComponentActivity() {
             val settings by settingsRepository.settings.collectAsState(
                 initial = com.gatekeep.data.repository.AppSettings(),
             )
-            var unlocked by remember { mutableStateOf(!settings.appLockEnabled || settings.appPasswordHash == null) }
+            val lockKey = "${settings.appLockEnabled}_${settings.appPasswordHash.orEmpty()}"
+            var unlocked by rememberSaveable(lockKey) {
+                mutableStateOf(!settings.appLockEnabled || settings.appPasswordHash == null)
+            }
+            val lifecycleOwner = LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner, settings.appLockEnabled, settings.appPasswordHash) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_STOP &&
+                        settings.appLockEnabled &&
+                        settings.appPasswordHash != null
+                    ) {
+                        unlocked = false
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
             val startDest = if (settings.onboardingComplete) Routes.DASHBOARD else Routes.ONBOARDING
 
             GatekeepTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    if (!unlocked && settings.appLockEnabled) {
+                    if (!unlocked && settings.appLockEnabled && settings.appPasswordHash != null) {
                         AppLockScreen(passwordHash = settings.appPasswordHash) { unlocked = true }
                     } else {
                         GatekeepNavHost(

@@ -107,8 +107,11 @@ class ProfileViewModel @Inject constructor(
         .map { it.appPasswordHash }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    fun requiresAppPin(): Boolean =
-        appSettings.value.appLockEnabled && appSettings.value.appPasswordHash != null
+    fun requiresAppPin(): Boolean {
+        val settings = appSettings.value
+        return settings.appPasswordHash != null &&
+            (settings.appLockEnabled || settings.strictMode)
+    }
 
     fun createProfile(name: String, onCreated: (Long) -> Unit) {
         viewModelScope.launch {
@@ -254,8 +257,12 @@ class PauseViewModel @Inject constructor(
         }
     }
 
+    val settings = settingsRepository.settings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.gatekeep.data.repository.AppSettings())
+
     fun emergencyBypass() {
         viewModelScope.launch {
+            if (settings.value.strictMode) return@launch
             val now = System.currentTimeMillis()
             settingsRepository.updateSettings { it.copy(lastEmergencyBypassEpochMs = now) }
             usageRepository.addPause(PauseType.emergencyBypass, now)
@@ -293,7 +300,7 @@ class StatsViewModel @Inject constructor(
     val activeProfiles = profileRepository.observeActiveProfiles()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _weeklyUsage = MutableStateFlow<List<Long>>(emptyList())
+    private val _weeklyUsage = MutableStateFlow<List<com.gatekeep.app.data.DailyUsage>>(emptyList())
     val weeklyUsage = _weeklyUsage.asStateFlow()
 
     private val _streak = MutableStateFlow(com.gatekeep.domain.model.StreakInfo(0, 0, null))

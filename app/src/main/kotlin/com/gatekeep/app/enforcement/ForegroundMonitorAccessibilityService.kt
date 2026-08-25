@@ -34,11 +34,13 @@ class ForegroundMonitorAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        coordinator.startEnforcementService()
+        coordinator.onAccessibilityConnected()
+        coordinator.refresh()
     }
 
     override fun onDestroy() {
         instance = null
+        coordinator.onAccessibilityDisconnected()
         super.onDestroy()
     }
 

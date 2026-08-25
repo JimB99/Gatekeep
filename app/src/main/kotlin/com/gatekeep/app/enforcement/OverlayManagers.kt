@@ -5,11 +5,11 @@ import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -31,6 +31,7 @@ class BlockOverlayManager @Inject constructor(
     private val coordinator: dagger.Lazy<EnforcementCoordinator>,
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private val inputMethodManager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
     private val mainHandler = Handler(Looper.getMainLooper())
     private var overlayView: View? = null
     private var waitRunnable: Runnable? = null
@@ -54,6 +55,7 @@ class BlockOverlayManager @Inject constructor(
         frictionMethod: FrictionMethod,
         difficulty: FrictionDifficulty,
         extensionMs: Long,
+        waitDurationSeconds: Int = 60,
         profilePasswordHash: String? = null,
         onProfileUnlocked: (() -> Unit)? = null,
     ) {
@@ -66,7 +68,7 @@ class BlockOverlayManager @Inject constructor(
                 }
                 createBlockOverlay(
                     packageName, message, reason, breakUntilMs,
-                    frictionMethod, difficulty, extensionMs,
+                    frictionMethod, difficulty, extensionMs, waitDurationSeconds,
                     profilePasswordHash, onProfileUnlocked,
                 )
             } catch (_: Exception) { }
@@ -127,6 +129,7 @@ class BlockOverlayManager @Inject constructor(
         frictionMethod: FrictionMethod,
         difficulty: FrictionDifficulty,
         extensionMs: Long,
+        waitDurationSeconds: Int,
         profilePasswordHash: String?,
         onProfileUnlocked: (() -> Unit)?,
     ) {
@@ -137,21 +140,23 @@ class BlockOverlayManager @Inject constructor(
             FrictionChallenge.generate(difficulty).also { currentChallenge = it }
         } else null
 
-        if (reason == "profilePin" || (frictionMethod == FrictionMethod.password && profilePasswordHash != null)) {
-            frictionInProgress = true
-            showPasswordFriction(view, profilePasswordHash, packageName, extensionMs, onProfileUnlocked)
-        } else {
-            view.findViewById<Button>(R.id.block_continue_btn).setOnClickListener {
-                showFriction(view, frictionMethod, challenge, packageName, extensionMs, profilePasswordHash)
-            }
-        }
         view.findViewById<Button>(R.id.block_back_btn).setOnClickListener {
             ForegroundMonitorAccessibilityService.instance?.performGlobalAction(
                 android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME,
             )
             hide()
         }
+
         addOverlay(view, focusable = false)
+
+        if (reason == "profilePin" || (frictionMethod == FrictionMethod.password && profilePasswordHash != null)) {
+            frictionInProgress = true
+            showPasswordFriction(view, profilePasswordHash, packageName, extensionMs, onProfileUnlocked)
+        } else {
+            view.findViewById<Button>(R.id.block_continue_btn).setOnClickListener {
+                showFriction(view, frictionMethod, challenge, packageName, extensionMs, waitDurationSeconds, profilePasswordHash)
+            }
+        }
     }
 
     private fun showFriction(
@@ -160,15 +165,11 @@ class BlockOverlayManager @Inject constructor(
         challenge: MathChallenge?,
         packageName: String,
         extensionMs: Long,
+        waitDurationSeconds: Int,
         profilePasswordHash: String?,
     ) {
         frictionInProgress = true
-        overlayParams?.let { params ->
-            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
-            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-            overlayView?.let { windowManager.updateViewLayout(it, params) }
-        }
-        overlayView?.requestFocus()
+        makeOverlayFocusableForInput()
 
         val container = view.findViewById<LinearLayout>(R.id.friction_container)
         container.visibility = View.VISIBLE
@@ -194,13 +195,14 @@ class BlockOverlayManager @Inject constructor(
                         coordinator.get().grantExtension(packageName, extensionMs)
                     }
                 }
+                showKeyboard(input)
             }
             FrictionMethod.password -> showPasswordFriction(view, profilePasswordHash, packageName, extensionMs, null)
             FrictionMethod.waitOneMin -> {
-                view.findViewById<TextView>(R.id.friction_prompt).text = "Wait 1 minute to continue"
+                view.findViewById<TextView>(R.id.friction_prompt).text = "Wait to continue"
                 val countdown = view.findViewById<TextView>(R.id.wait_countdown)
                 countdown.visibility = View.VISIBLE
-                var remaining = 60
+                var remaining = waitDurationSeconds
                 countdown.text = "${remaining}s"
                 waitRunnable = object : Runnable {
                     override fun run() {
@@ -217,7 +219,7 @@ class BlockOverlayManager @Inject constructor(
                 mainHandler.postDelayed(waitRunnable!!, 1000)
             }
             else -> {
-                view.findViewById<TextView>(R.id.friction_prompt).text = "Use math, wait, or PIN mode in settings"
+                view.findViewById<TextView>(R.id.friction_prompt).text = "Use math, wait, or profile PIN in settings"
             }
         }
     }
@@ -229,12 +231,7 @@ class BlockOverlayManager @Inject constructor(
         extensionMs: Long,
         onProfileUnlocked: (() -> Unit)?,
     ) {
-        overlayParams?.let { params ->
-            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
-            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-            overlayView?.let { windowManager.updateViewLayout(it, params) }
-        }
-        overlayView?.requestFocus()
+        makeOverlayFocusableForInput()
         val container = view.findViewById<LinearLayout>(R.id.friction_container)
         container.visibility = View.VISIBLE
         view.findViewById<Button>(R.id.block_continue_btn).visibility = View.GONE
@@ -259,6 +256,25 @@ class BlockOverlayManager @Inject constructor(
                 }
             }
         }
+        showKeyboard(input)
+    }
+
+    private fun makeOverlayFocusableForInput() {
+        overlayParams?.let { params ->
+            params.flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE or
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            overlayView?.let { windowManager.updateViewLayout(it, params) }
+        }
+        overlayView?.requestFocus()
+    }
+
+    private fun showKeyboard(input: EditText) {
+        input.requestFocus()
+        mainHandler.postDelayed({
+            inputMethodManager.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
+        }, 100)
     }
 
     private fun updateBlock(message: String, reason: String, breakUntilMs: Long?) {
@@ -279,11 +295,6 @@ class BlockOverlayManager @Inject constructor(
     }
 
     private fun addOverlay(view: View, focusable: Boolean) {
-        val flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-            WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
-        if (!focusable) {
-            flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-        }
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,

@@ -15,14 +15,29 @@ android {
         applicationId = "com.gatekeep.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "3.1.0"
         ndk {
             abiFilters += "arm64-v8a"
         }
     }
 
+    signingConfigs {
+        val debugKeystore = file("../keystore/debug.keystore")
+        if (debugKeystore.exists()) {
+            create("debugShared") {
+                storeFile = debugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfigs.findByName("debugShared")?.let { signingConfig = it }
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(
@@ -43,6 +58,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
