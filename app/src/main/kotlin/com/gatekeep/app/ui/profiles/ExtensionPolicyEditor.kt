@@ -145,12 +145,17 @@ fun ExtensionPolicyEditor(
             label = stringResource(R.string.max_consecutive_extensions),
             value = draft.maxConsecutive,
             onValueChange = { newConsecutive ->
+                val bumpedDaily = when {
+                    newConsecutive != null && draft.maxPerDay != null && newConsecutive > draft.maxPerDay ->
+                        newConsecutive
+                    else -> draft.maxPerDay
+                }
                 val capped = when {
                     newConsecutive == null -> null
-                    draft.maxPerDay != null -> minOf(newConsecutive, draft.maxPerDay)
+                    bumpedDaily != null -> minOf(newConsecutive, bumpedDaily)
                     else -> newConsecutive
                 }
-                onDraftChange(draft.copy(maxConsecutive = capped))
+                onDraftChange(draft.copy(maxPerDay = bumpedDaily, maxConsecutive = capped))
             },
         )
         Row(

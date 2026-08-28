@@ -2,7 +2,8 @@ package com.gatekeep.app.ui.pause
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,6 +16,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -25,7 +27,6 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,18 +40,28 @@ import com.gatekeep.app.ui.viewmodel.PauseViewModel
 import com.gatekeep.domain.model.PauseType
 import java.util.Calendar
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PauseScreen(
     onBack: () -> Unit,
     viewModel: PauseViewModel = hiltViewModel(),
 ) {
-    val profiles by viewModel.profiles.collectAsState()
+    val activeProfiles by viewModel.activeProfiles.collectAsState()
     val settings by viewModel.settings.collectAsState()
-    var scopeIndex by remember { mutableIntStateOf(0) }
+    var pauseAll by remember { mutableStateOf(true) }
+    var selectedProfileIds by remember { mutableStateOf(setOf<Long>()) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var selectedDateMs by remember { mutableStateOf<Long?>(null) }
+
+    val canPauseScoped = pauseAll || selectedProfileIds.isNotEmpty()
+
+    fun profileIdsForPause(): List<Long>? =
+        if (pauseAll) null else selectedProfileIds.toList()
+
+    fun pauseQuick(type: PauseType) {
+        viewModel.pauseForTargets(type, profileIdsForPause())
+    }
 
     Scaffold(
         topBar = {
@@ -69,31 +80,79 @@ fun PauseScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(stringResource(R.string.scope))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 GatekeepFilterChip(
-                    selected = scopeIndex == 0,
-                    onClick = { scopeIndex = 0 },
+                    selected = pauseAll,
+                    onClick = {
+                        pauseAll = true
+                        selectedProfileIds = emptySet()
+                    },
                     label = { Text(stringResource(R.string.scope_all)) },
                 )
-                GatekeepFilterChip(
-                    selected = scopeIndex == 1,
-                    onClick = { scopeIndex = 1 },
-                    label = { Text(stringResource(R.string.scope_active_profile)) },
+            }
+            Text(
+                stringResource(R.string.scope_active_profiles),
+                style = MaterialTheme.typography.labelMedium,
+            )
+            if (activeProfiles.isEmpty()) {
+                Text(
+                    stringResource(R.string.pause_no_active_profiles),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            } else {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    activeProfiles.forEach { profile ->
+                        GatekeepFilterChip(
+                            selected = !pauseAll && profile.id in selectedProfileIds,
+                            onClick = {
+                                pauseAll = false
+                                selectedProfileIds = if (profile.id in selectedProfileIds) {
+                                    selectedProfileIds - profile.id
+                                } else {
+                                    selectedProfileIds + profile.id
+                                }
+                            },
+                            label = { Text(profile.name) },
+                        )
+                    }
+                }
             }
-            PauseButton(stringResource(R.string.pause_5_min)) {
-                pauseQuick(viewModel, PauseType.fiveMin, profiles, scopeIndex)
-            }
-            PauseButton(stringResource(R.string.pause_15_min)) {
-                pauseQuick(viewModel, PauseType.fifteenMin, profiles, scopeIndex)
-            }
-            PauseButton(stringResource(R.string.pause_60_min)) {
-                pauseQuick(viewModel, PauseType.sixtyMin, profiles, scopeIndex)
-            }
-            PauseButton(stringResource(R.string.pause_until_date)) { showDatePicker = true }
-            PauseButton(stringResource(R.string.focus_mode_25)) { viewModel.activateFocusMode() }
+            PauseButton(
+                label = stringResource(R.string.pause_5_min),
+                enabled = canPauseScoped,
+                onClick = { pauseQuick(PauseType.fiveMin) },
+            )
+            PauseButton(
+                label = stringResource(R.string.pause_15_min),
+                enabled = canPauseScoped,
+                onClick = { pauseQuick(PauseType.fifteenMin) },
+            )
+            PauseButton(
+                label = stringResource(R.string.pause_60_min),
+                enabled = canPauseScoped,
+                onClick = { pauseQuick(PauseType.sixtyMin) },
+            )
+            PauseButton(
+                label = stringResource(R.string.pause_until_date),
+                enabled = canPauseScoped,
+                onClick = { showDatePicker = true },
+            )
+            PauseButton(
+                label = stringResource(R.string.focus_mode_25),
+                onClick = { viewModel.activateFocusMode() },
+            )
             if (!settings.strictMode) {
-                PauseButton(stringResource(R.string.emergency_bypass)) { viewModel.emergencyBypass() }
+                PauseButton(
+                    label = stringResource(R.string.emergency_bypass),
+                    onClick = { viewModel.emergencyBypass() },
+                )
             }
         }
     }
@@ -127,8 +186,11 @@ fun PauseScreen(
                         set(Calendar.MINUTE, timeState.minute)
                         set(Calendar.SECOND, 0)
                     }
-                    val profileId = if (scopeIndex == 1) profiles.firstOrNull { it.isActive }?.id else null
-                    viewModel.pause(PauseType.untilDatetime, profileId, null, cal.timeInMillis)
+                    viewModel.pauseForTargets(
+                        PauseType.untilDatetime,
+                        profileIdsForPause(),
+                        untilMs = cal.timeInMillis,
+                    )
                     showTimePicker = false
                 }) { Text(stringResource(R.string.pause)) }
             },
@@ -137,20 +199,15 @@ fun PauseScreen(
     }
 }
 
-private fun pauseQuick(
-    viewModel: PauseViewModel,
-    type: PauseType,
-    profiles: List<com.gatekeep.domain.model.Profile>,
-    scopeIndex: Int,
-) {
-    val profileId = when (scopeIndex) {
-        1 -> profiles.firstOrNull { it.isActive }?.id
-        else -> null
-    }
-    viewModel.pause(type, profileId, null)
-}
-
 @Composable
-private fun PauseButton(label: String, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth()) { Text(label) }
+private fun PauseButton(
+    label: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text(label) }
 }

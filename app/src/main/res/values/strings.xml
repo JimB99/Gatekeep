@@ -124,10 +124,11 @@
     <string name="extension_custom_short">Custom</string>
     <string name="extension_custom_minutes">Custom minutes</string>
     <string name="extension_overlay_preview">Overlay buttons: %1$s</string>
-    <string name="extension_quota_today">Today: %1$d/%2$d extensions</string>
-    <string name="extension_quota_today_unlimited">Today: %1$d extensions</string>
+    <string name="extension_quota_today">Today: %1$d/%2$d</string>
+    <string name="extension_quota_today_unlimited">Today: %1$d</string>
     <string name="extension_quota_consecutive">In a row: %1$d/%2$d</string>
     <string name="extension_quota_consecutive_unlimited">In a row: %1$d</string>
+    <string name="extension_quota_heading">Extensions</string>
     <string name="extension_unlimited">Unlimited</string>
     <string name="rules_group_deterrent">Deterrent</string>
     <string name="rules_group_block">Block</string>
@@ -167,6 +168,8 @@
     <string name="end_time">End time</string>
     <string name="add_windows">Add window(s)</string>
     <string name="schedule_conflict">These hours overlap an existing window on one or more selected days.</string>
+    <string name="schedule_days_skipped">Skipped %1$s (overlap existing window)</string>
+    <string name="schedule_select_days">Select at least one day to add a window.</string>
     <string name="schedule_invalid_time_range">End time must be after start time.</string>
     <string name="day_sun">Sun</string>
     <string name="day_mon">Mon</string>
@@ -195,6 +198,8 @@
     <string name="tab_tracked">Tracked</string>
     <string name="current_streak_format">Current streak: %1$d days</string>
     <string name="longest_streak_format">Longest streak: %1$d days</string>
+    <string name="stats_streak_for_profile">Streak and overrides for %1$s</string>
+    <string name="load_more">Load more</string>
     <string name="overrides_format">Overrides: %1$d</string>
     <string name="week_label_format">Week %1$d (%2$d)</string>
     <string name="today_suffix">(today)</string>
@@ -205,7 +210,8 @@
     <string name="pause_limits">Pause limits</string>
     <string name="scope">Scope</string>
     <string name="scope_all">All</string>
-    <string name="scope_active_profile">Active profile</string>
+    <string name="scope_active_profiles">Active profiles</string>
+    <string name="pause_no_active_profiles">No active profiles. Activate a profile or choose All to pause everything.</string>
     <string name="pause_5_min">Pause 5 minutes</string>
     <string name="pause_15_min">Pause 15 minutes</string>
     <string name="pause_60_min">Pause 60 minutes</string>

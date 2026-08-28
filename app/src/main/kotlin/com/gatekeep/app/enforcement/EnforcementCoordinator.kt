@@ -271,11 +271,9 @@ class EnforcementCoordinator @Inject constructor(
         val session = usageRepository.getSessionState(packageName)
             ?: SessionTracker.startSession(packageName, System.currentTimeMillis())
         val cleared = SessionTracker.clearBreak(session)
-        usageRepository.saveSessionState(
-            cleared.copy(sessionStartEpochMs = System.currentTimeMillis()),
-            profileId,
-        )
-        sessionStartedForPackage = null
+        val extended = SessionTracker.addExcludedTime(cleared, extensionMs)
+        usageRepository.saveSessionState(extended, profileId)
+        sessionStartedForPackage = packageName
         blockOverlay.hide()
         evaluate(packageName)
     }
@@ -531,6 +529,12 @@ class EnforcementCoordinator @Inject constructor(
         val result = when (val ruleResult = RuleEngine.evaluate(evalContext)) {
             is RuleResult.Blocked -> ruleResult
             is RuleResult.DelayOpen -> {
+                ensureSessionStarted(
+                    packageName = packageName,
+                    profileId = primaryProfile.id,
+                    now = now,
+                    existingState = sessionState,
+                )
                 mainHandler.post {
                     blockOverlay.showDelay(
                         ruleResult.delaySeconds,
@@ -544,6 +548,12 @@ class EnforcementCoordinator @Inject constructor(
             }
             is RuleResult.OpenDeterrent -> {
                 if (openGatePassedPackage != packageName) {
+                    ensureSessionStarted(
+                        packageName = packageName,
+                        profileId = primaryProfile.id,
+                        now = now,
+                        existingState = sessionState,
+                    )
                     showOpenDeterrent(packageName, appLabel, primaryProfile, ruleResult)
                     return
                 }
@@ -684,7 +694,6 @@ class EnforcementCoordinator @Inject constructor(
         stopCountdownTicker()
         isBlockingActive = true
         blockedPackage = packageName
-        scope.launch { recordFrictionStart(packageName, profile.id) }
         mainHandler.post {
             blockOverlay.show(
                 BlockOverlayRequest(
@@ -888,9 +897,7 @@ class EnforcementCoordinator @Inject constructor(
         val usedToday = usageRepository.countOverridesForPackageToday(
             profile.id, packageName, dayStart,
         )
-        val maxConsecutive = policy.maxConsecutiveExtensions?.let { max ->
-            policy.maxExtensionsPerDay?.let { minOf(max, it) } ?: max
-        }
+        val maxConsecutive = ExtensionPolicyEvaluator.effectiveConsecutiveCap(policy)
         return BlockOverlayRequest(
             packageName = packageName,
             message = message,

@@ -308,6 +308,24 @@ class PauseViewModel @Inject constructor(
         }
     }
 
+    fun pauseForTargets(
+        type: PauseType,
+        profileIds: List<Long>?,
+        packageName: String? = null,
+        untilMs: Long? = null,
+    ) {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            if (profileIds == null) {
+                usageRepository.addPause(type, now, null, packageName, untilMs)
+            } else {
+                profileIds.forEach { profileId ->
+                    usageRepository.addPause(type, now, profileId, packageName, untilMs)
+                }
+            }
+        }
+    }
+
     fun activateFocusMode() {
         viewModelScope.launch {
             val until = System.currentTimeMillis() + 25 * 60_000L
@@ -372,8 +390,8 @@ class StatsViewModel @Inject constructor(
     val profiles = profileRepository.observeProfiles()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _selectedProfileId = MutableStateFlow<Long?>(null)
-    val selectedProfileId = _selectedProfileId.asStateFlow()
+    private val _selectedProfileIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedProfileIds = _selectedProfileIds.asStateFlow()
 
     private val _rangeKind = MutableStateFlow(StatsRangeKind.day)
     val rangeKind = _rangeKind.asStateFlow()
@@ -384,8 +402,15 @@ class StatsViewModel @Inject constructor(
     private val _overview = MutableStateFlow(StatsOverview(0L, emptyList(), "", 1L))
     val overview = _overview.asStateFlow()
 
-    private val _topApps = MutableStateFlow<List<TopAppUsage>>(emptyList())
-    val topApps = _topApps.asStateFlow()
+    private val _allTopApps = MutableStateFlow<List<TopAppUsage>>(emptyList())
+    private val _visibleTopAppCount = MutableStateFlow(10)
+    val topApps = combine(_allTopApps, _visibleTopAppCount) { all, count ->
+        all.take(count)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val canLoadMoreTopApps = combine(_allTopApps, _visibleTopAppCount) { all, count ->
+        all.size > count
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private val _trackedApps = MutableStateFlow<List<AppUsageStat>>(emptyList())
     val trackedApps = _trackedApps.asStateFlow()
@@ -402,27 +427,38 @@ class StatsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             profiles.collect { list ->
-                if (_selectedProfileId.value == null) {
-                    _selectedProfileId.value = list.firstOrNull { it.isActive }?.id ?: list.firstOrNull()?.id
+                if (_selectedProfileIds.value.isEmpty() && list.isNotEmpty()) {
+                    val activeIds = list.filter { it.isActive }.map { it.id }.toSet()
+                    _selectedProfileIds.value = activeIds.ifEmpty { setOf(list.first().id) }
                 }
             }
         }
         viewModelScope.launch {
-            combine(_rangeKind, _anchorMs, _selectedProfileId) { kind, anchor, profileId ->
-                Triple(kind, anchor, profileId)
-            }.collect { (kind, anchor, profileId) ->
+            combine(_rangeKind, _anchorMs, _selectedProfileIds) { kind, anchor, profileIds ->
+                Triple(kind, anchor, profileIds)
+            }.collect { (kind, anchor, profileIds) ->
                 _canGoForward.value = StatsPeriodLogic.canShiftForward(
                     kind.toPeriodKind(),
                     anchor,
                     System.currentTimeMillis(),
                 )
-                loadStats(kind, anchor, profileId)
+                loadStats(kind, anchor, profileIds)
             }
         }
     }
 
-    fun setProfileId(id: Long?) {
-        _selectedProfileId.value = id
+    fun toggleProfileId(id: Long) {
+        val current = _selectedProfileIds.value
+        if (id in current && current.size <= 1) return
+        _selectedProfileIds.value = if (id in current) {
+            current - id
+        } else {
+            current + id
+        }
+    }
+
+    fun loadMoreTopApps() {
+        _visibleTopAppCount.value += 10
     }
 
     fun setRangeKind(kind: StatsRangeKind) {
@@ -444,14 +480,17 @@ class StatsViewModel @Inject constructor(
         )
     }
 
-    private suspend fun loadStats(kind: StatsRangeKind, anchorMs: Long, profileId: Long?) {
+    private suspend fun loadStats(kind: StatsRangeKind, anchorMs: Long, profileIds: Set<Long>) {
         val range = buildRange(kind, anchorMs)
         _overview.value = statsRepository.overviewForRange(range)
-        _topApps.value = statsRepository.topAppsForRange(range)
-        if (profileId != null) {
-            _trackedApps.value = statsRepository.trackedAppsForRange(profileId, range)
-            _streak.value = statsRepository.streakForProfile(profileId)
-            _overrideCount.value = statsRepository.overrideCount(profileId)
+        _visibleTopAppCount.value = 10
+        _allTopApps.value = statsRepository.topAppsForRange(range, limit = 50)
+        if (profileIds.isNotEmpty()) {
+            _trackedApps.value = statsRepository.trackedAppsForProfiles(profileIds.toList(), range)
+            val primaryId = profiles.value.firstOrNull { it.id in profileIds }?.id
+                ?: profileIds.first()
+            _streak.value = statsRepository.streakForProfile(primaryId)
+            _overrideCount.value = statsRepository.overrideCount(primaryId)
         } else {
             _trackedApps.value = emptyList()
             _streak.value = com.gatekeep.domain.model.StreakInfo(0, 0, null)

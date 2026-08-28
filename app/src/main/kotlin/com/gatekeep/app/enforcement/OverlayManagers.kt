@@ -432,7 +432,10 @@ class BlockOverlayManager @Inject constructor(
     }
 
     private fun bindExtensionQuota(view: View, request: BlockOverlayRequest) {
+        val headingView = view.findViewById<TextView>(R.id.extension_quota_heading)
         val quotaView = view.findViewById<TextView>(R.id.extension_quota_text)
+        headingView.text = context.getString(R.string.extension_quota_heading)
+        headingView.visibility = View.VISIBLE
         val todayText = request.maxExtensionsPerDay?.let { max ->
             context.getString(R.string.extension_quota_today, request.extensionsUsedToday, max)
         } ?: context.getString(

@@ -15,13 +15,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.dp
 import com.gatekeep.app.data.ChartBucket
 import com.gatekeep.app.util.formatChartAxisTick
@@ -34,6 +35,8 @@ fun StatsBarChart(
     modifier: Modifier = Modifier,
     chartHeightDp: Dp = 120.dp,
     enableHorizontalScroll: Boolean = false,
+    labelInterval: Int = 5,
+    rotateLabels: Boolean = false,
 ) {
     if (buckets.isEmpty()) return
 
@@ -54,14 +57,14 @@ fun StatsBarChart(
         ?: effectiveScaleMs.coerceAtLeast(1L).toFloat()
     val scrollState = rememberScrollState()
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
-    val axisWidth = 56.dp
+    val axisWidth = 40.dp
     val chartGap = 8.dp
     val barGap = 4.dp
     val availableChartWidth = screenWidthDp - axisWidth - chartGap - 32.dp
     val computedBarWidth = if (enableHorizontalScroll) {
         when {
             buckets.size <= 12 -> 24.dp
-            buckets.size <= 31 -> 14.dp
+            buckets.size <= 31 -> 12.dp
             else -> 24.dp
         }
     } else {
@@ -72,6 +75,17 @@ fun StatsBarChart(
         computedBarWidth * buckets.size + barGap * (buckets.size - 1).coerceAtLeast(0)
     } else {
         availableChartWidth
+    }
+    val labelRowHeight = if (rotateLabels) 52.dp else 28.dp
+    val labelStyle = if (rotateLabels) {
+        MaterialTheme.typography.labelMedium
+    } else {
+        MaterialTheme.typography.labelSmall
+    }
+    val barSlotWidthDp = if (enableHorizontalScroll) {
+        computedBarWidth + barGap
+    } else {
+        chartContentWidth / buckets.size.coerceAtLeast(1)
     }
 
     Row(modifier = modifier.fillMaxWidth()) {
@@ -133,28 +147,42 @@ fun StatsBarChart(
             Row(
                 modifier = Modifier
                     .width(chartContentWidth)
+                    .height(labelRowHeight)
                     .padding(top = 4.dp),
             ) {
                 buckets.forEachIndexed { index, bucket ->
-                    val showLabel = !enableHorizontalScroll ||
-                        index == 0 ||
-                        index == buckets.lastIndex ||
-                        (index + 1) % 5 == 0
+                    val showLabel = when {
+                        !enableHorizontalScroll -> true
+                        index == 0 || index == buckets.lastIndex -> true
+                        labelInterval > 0 && (index + 1) % labelInterval == 0 -> true
+                        else -> false
+                    }
+                    val slotModifier = if (enableHorizontalScroll) {
+                        Modifier.width(barSlotWidthDp)
+                    } else {
+                        Modifier.weight(1f)
+                    }
                     Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 1.dp),
+                        modifier = slotModifier.padding(horizontal = 1.dp),
                         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
                     ) {
                         if (showLabel) {
                             Text(
                                 text = bucket.label,
-                                style = MaterialTheme.typography.labelSmall,
+                                style = labelStyle,
                                 color = axisLabelColor,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
-                                overflow = TextOverflow.Clip,
+                                overflow = TextOverflow.Visible,
                                 softWrap = false,
+                                modifier = if (rotateLabels) {
+                                    Modifier.graphicsLayer {
+                                        rotationZ = -45f
+                                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
+                                    }
+                                } else {
+                                    Modifier
+                                },
                             )
                             bucket.subLabel?.let { sub ->
                                 Text(

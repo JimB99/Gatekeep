@@ -117,10 +117,11 @@
     <string name="extension_custom_short">Propio</string>
     <string name="extension_custom_minutes">Minutos personalizados</string>
     <string name="extension_overlay_preview">Botones del overlay: %1$s</string>
-    <string name="extension_quota_today">Hoy: %1$d/%2$d extensiones</string>
-    <string name="extension_quota_today_unlimited">Hoy: %1$d extensiones</string>
+    <string name="extension_quota_today">Hoy: %1$d/%2$d</string>
+    <string name="extension_quota_today_unlimited">Hoy: %1$d</string>
     <string name="extension_quota_consecutive">Seguidas: %1$d/%2$d</string>
     <string name="extension_quota_consecutive_unlimited">Seguidas: %1$d</string>
+    <string name="extension_quota_heading">Extensiones</string>
     <string name="extension_unlimited">Ilimitado</string>
     <string name="rules_group_deterrent">Disuasión</string>
     <string name="rules_group_block">Bloquear</string>
@@ -158,6 +159,8 @@
     <string name="end_time">Hora de fin</string>
     <string name="add_windows">Añadir ventana(s)</string>
     <string name="schedule_conflict">Estas horas se solapan con una ventana existente en uno o más días.</string>
+    <string name="schedule_days_skipped">Omitido %1$s (solapa con ventana existente)</string>
+    <string name="schedule_select_days">Selecciona al menos un día para añadir una ventana.</string>
     <string name="schedule_invalid_time_range">La hora de fin debe ser posterior a la de inicio.</string>
     <string name="duration_step_hint">Ajustar de %1$d en %1$d minutos</string>
     <string name="delete_pin_digit">Borrar último dígito</string>
@@ -187,6 +190,8 @@
     <string name="tab_tracked">Rastreadas</string>
     <string name="current_streak_format">Racha actual: %1$d días</string>
     <string name="longest_streak_format">Racha más larga: %1$d días</string>
+    <string name="stats_streak_for_profile">Racha y anulaciones de %1$s</string>
+    <string name="load_more">Cargar más</string>
     <string name="overrides_format">Anulaciones: %1$d</string>
     <string name="week_label_format">Semana %1$d (%2$d)</string>
     <string name="today_suffix">(hoy)</string>
@@ -196,7 +201,8 @@
     <string name="pause_limits">Pausar límites</string>
     <string name="scope">Ámbito</string>
     <string name="scope_all">Todos</string>
-    <string name="scope_active_profile">Perfil activo</string>
+    <string name="scope_active_profiles">Perfiles activos</string>
+    <string name="pause_no_active_profiles">No hay perfiles activos. Activa un perfil o elige Todos para pausar todo.</string>
     <string name="pause_5_min">Pausar 5 minutos</string>
     <string name="pause_15_min">Pausar 15 minutos</string>
     <string name="pause_60_min">Pausar 60 minutos</string>

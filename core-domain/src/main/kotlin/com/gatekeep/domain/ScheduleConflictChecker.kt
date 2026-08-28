@@ -28,4 +28,11 @@ object ScheduleConflictChecker {
     ): Set<Int> = days.filter { day ->
         wouldConflict(existing, day, startMinute, endMinute)
     }.toSet()
+
+    fun addableDays(
+        existing: List<ScheduleWindow>,
+        days: Set<Int>,
+        startMinute: Int,
+        endMinute: Int,
+    ): Set<Int> = days - conflictingDays(existing, days, startMinute, endMinute)
 }

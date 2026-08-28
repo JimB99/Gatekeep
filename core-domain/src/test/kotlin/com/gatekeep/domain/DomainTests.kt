@@ -216,6 +216,24 @@ class ExtensionPolicyEvaluatorTest {
   }
 
   @Test
+  fun `effectiveConsecutiveCap falls back to daily cap`() {
+    val policy = com.gatekeep.domain.model.ExtensionPolicy(maxExtensionsPerDay = 2)
+    assertEquals(2, ExtensionPolicyEvaluator.effectiveConsecutiveCap(policy))
+  }
+
+  @Test
+  fun `daily cap applies as consecutive cap when consecutive unset`() {
+    val policy = com.gatekeep.domain.model.ExtensionPolicy(
+      optionMinutes = listOf(5),
+      maxExtensionsPerDay = 2,
+    )
+    val allowed = ExtensionPolicyEvaluator.evaluateExtension(policy, 5, overridesToday = 0, consecutiveInSession = 1)
+    val denied = ExtensionPolicyEvaluator.evaluateExtension(policy, 5, overridesToday = 0, consecutiveInSession = 2)
+    assertTrue(allowed is ExtensionPolicyEvaluator.ExtensionDecision.Allowed)
+    assertTrue(denied is ExtensionPolicyEvaluator.ExtensionDecision.Denied)
+  }
+
+  @Test
   fun `no limit today when enabled`() {
     val policy = com.gatekeep.domain.model.ExtensionPolicy(showNoLimitToday = true)
     val result = ExtensionPolicyEvaluator.evaluateExtension(
@@ -300,6 +318,61 @@ class SessionTrackerTest {
         session = SessionTracker.endFriction(session, now)
         val duration = SessionTracker.sessionDurationMs(session, now)
         assertEquals(8 * 60_000L, duration)
+    }
+
+    @Test
+    fun `extension bonus via excluded time grants more session remaining`() {
+        val now = 1_000_000L
+        val sessionLimit = 15 * 60_000L
+        val session = SessionTracker.startSession("com.test", now - sessionLimit)
+        val atLimit = SessionTracker.evaluateSession(
+            AppLimit(1, "com.test", sessionLimitMs = sessionLimit),
+            session,
+            now,
+        )
+        assertTrue(atLimit is SessionTracker.SessionCheckResult.SessionExceeded)
+
+        val extended = SessionTracker.addExcludedTime(session, 5 * 60_000L)
+        val afterExtension = SessionTracker.evaluateSession(
+            AppLimit(1, "com.test", sessionLimitMs = sessionLimit),
+            extended,
+            now,
+        )
+        assertTrue(afterExtension is SessionTracker.SessionCheckResult.Allowed)
+        val allowed = afterExtension as SessionTracker.SessionCheckResult.Allowed
+        assertEquals(5 * 60_000L, allowed.remainingSessionMs)
+    }
+
+    @Test
+    fun `large extension bonus exceeds original session limit`() {
+        val now = 1_000_000L
+        val sessionLimit = 60_000L
+        val extensionMs = 150 * 60_000L
+        val session = SessionTracker.startSession("com.test", now - sessionLimit)
+        val extended = SessionTracker.addExcludedTime(session, extensionMs)
+        val result = SessionTracker.evaluateSession(
+            AppLimit(1, "com.test", sessionLimitMs = sessionLimit),
+            extended,
+            now,
+        )
+        assertTrue(result is SessionTracker.SessionCheckResult.Allowed)
+        val allowed = result as SessionTracker.SessionCheckResult.Allowed
+        assertTrue(allowed.remainingSessionMs!! >= extensionMs - 1000)
+    }
+
+    @Test
+    fun `session counts time during open wait when friction is not excluded`() {
+        val now = 1_000_000L
+        val sessionLimit = 5 * 60_000L
+        val session = SessionTracker.startSession("com.test", now - 30_000L)
+        val result = SessionTracker.evaluateSession(
+            AppLimit(1, "com.test", sessionLimitMs = sessionLimit),
+            session,
+            now,
+        )
+        assertTrue(result is SessionTracker.SessionCheckResult.Allowed)
+        val allowed = result as SessionTracker.SessionCheckResult.Allowed
+        assertEquals(sessionLimit - 30_000L, allowed.remainingSessionMs)
     }
 }
 

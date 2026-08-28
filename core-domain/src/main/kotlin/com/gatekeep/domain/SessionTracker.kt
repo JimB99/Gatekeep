@@ -45,8 +45,12 @@ object SessionTracker {
             return SessionCheckResult.Allowed(remainingSessionMs = null)
         }
 
-        val duration = sessionDurationMs(session, nowEpochMs)
-        val remaining = sessionLimit - duration
+        val elapsed = session?.let { (nowEpochMs - it.sessionStartEpochMs).coerceAtLeast(0) } ?: 0L
+        val activeFrictionMs = session?.frictionStartedAtEpochMs?.let { started ->
+            (nowEpochMs - started).coerceAtLeast(0)
+        } ?: 0L
+        val excludedMs = session?.excludedMs ?: 0L
+        val remaining = sessionLimit - elapsed + excludedMs + activeFrictionMs
 
         return if (remaining <= 0) {
             val breakDuration = limit.breakDurationMs ?: 0L

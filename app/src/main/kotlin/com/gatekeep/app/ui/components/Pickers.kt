@@ -1,6 +1,7 @@
 package com.gatekeep.app.ui.components
 
 import android.widget.ImageView
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,10 +10,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -27,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -102,7 +106,14 @@ fun DayOfWeekSelector(
                     if (index in updated) updated.remove(index) else updated.add(index)
                     onSelectionChange(updated)
                 },
-                label = { Text(label) },
+                modifier = Modifier.weight(1f),
+                label = {
+                    Text(
+                        text = label,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                    )
+                },
             )
         }
     }
@@ -384,16 +395,28 @@ private fun HoldRepeatStepperButton(text: String, onStep: () -> Unit) {
             delay(80)
         }
     }
-    androidx.compose.material3.OutlinedButton(
-        onClick = onStep,
+    Surface(
         modifier = Modifier.pointerInput(Unit) {
             detectTapGestures(
                 onPress = {
+                    val pressStart = System.currentTimeMillis()
                     held = true
                     tryAwaitRelease()
                     held = false
+                    if (System.currentTimeMillis() - pressStart < 400) {
+                        onStep()
+                    }
                 },
             )
         },
-    ) { Text(text) }
+        shape = RoundedCornerShape(4.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelLarge,
+        )
+    }
 }

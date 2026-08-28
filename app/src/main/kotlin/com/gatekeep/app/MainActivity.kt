@@ -1,10 +1,9 @@
 package com.gatekeep.app
 
-import android.content.Context
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisposableEffect
@@ -23,7 +22,6 @@ import com.gatekeep.app.ui.GatekeepNavHost
 import com.gatekeep.app.ui.Routes
 import com.gatekeep.app.ui.lock.AppLockScreen
 import com.gatekeep.app.ui.theme.GatekeepTheme
-import com.gatekeep.app.util.LocaleController
 import com.gatekeep.app.worker.UsageSyncWorker
 import com.gatekeep.app.worker.WeeklyReportWorker
 import com.gatekeep.data.repository.ProfileRepository
@@ -34,16 +32,11 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var coordinator: EnforcementCoordinator
     @Inject lateinit var profileRepository: ProfileRepository
-
-    override fun attachBaseContext(newBase: Context) {
-        LocaleController.applyStored(newBase)
-        super.attachBaseContext(newBase)
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

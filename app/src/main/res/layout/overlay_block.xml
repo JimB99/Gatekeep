@@ -105,6 +105,16 @@
             android:visibility="gone">
 
             <TextView
+                android:id="@+id/extension_quota_heading"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <TextView
                 android:id="@+id/extension_quota_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

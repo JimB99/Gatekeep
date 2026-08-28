@@ -70,6 +70,34 @@ class ScheduleConflictCheckerTest {
             ScheduleConflictChecker.wouldConflict(existing, 1, 540, 1020),
         )
     }
+
+    @Test
+    fun `addableDays excludes only conflicting days`() {
+        val existing = listOf(
+            ScheduleWindow(id = 1, profileId = 1, dayOfWeek = 1, startMinute = 540, endMinute = 1020),
+        )
+        val addable = ScheduleConflictChecker.addableDays(
+            existing = existing,
+            days = setOf(1, 2),
+            startMinute = 540,
+            endMinute = 1020,
+        )
+        assertEquals(setOf(2), addable)
+    }
+
+    @Test
+    fun `addableDays is empty when all selected days conflict`() {
+        val existing = listOf(
+            ScheduleWindow(id = 1, profileId = 1, dayOfWeek = 1, startMinute = 540, endMinute = 1020),
+        )
+        val addable = ScheduleConflictChecker.addableDays(
+            existing = existing,
+            days = setOf(1),
+            startMinute = 540,
+            endMinute = 1020,
+        )
+        assertTrue(addable.isEmpty())
+    }
 }
 
 class ChartAxisTicksTest {

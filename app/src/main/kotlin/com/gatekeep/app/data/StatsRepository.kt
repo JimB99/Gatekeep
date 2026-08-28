@@ -6,6 +6,7 @@ import com.gatekeep.app.util.UsageStatsCollector
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.UsageRepository
 import com.gatekeep.domain.StreakCalculator
+import com.gatekeep.domain.TrackedAppMerge
 import com.gatekeep.domain.UsageBucketAggregator
 import com.gatekeep.domain.model.StreakInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -75,7 +76,7 @@ class StatsRepository @Inject constructor(
         )
     }
 
-    suspend fun topAppsForRange(range: StatsTimeRange, limit: Int = 5): List<TopAppUsage> {
+    suspend fun topAppsForRange(range: StatsTimeRange, limit: Int = 10): List<TopAppUsage> {
         val bounds = buildRangeBounds(range)
         return usageStatsCollector.topApps(bounds.startMs, bounds.endMs, limit).map { (pkg, ms) ->
             TopAppUsage(
@@ -86,20 +87,36 @@ class StatsRepository @Inject constructor(
         }
     }
 
-    suspend fun trackedAppsForRange(profileId: Long, range: StatsTimeRange): List<AppUsageStat> {
+    suspend fun trackedAppsForRange(profileId: Long, range: StatsTimeRange): List<AppUsageStat> =
+        trackedAppsForProfiles(listOf(profileId), range)
+
+    suspend fun trackedAppsForProfiles(profileIds: List<Long>, range: StatsTimeRange): List<AppUsageStat> {
+        if (profileIds.isEmpty()) return emptyList()
         val bounds = buildRangeBounds(range)
         val usageByPackage = usageStatsCollector.foregroundMsByPackageInRange(bounds.startMs, bounds.endMs)
-        val apps = profileRepository.observeMonitoredApps(profileId).first()
-        val profile = profileRepository.observeProfiles().first().find { it.id == profileId }
-        val dailyLimit = profile?.dailyLimitMs
-        return apps.map { app ->
-            AppUsageStat(
-                packageName = app.packageName,
-                label = app.label,
-                usageMs = usageByPackage[app.packageName] ?: 0L,
-                limitMs = dailyLimit,
-            )
-        }.sortedByDescending { it.usageMs }
+        val allProfiles = profileRepository.observeProfiles().first()
+        val byPackage = linkedMapOf<String, AppUsageStat>()
+        for (profileId in profileIds) {
+            val apps = profileRepository.observeMonitoredApps(profileId).first()
+            val dailyLimit = allProfiles.find { it.id == profileId }?.dailyLimitMs
+            for (app in apps) {
+                val usageMs = usageByPackage[app.packageName] ?: 0L
+                val existing = byPackage[app.packageName]
+                if (existing == null) {
+                    byPackage[app.packageName] = AppUsageStat(
+                        packageName = app.packageName,
+                        label = app.label,
+                        usageMs = usageMs,
+                        limitMs = dailyLimit,
+                    )
+                } else {
+                    byPackage[app.packageName] = existing.copy(
+                        limitMs = TrackedAppMerge.mergeDailyLimit(existing.limitMs, dailyLimit),
+                    )
+                }
+            }
+        }
+        return byPackage.values.sortedByDescending { it.usageMs }
     }
 
     suspend fun streakForProfile(profileId: Long): StreakInfo {

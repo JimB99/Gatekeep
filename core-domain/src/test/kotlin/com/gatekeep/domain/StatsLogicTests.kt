@@ -41,6 +41,24 @@ class UsageBucketAggregatorTest {
     }
 }
 
+class TrackedAppMergeTest {
+
+    @Test
+    fun `mergeDailyLimit picks stricter non-null cap`() {
+        assertEquals(2L * 60 * 60 * 1000, TrackedAppMerge.mergeDailyLimit(3L * 60 * 60 * 1000, 2L * 60 * 60 * 1000))
+    }
+
+    @Test
+    fun `mergeDailyLimit keeps existing when incoming null`() {
+        assertEquals(5L, TrackedAppMerge.mergeDailyLimit(5L, null))
+    }
+
+    @Test
+    fun `mergeDailyLimit uses incoming when existing null`() {
+        assertEquals(7L, TrackedAppMerge.mergeDailyLimit(null, 7L))
+    }
+}
+
 class StatsPeriodLogicTest {
 
     private val zone = ZoneId.of("Europe/Amsterdam")

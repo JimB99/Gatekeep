@@ -117,10 +117,11 @@
     <string name="extension_custom_short">Eigene</string>
     <string name="extension_custom_minutes">Eigene Minuten</string>
     <string name="extension_overlay_preview">Overlay-Buttons: %1$s</string>
-    <string name="extension_quota_today">Heute: %1$d/%2$d Verlängerungen</string>
-    <string name="extension_quota_today_unlimited">Heute: %1$d Verlängerungen</string>
+    <string name="extension_quota_today">Heute: %1$d/%2$d</string>
+    <string name="extension_quota_today_unlimited">Heute: %1$d</string>
     <string name="extension_quota_consecutive">Hintereinander: %1$d/%2$d</string>
     <string name="extension_quota_consecutive_unlimited">Hintereinander: %1$d</string>
+    <string name="extension_quota_heading">Verlängerungen</string>
     <string name="extension_unlimited">Unbegrenzt</string>
     <string name="rules_group_deterrent">Abschreckung</string>
     <string name="rules_group_block">Blockieren</string>
@@ -158,6 +159,8 @@
     <string name="end_time">Endzeit</string>
     <string name="add_windows">Zeitfenster hinzufügen</string>
     <string name="schedule_conflict">Diese Zeiten überschneiden sich mit einem bestehenden Fenster an einem oder mehreren Tagen.</string>
+    <string name="schedule_days_skipped">%1$s übersprungen (Überschneidung mit bestehendem Fenster)</string>
+    <string name="schedule_select_days">Wähle mindestens einen Tag, um ein Fenster hinzuzufügen.</string>
     <string name="schedule_invalid_time_range">Endzeit muss nach der Startzeit liegen.</string>
     <string name="duration_step_hint">In %1$d-Minuten-Schritten anpassen</string>
     <string name="delete_pin_digit">Letzte Ziffer löschen</string>
@@ -187,6 +190,8 @@
     <string name="tab_tracked">Verfolgt</string>
     <string name="current_streak_format">Aktuelle Serie: %1$d Tage</string>
     <string name="longest_streak_format">Längste Serie: %1$d Tage</string>
+    <string name="stats_streak_for_profile">Serie und Überschreibungen für %1$s</string>
+    <string name="load_more">Mehr laden</string>
     <string name="overrides_format">Überschreibungen: %1$d</string>
     <string name="week_label_format">Woche %1$d (%2$d)</string>
     <string name="today_suffix">(heute)</string>
@@ -196,7 +201,8 @@
     <string name="pause_limits">Limits pausieren</string>
     <string name="scope">Bereich</string>
     <string name="scope_all">Alle</string>
-    <string name="scope_active_profile">Aktives Profil</string>
+    <string name="scope_active_profiles">Aktive Profile</string>
+    <string name="pause_no_active_profiles">Keine aktiven Profile. Aktiviere ein Profil oder wähle Alle, um alles zu pausieren.</string>
     <string name="pause_5_min">5 Minuten pausieren</string>
     <string name="pause_15_min">15 Minuten pausieren</string>
     <string name="pause_60_min">60 Minuten pausieren</string>
