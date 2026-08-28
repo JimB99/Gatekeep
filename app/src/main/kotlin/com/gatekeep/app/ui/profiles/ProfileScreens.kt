@@ -6,23 +6,31 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -33,51 +41,53 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.gatekeep.app.ui.components.AppIcon
 import com.gatekeep.app.ui.components.DurationPicker
 import com.gatekeep.app.ui.components.PinGateDialog
-import com.gatekeep.app.ui.components.PinTextField
+import com.gatekeep.app.R
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
-import com.gatekeep.app.util.PasswordHasher
-import com.gatekeep.domain.model.FrictionDifficulty
-import com.gatekeep.domain.model.FrictionMethod
+import com.gatekeep.domain.model.OnOpenAction
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileDetailScreen(
+fun ProfileHubScreen(
     profileId: Long,
     onBack: () -> Unit,
     onEditApps: () -> Unit,
     onEditSchedule: () -> Unit,
+    onEditLimits: () -> Unit,
+    onEditRules: () -> Unit,
+    onEditPin: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val profiles by viewModel.profiles.collectAsState()
     val profile = profiles.find { it.id == profileId }
     val appPasswordHash by viewModel.appPasswordHash.collectAsState()
+    val monitoredPackages by viewModel.monitoredPackages.collectAsState()
     var profileName by remember(profile?.name) { mutableStateOf(profile?.name ?: "") }
-    var defaultFriction by remember(profile?.defaultFrictionMethod) {
-        mutableStateOf(profile?.defaultFrictionMethod ?: FrictionMethod.math)
-    }
-    var frictionDifficulty by remember(profile?.defaultFrictionDifficulty) {
-        mutableStateOf(profile?.defaultFrictionDifficulty ?: FrictionDifficulty.medium)
-    }
-    var waitSeconds by remember(profile?.waitDurationSeconds) {
-        mutableIntStateOf(profile?.waitDurationSeconds ?: 60)
-    }
-    var dailyMs by remember(profile?.dailyLimitMs) { mutableLongStateOf(profile?.dailyLimitMs ?: 60 * 60_000L) }
-    var sessionMs by remember(profile?.sessionLimitMs) { mutableLongStateOf(profile?.sessionLimitMs ?: 15 * 60_000L) }
-    var breakMs by remember(profile?.breakDurationMs) { mutableLongStateOf(profile?.breakDurationMs ?: 5 * 60_000L) }
-    var hourlyMs by remember(profile?.hourlyLimitMs) { mutableLongStateOf(profile?.hourlyLimitMs ?: 0L) }
-    var weeklyMs by remember(profile?.weeklyLimitMs) { mutableLongStateOf(profile?.weeklyLimitMs ?: 0L) }
-    var pinEnabled by remember(profile?.lockEnabled) { mutableStateOf(profile?.lockEnabled == true) }
-    var pin by remember { mutableStateOf("") }
+    var savedName by remember(profile?.name) { mutableStateOf(profile?.name ?: "") }
     var showDeactivatePinGate by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
+    LaunchedEffect(profile?.name) {
+        profile?.name?.let {
+            profileName = it
+            savedName = it
+        }
+    }
+
+    val nameDirty = profileName.trim() != savedName.trim()
+
+    LaunchedEffect(profileId) {
+        viewModel.bindProfile(profileId)
+    }
+
     if (showDeactivatePinGate && profile != null) {
         PinGateDialog(
-            title = "Enter app PIN to change profile",
+            title = stringResource(R.string.enter_app_pin_change_profile),
             passwordHash = appPasswordHash,
             onDismiss = { showDeactivatePinGate = false },
             onVerified = {
@@ -86,23 +96,20 @@ fun ProfileDetailScreen(
             },
         )
     }
-
     if (showDeleteConfirm && profile != null) {
-        androidx.compose.material3.AlertDialog(
+        AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete profile?") },
-            text = { Text("Delete ${profile.name}? This cannot be undone.") },
+            title = { Text(stringResource(R.string.delete_profile_title)) },
+            text = { Text(stringResource(R.string.delete_profile_message, profile.name)) },
             confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
+                TextButton(onClick = {
                     showDeleteConfirm = false
                     viewModel.deleteProfile(profileId)
                     onBack()
-                }) { Text("Delete") }
+                }) { Text(stringResource(R.string.delete)) }
             },
             dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Cancel")
-                }
+                TextButton(onClick = { showDeleteConfirm = false }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }
@@ -110,10 +117,10 @@ fun ProfileDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(profile?.name ?: "Profile") },
+                title = { Text(profile?.name ?: stringResource(R.string.profile)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
                     }
                 },
             )
@@ -123,23 +130,29 @@ fun ProfileDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             OutlinedTextField(
                 value = profileName,
                 onValueChange = { profileName = it },
-                label = { Text("Profile name") },
+                label = { Text(stringResource(R.string.profile_name)) },
                 modifier = Modifier.fillMaxWidth(),
             )
-            Button(
-                onClick = {
-                    profile?.copy(name = profileName.trim())?.let { viewModel.updateProfile(it) }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = profileName.isNotBlank(),
-            ) { Text("Save name") }
+            if (nameDirty) {
+                Button(
+                    onClick = {
+                        profile?.copy(name = profileName.trim())?.let {
+                            viewModel.updateProfile(it)
+                            savedName = profileName.trim()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = profileName.isNotBlank(),
+                ) { Text(stringResource(R.string.save_name)) }
+            }
 
             Card(modifier = Modifier.fillMaxWidth()) {
                 Row(
@@ -147,7 +160,7 @@ fun ProfileDetailScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Active", fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.active), fontWeight = FontWeight.Medium)
                     Switch(
                         checked = profile?.isActive == true,
                         onCheckedChange = { active ->
@@ -162,118 +175,244 @@ fun ProfileDetailScreen(
                     )
                 }
             }
-            Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onEditApps)) {
-                Text("Manage apps", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Medium)
-            }
-            Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onEditSchedule)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Allowed hours", fontWeight = FontWeight.Medium)
-                    Text(
-                        "Apps in this profile can only be used during these times.",
-                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
 
-            Text("Limits (apply to all apps in profile)", fontWeight = FontWeight.SemiBold)
-            DurationPicker("Daily limit", dailyMs, onDurationChange = { dailyMs = it })
-            DurationPicker("Session limit", sessionMs, minuteStep = 1, onDurationChange = { sessionMs = it })
-            DurationPicker("Break duration", breakMs, onDurationChange = { breakMs = it })
-            DurationPicker("Hourly limit (0 = off)", hourlyMs, onDurationChange = { hourlyMs = it })
-            DurationPicker("Weekly limit (0 = off)", weeklyMs, minuteStep = 30, onDurationChange = { weeklyMs = it })
-            Button(
-                onClick = {
-                    profile?.copy(
-                        dailyLimitMs = dailyMs.takeIf { it > 0 },
-                        sessionLimitMs = sessionMs.takeIf { it > 0 },
-                        breakDurationMs = breakMs.takeIf { it > 0 },
-                        hourlyLimitMs = hourlyMs.takeIf { it > 0 },
-                        weeklyLimitMs = weeklyMs.takeIf { it > 0 },
-                    )?.let { viewModel.updateProfile(it) }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Save limits") }
-
-            Text("Default deterrent", fontWeight = FontWeight.SemiBold)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(FrictionMethod.math, FrictionMethod.waitOneMin, FrictionMethod.password).forEach { method ->
-                    FilterChip(
-                        selected = defaultFriction == method,
-                        onClick = {
-                            defaultFriction = method
-                            profile?.copy(defaultFrictionMethod = method)?.let { viewModel.updateProfile(it) }
-                        },
-                        label = {
-                            Text(
-                                when (method) {
-                                    FrictionMethod.math -> "Math"
-                                    FrictionMethod.waitOneMin -> "Wait"
-                                    FrictionMethod.password -> "Use profile PIN"
-                                    else -> method.name
-                                },
-                            )
-                        },
-                    )
-                }
-            }
-            if (defaultFriction == FrictionMethod.math) {
-                Text("Math difficulty", fontWeight = FontWeight.Medium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FrictionDifficulty.entries.forEach { difficulty ->
-                        FilterChip(
-                            selected = frictionDifficulty == difficulty,
-                            onClick = {
-                                frictionDifficulty = difficulty
-                                profile?.copy(defaultFrictionDifficulty = difficulty)
-                                    ?.let { viewModel.updateProfile(it) }
-                            },
-                            label = {
-                                Text(difficulty.name.replaceFirstChar { it.uppercase() })
-                            },
-                        )
-                    }
-                }
-            }
-            if (defaultFriction == FrictionMethod.waitOneMin) {
-                DurationPicker(
-                    label = "Wait duration",
-                    totalMs = waitSeconds * 1000L,
-                    minuteStep = 1,
-                    onDurationChange = { ms ->
-                        waitSeconds = (ms / 1000).toInt().coerceIn(30, 5 * 60)
-                        profile?.copy(waitDurationSeconds = waitSeconds)?.let { viewModel.updateProfile(it) }
-                    },
-                )
-            }
-
-            Text("Profile PIN", fontWeight = FontWeight.SemiBold)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Switch(checked = pinEnabled, onCheckedChange = { pinEnabled = it })
-                Text("Require PIN to open apps in this profile")
-            }
-            PinTextField(
-                value = pin,
-                onValueChange = { pin = it },
-                label = "Profile PIN",
+            ProfileNavRow(
+                title = stringResource(R.string.apps),
+                subtitle = stringResource(R.string.manage_tracked_apps),
+                onClick = onEditApps,
+                iconPackages = monitoredPackages,
             )
-            Text(
-                "Same PIN is used if you pick 'Use profile PIN' when blocked.",
-                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-            )
-            Button(
-                onClick = {
-                    profile?.copy(
-                        lockEnabled = pinEnabled,
-                        passwordHash = if (pin.isNotBlank()) PasswordHasher.hash(pin) else profile.passwordHash,
-                    )?.let { viewModel.updateProfile(it) }
-                    pin = ""
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Save profile PIN") }
+            ProfileNavRow(stringResource(R.string.schedule), stringResource(R.string.allowed_hours), onEditSchedule)
+            ProfileNavRow(stringResource(R.string.time_limits), stringResource(R.string.daily_session_break), onEditLimits)
+            ProfileNavRow(stringResource(R.string.rules), stringResource(R.string.open_limit_extension), onEditRules)
+            ProfileNavRow(stringResource(R.string.profile_pin), stringResource(R.string.pin_to_open_apps), onEditPin)
 
             Card(modifier = Modifier.fillMaxWidth().clickable { showDeleteConfirm = true }) {
-                Text("Delete profile", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.delete_profile), modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Medium)
             }
         }
     }
 }
+
+@Composable
+private fun ProfileNavRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    iconPackages: List<String> = emptyList(),
+) {
+    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        ListItem(
+            headlineContent = { Text(title, fontWeight = FontWeight.Medium) },
+            supportingContent = {
+                Column {
+                    Text(subtitle)
+                    if (iconPackages.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            iconPackages.take(5).forEach { pkg ->
+                                AppIcon(pkg, modifier = Modifier.size(24.dp))
+                            }
+                            if (iconPackages.size > 5) {
+                                Text(
+                                    "+${iconPackages.size - 5}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProfileLimitsScreen(
+    profileId: Long,
+    onBack: () -> Unit,
+    viewModel: ProfileViewModel = hiltViewModel(),
+) {
+    val profiles by viewModel.profiles.collectAsState()
+    val profile = profiles.find { it.id == profileId }
+    val saveMessage by viewModel.saveMessage.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    fun limitToDraftMs(value: Long?): Long = value ?: 0L
+    fun draftToSavedMs(value: Long): Long? = value.takeIf { it > 0 }
+
+    var savedDailyMs by remember(profile?.id) { mutableLongStateOf(limitToDraftMs(profile?.dailyLimitMs)) }
+    var savedSessionMs by remember(profile?.id) { mutableLongStateOf(limitToDraftMs(profile?.sessionLimitMs)) }
+    var savedBreakMs by remember(profile?.id) { mutableLongStateOf(limitToDraftMs(profile?.breakDurationMs)) }
+    var savedHourlyMs by remember(profile?.id) { mutableLongStateOf(limitToDraftMs(profile?.hourlyLimitMs)) }
+    var savedWeeklyMs by remember(profile?.id) { mutableLongStateOf(limitToDraftMs(profile?.weeklyLimitMs)) }
+
+    var dailyMs by remember(profile?.id) { mutableLongStateOf(savedDailyMs) }
+    var sessionMs by remember(profile?.id) { mutableLongStateOf(savedSessionMs) }
+    var breakMs by remember(profile?.id) { mutableLongStateOf(savedBreakMs) }
+    var hourlyMs by remember(profile?.id) { mutableLongStateOf(savedHourlyMs) }
+    var weeklyMs by remember(profile?.id) { mutableLongStateOf(savedWeeklyMs) }
+
+    LaunchedEffect(profile?.dailyLimitMs, profile?.sessionLimitMs, profile?.breakDurationMs, profile?.hourlyLimitMs, profile?.weeklyLimitMs) {
+        if (profile == null) return@LaunchedEffect
+        savedDailyMs = limitToDraftMs(profile.dailyLimitMs)
+        savedSessionMs = limitToDraftMs(profile.sessionLimitMs)
+        savedBreakMs = limitToDraftMs(profile.breakDurationMs)
+        savedHourlyMs = limitToDraftMs(profile.hourlyLimitMs)
+        savedWeeklyMs = limitToDraftMs(profile.weeklyLimitMs)
+        dailyMs = savedDailyMs
+        sessionMs = savedSessionMs
+        breakMs = savedBreakMs
+        hourlyMs = savedHourlyMs
+        weeklyMs = savedWeeklyMs
+    }
+
+    val isDirty = dailyMs != savedDailyMs ||
+        sessionMs != savedSessionMs ||
+        breakMs != savedBreakMs ||
+        hourlyMs != savedHourlyMs ||
+        weeklyMs != savedWeeklyMs
+
+    fun saveLimits() {
+        profile?.copy(
+            dailyLimitMs = draftToSavedMs(dailyMs),
+            sessionLimitMs = draftToSavedMs(sessionMs),
+            breakDurationMs = breakMs,
+            hourlyLimitMs = draftToSavedMs(hourlyMs),
+            weeklyLimitMs = draftToSavedMs(weeklyMs),
+        )?.let { updated ->
+            viewModel.saveProfile(updated)
+            savedDailyMs = dailyMs
+            savedSessionMs = sessionMs
+            savedBreakMs = breakMs
+            savedHourlyMs = hourlyMs
+            savedWeeklyMs = weeklyMs
+        }
+    }
+
+    LaunchedEffect(saveMessage) {
+        saveMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearSaveMessage()
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.time_limits)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(stringResource(R.string.limits_apply_all_apps), style = MaterialTheme.typography.bodySmall)
+            DurationPicker(stringResource(R.string.daily_limit), dailyMs, minuteStep = 15, onDurationChange = { dailyMs = it })
+            DurationPicker(stringResource(R.string.session_limit), sessionMs, minuteStep = 5, onDurationChange = { sessionMs = it })
+            DurationPicker(stringResource(R.string.break_duration), breakMs, minuteStep = 5, onDurationChange = { breakMs = it })
+            DurationPicker(stringResource(R.string.hourly_limit_off), hourlyMs, minuteStep = 5, onDurationChange = { hourlyMs = it })
+            DurationPicker(stringResource(R.string.weekly_limit_off), weeklyMs, minuteStep = 60, onDurationChange = { weeklyMs = it })
+            if (isDirty) {
+                Button(
+                    onClick = { saveLimits() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.save_limits)) }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProfilePinScreen(
+    profileId: Long,
+    onBack: () -> Unit,
+    viewModel: ProfileViewModel = hiltViewModel(),
+) {
+    val profiles by viewModel.profiles.collectAsState()
+    val profile = profiles.find { it.id == profileId }
+    val saveMessage by viewModel.saveMessage.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var pin by remember { mutableStateOf("") }
+    var savedPin by remember { mutableStateOf("") }
+    val pinEnabled = profile?.onOpenAction == OnOpenAction.pinGate
+
+    LaunchedEffect(profileId, profile?.passwordHash) {
+        val loaded = if (!profile?.passwordHash.isNullOrBlank()) {
+            viewModel.loadProfilePin(profileId).orEmpty()
+        } else {
+            ""
+        }
+        pin = loaded
+        savedPin = loaded
+    }
+
+    LaunchedEffect(saveMessage) {
+        saveMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearSaveMessage()
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.profile_pin)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                if (pinEnabled) {
+                    stringResource(R.string.profile_pin_enabled_hint)
+                } else {
+                    stringResource(R.string.profile_pin_disabled_hint)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            ProfilePinEditor(
+                pin = pin,
+                savedPin = savedPin,
+                onPinChange = { pin = it },
+                label = stringResource(R.string.profile_pin),
+                hint = stringResource(R.string.profile_pin_rules_hint),
+                clearHint = stringResource(R.string.clear_pin_hint),
+                profile = profile,
+                viewModel = viewModel,
+                pinGateActive = pinEnabled,
+                onSaved = { savedPin = it },
+            )
+        }
+    }
+}
+
+

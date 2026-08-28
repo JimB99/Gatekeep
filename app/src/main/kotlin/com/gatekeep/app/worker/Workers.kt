@@ -7,6 +7,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.gatekeep.app.R
 import com.gatekeep.app.enforcement.GatekeepNotificationHelper
 import com.gatekeep.app.util.UsageStatsCollector
 import com.gatekeep.data.repository.ProfileRepository
@@ -87,8 +88,8 @@ class WeeklyReportWorker @AssistedInject constructor(
         if (settingsRepository.isQuietHours(minuteOfDay, settings)) return Result.success()
 
         notificationHelper.showWarning(
-            "Weekly Gatekeep Report",
-            "Review your screen time stats in the app.",
+            applicationContext.getString(R.string.weekly_report_title),
+            applicationContext.getString(R.string.weekly_report_body),
         )
         return Result.success()
     }

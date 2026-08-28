@@ -15,6 +15,17 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class UsageHudInfo(
+    val sessionRemainingMs: Long? = null,
+    val dailyRemainingMs: Long? = null,
+    val dailyLimitMs: Long? = null,
+    val dailyUsedMs: Long? = null,
+    val hourlyRemainingMs: Long? = null,
+    val hourlyLimitMs: Long? = null,
+    val weeklyRemainingMs: Long? = null,
+    val weeklyLimitMs: Long? = null,
+)
+
 @Singleton
 class GatekeepNotificationHelper @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -68,37 +79,58 @@ class GatekeepNotificationHelper @Inject constructor(
 
     fun showCountdown(
         appLabel: String,
-        sessionDeadlineMs: Long?,
-        dailyDeadlineMs: Long?,
-        dailyLimitMs: Long? = null,
-        usedTodayMs: Long? = null,
+        hud: UsageHudInfo,
     ) {
         val intent = Intent(context, MainActivity::class.java)
         val pending = PendingIntent.getActivity(context, 1, intent, PendingIntent.FLAG_IMMUTABLE)
-        val primaryDeadline = sessionDeadlineMs ?: dailyDeadlineMs ?: return
-        val now = System.currentTimeMillis()
-        val primaryLabel = if (sessionDeadlineMs != null) "Session left" else "Daily left"
+        val parts = buildList {
+            hud.sessionRemainingMs?.let {
+                add(context.getString(R.string.hud_session_format, formatDurationMs(context, it)))
+            }
+            if (hud.dailyLimitMs != null && hud.dailyUsedMs != null) {
+                add(
+                    context.getString(
+                        R.string.hud_daily_used_format,
+                        formatDurationMs(context, hud.dailyUsedMs),
+                        formatDurationMs(context, hud.dailyLimitMs),
+                    ),
+                )
+            } else {
+                hud.dailyRemainingMs?.let {
+                    add(context.getString(R.string.hud_daily_left_format, formatDurationMs(context, it)))
+                }
+            }
+            if (hud.hourlyLimitMs != null && hud.hourlyRemainingMs != null) {
+                val used = (hud.hourlyLimitMs - hud.hourlyRemainingMs).coerceAtLeast(0)
+                add(
+                    context.getString(
+                        R.string.hud_hourly_format,
+                        formatDurationMs(context, used),
+                        formatDurationMs(context, hud.hourlyLimitMs),
+                    ),
+                )
+            }
+            if (hud.weeklyLimitMs != null && hud.weeklyRemainingMs != null) {
+                val used = (hud.weeklyLimitMs - hud.weeklyRemainingMs).coerceAtLeast(0)
+                add(
+                    context.getString(
+                        R.string.hud_weekly_format,
+                        formatDurationMs(context, used),
+                        formatDurationMs(context, hud.weeklyLimitMs),
+                    ),
+                )
+            }
+        }
+        if (parts.isEmpty()) return
 
         val builder = NotificationCompat.Builder(context, CHANNEL_SESSION_TIMER)
-            .setContentTitle("$appLabel — $primaryLabel")
+            .setContentTitle(context.getString(R.string.hud_usage_title, appLabel))
+            .setContentText(parts.joinToString(" · "))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(parts.joinToString("\n")))
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentIntent(pending)
-            .setOngoing(false)
-            .setOnlyAlertOnce(true)
+            .setOngoing(true)
             .setSilent(true)
-            .setUsesChronometer(true)
-            .setChronometerCountDown(true)
-            .setWhen(primaryDeadline)
-            .setShowWhen(true)
-
-        if (dailyLimitMs != null && usedTodayMs != null) {
-            builder.setContentText(
-                "Today: ${formatDurationMs(usedTodayMs)} / ${formatDurationMs(dailyLimitMs)} limit",
-            )
-        } else {
-            val remainingMs = (primaryDeadline - now).coerceAtLeast(0)
-            builder.setContentText(formatDurationMs(remainingMs))
-        }
         notificationManager.notify(COUNTDOWN_NOTIFICATION_ID, builder.build())
     }
 

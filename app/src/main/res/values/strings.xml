@@ -8,4 +8,307 @@
     <string name="channel_service">Gatekeep service</string>
     <string name="channel_session_timer">Session timer</string>
     <string name="channel_warnings">Warnings</string>
+
+    <!-- Common -->
+    <string name="back">Back</string>
+    <string name="cancel">Cancel</string>
+    <string name="confirm">Confirm</string>
+    <string name="create">Create</string>
+    <string name="save">Save</string>
+    <string name="set">Set</string>
+    <string name="delete">Delete</string>
+    <string name="remove">Remove</string>
+    <string name="unlock">Unlock</string>
+    <string name="next">Next</string>
+    <string name="previous">Previous</string>
+    <string name="on">On</string>
+    <string name="off">Off</string>
+    <string name="name">Name</string>
+    <string name="pin">PIN</string>
+    <string name="incorrect_pin">Incorrect PIN</string>
+    <string name="saved">Saved</string>
+    <string name="default_profile_name">Default</string>
+    <string name="hide_pin">Hide PIN</string>
+    <string name="show_pin">Show PIN</string>
+
+    <!-- Language -->
+    <string name="language">Language</string>
+    <string name="language_english">English</string>
+    <string name="language_german">Deutsch</string>
+    <string name="language_spanish">Español</string>
+
+    <!-- Settings -->
+    <string name="settings">Settings</string>
+    <string name="security">Security</string>
+    <string name="notifications">Notifications</string>
+    <string name="enforcement">Enforcement</string>
+    <string name="about">About</string>
+    <string name="pin_set">PIN set</string>
+    <string name="no_pin">No PIN</string>
+    <string name="timer">Timer</string>
+    <string name="warnings">Warnings</string>
+    <string name="weekly">Weekly</string>
+    <string name="version_format">Version %1$s</string>
+    <string name="version_full_format">Version %1$s (%2$d)</string>
+    <string name="replay_onboarding">Replay onboarding</string>
+    <string name="permissions_and_setup">Permissions and setup</string>
+    <string name="require_pin_to_open">Require PIN to open Gatekeep</string>
+    <string name="app_lock_help_set">Locks the app when you leave Gatekeep or reopen it.</string>
+    <string name="app_lock_help_unset">Set a PIN in App lock below first.</string>
+    <string name="app_pin">App PIN</string>
+    <string name="save_app_pin">Save app PIN</string>
+    <string name="protection">Protection</string>
+    <string name="strict_mode">Strict mode</string>
+    <string name="strict_mode_help">Requires app PIN for profile changes and disables emergency bypass.</string>
+    <string name="device_admin">Device admin (uninstall deterrent)</string>
+    <string name="device_admin_explanation">Optional uninstall deterrent during strict mode</string>
+    <string name="usage_hud">Usage HUD while app open</string>
+    <string name="usage_hud_help">Shows session and limit timers while a tracked app is in the foreground.</string>
+    <string name="limit_warnings">Limit warnings</string>
+    <string name="limit_warnings_help">Alert when approaching daily or session limits.</string>
+    <string name="weekly_report">Weekly report</string>
+    <string name="weekly_report_help">Summary notification (respects quiet hours).</string>
+    <string name="quiet_hours">Quiet hours</string>
+    <string name="start">Start</string>
+    <string name="end">End</string>
+    <string name="save_quiet_hours">Save quiet hours</string>
+    <string name="enforcement_enabled">Enforcement enabled</string>
+    <string name="enforcement_enabled_help">Turn off all blocking and timers without uninstalling Gatekeep.</string>
+    <string name="last_error_format">Last error: %1$s</string>
+    <string name="no_recent_enforcement_errors">No recent enforcement errors</string>
+
+    <!-- Home -->
+    <string name="stats">Stats</string>
+    <string name="new_profile">New profile</string>
+    <string name="create_profile_hint">Create a profile and add apps to start limiting screen time.</string>
+    <string name="apps_count_usage_today">%1$d apps · %2$s used today</string>
+    <string name="apps">Apps</string>
+    <string name="allowed_hours">Allowed hours</string>
+    <string name="usage_format">%1$s: %2$s / %3$s</string>
+
+    <!-- Profile -->
+    <string name="profile">Profile</string>
+    <string name="enter_app_pin_change_profile">Enter app PIN to change profile</string>
+    <string name="delete_profile_title">Delete profile?</string>
+    <string name="delete_profile_message">Delete %1$s? This cannot be undone.</string>
+    <string name="profile_name">Profile name</string>
+    <string name="save_name">Save name</string>
+    <string name="active">Active</string>
+    <string name="manage_tracked_apps">Manage tracked apps</string>
+    <string name="schedule">Schedule</string>
+    <string name="time_limits">Time limits</string>
+    <string name="daily_session_break">Daily, session, break</string>
+    <string name="rules">Rules</string>
+    <string name="open_limit_extension">Open, limit, extension policy</string>
+    <string name="profile_pin">Profile PIN</string>
+    <string name="pin_to_open_apps">PIN to open apps</string>
+    <string name="delete_profile">Delete profile</string>
+    <string name="limits_apply_all_apps">Limits apply to all apps in profile</string>
+    <string name="daily_limit">Daily limit</string>
+    <string name="session_limit">Session limit</string>
+    <string name="break_duration">Break duration (0 = no wait)</string>
+    <string name="hourly_limit_off">Hourly limit (0 = off)</string>
+    <string name="weekly_limit_off">Weekly limit (0 = off)</string>
+    <string name="save_limits">Save limits</string>
+    <string name="duration_step_hint">Adjust by %1$d minutes</string>
+    <string name="delete_pin_digit">Delete last digit</string>
+    <string name="when_opening_app">When opening an app</string>
+    <string name="when_limit_reached">When a time limit is reached</string>
+    <string name="during_use_session">During use (session limit)</string>
+    <string name="math_difficulty">Math difficulty</string>
+    <string name="wait_before_opening_label">Wait before opening</string>
+    <string name="wait_during_use">Wait during use (session/limit)</string>
+    <string name="extension_options">Extension options</string>
+    <string name="extension_minutes_label">Extension minutes</string>
+    <string name="extension_custom">Custom</string>
+    <string name="extension_custom_short">Custom</string>
+    <string name="extension_custom_minutes">Custom minutes</string>
+    <string name="extension_overlay_preview">Overlay buttons: %1$s</string>
+    <string name="extension_quota_today">Today: %1$d/%2$d extensions</string>
+    <string name="extension_quota_today_unlimited">Today: %1$d extensions</string>
+    <string name="extension_quota_consecutive">In a row: %1$d/%2$d</string>
+    <string name="extension_quota_consecutive_unlimited">In a row: %1$d</string>
+    <string name="extension_unlimited">Unlimited</string>
+    <string name="rules_group_deterrent">Deterrent</string>
+    <string name="rules_group_block">Block</string>
+    <string name="rules_group_extend">Extend</string>
+    <string name="minutes_comma_separated">Minutes (comma-separated)</string>
+    <string name="max_extensions_per_day">Max extensions per day (empty = unlimited)</string>
+    <string name="max_consecutive_extensions">Max consecutive extensions (empty = unlimited)</string>
+    <string name="show_no_limit_today">Show \"No limit today\" button</string>
+    <string name="profile_pin_enabled_hint">PIN is enabled via Rules → When opening an app → PIN.</string>
+    <string name="profile_pin_disabled_hint">PIN is off. Enable it in Rules → When opening an app → PIN.</string>
+    <string name="profile_pin_rules_hint">Saving stores the PIN. Enable or disable PIN in Rules.</string>
+    <string name="save_profile_pin">Save profile PIN</string>
+    <string name="clear_pin_hint">Clear the field and save to remove the stored PIN.</string>
+    <string name="pin_gate_rules_hint">PIN is required when opening apps. Manage the stored PIN here or in Profile PIN.</string>
+    <string name="open_action_none">None</string>
+    <string name="open_action_pin">PIN</string>
+    <string name="open_action_math">Math</string>
+    <string name="open_action_wait">Wait</string>
+    <string name="limit_action_notify">Notify only</string>
+    <string name="limit_action_extend">Limit + extend</string>
+    <string name="limit_action_hard_block">Hard block</string>
+    <string name="difficulty_easy">Easy</string>
+    <string name="difficulty_medium">Medium</string>
+    <string name="difficulty_hard">Hard</string>
+
+    <!-- Apps picker -->
+    <string name="select_apps">Select apps</string>
+    <string name="search">Search</string>
+    <string name="selected">Selected</string>
+    <string name="all_apps">All apps</string>
+    <string name="not_available_now">Not available right now</string>
+
+    <!-- Schedule -->
+    <string name="schedule_hint">Apps in this profile can only be used during these times.</string>
+    <string name="allowed_days">Allowed days</string>
+    <string name="start_time">Start time</string>
+    <string name="end_time">End time</string>
+    <string name="add_windows">Add window(s)</string>
+    <string name="schedule_conflict">These hours overlap an existing window on one or more selected days.</string>
+    <string name="schedule_invalid_time_range">End time must be after start time.</string>
+    <string name="day_sun">Sun</string>
+    <string name="day_mon">Mon</string>
+    <string name="day_tue">Tue</string>
+    <string name="day_wed">Wed</string>
+    <string name="day_thu">Thu</string>
+    <string name="day_fri">Fri</string>
+    <string name="day_sat">Sat</string>
+    <string name="day_letter_sun">S</string>
+    <string name="day_letter_mon">M</string>
+    <string name="day_letter_tue">T</string>
+    <string name="day_letter_wed">W</string>
+    <string name="day_letter_thu">T</string>
+    <string name="day_letter_fri">F</string>
+    <string name="day_letter_sat">S</string>
+
+    <!-- Stats -->
+    <string name="statistics">Statistics</string>
+    <string name="range_day">Day</string>
+    <string name="range_week">Week</string>
+    <string name="range_month">Month</string>
+    <string name="range_year">Year</string>
+    <string name="screen_time">Screen time</string>
+    <string name="tab_overview">Overview</string>
+    <string name="tab_top_apps">Top apps</string>
+    <string name="tab_tracked">Tracked</string>
+    <string name="current_streak_format">Current streak: %1$d days</string>
+    <string name="longest_streak_format">Longest streak: %1$d days</string>
+    <string name="overrides_format">Overrides: %1$d</string>
+    <string name="week_label_format">Week %1$d (%2$d)</string>
+    <string name="today_suffix">(today)</string>
+    <string name="usage_slash_format">%1$s / %2$s</string>
+    <string name="no_limit_dash">—</string>
+
+    <!-- Pause -->
+    <string name="pause_limits">Pause limits</string>
+    <string name="scope">Scope</string>
+    <string name="scope_all">All</string>
+    <string name="scope_active_profile">Active profile</string>
+    <string name="pause_5_min">Pause 5 minutes</string>
+    <string name="pause_15_min">Pause 15 minutes</string>
+    <string name="pause_60_min">Pause 60 minutes</string>
+    <string name="pause_until_date">Pause until date…</string>
+    <string name="focus_mode_25">Focus mode (25 min)</string>
+    <string name="emergency_bypass">Emergency bypass (15 min)</string>
+    <string name="pause">Pause</string>
+
+    <!-- Onboarding -->
+    <string name="welcome_title">Welcome to Gatekeep</string>
+    <string name="welcome_body">Gatekeep helps you manage screen time with profiles, session limits, schedules, and friction unlocks.</string>
+    <string name="welcome_hud_note">The Session HUD shows a timer bar at the bottom of apps (like Digital Wellbeing). It cannot appear in the Recents screen — that requires system privileges.</string>
+    <string name="perm_usage_title">Usage Access</string>
+    <string name="perm_usage_desc">Required to track how long you use each app.</string>
+    <string name="perm_accessibility_title">Accessibility Service</string>
+    <string name="perm_accessibility_desc">Detects which app is in the foreground to enforce limits.</string>
+    <string name="perm_overlay_title">Display Over Apps</string>
+    <string name="perm_overlay_desc">Shows block screen and session timer HUD.</string>
+    <string name="perm_battery_title">Battery Optimization</string>
+    <string name="perm_battery_desc">Prevents the system from killing Gatekeep on some devices.</string>
+    <string name="allow_notifications">Allow notifications</string>
+    <string name="get_started">Get started</string>
+    <string name="skip_for_now">Skip for now</string>
+    <string name="granted">Granted</string>
+    <string name="not_granted">Not granted</string>
+    <string name="open_settings">Open Settings</string>
+
+    <!-- App lock -->
+    <string name="enter_pin_unlock">Enter PIN to unlock</string>
+
+    <!-- Permissions banner -->
+    <string name="enforcement_issue">Enforcement issue detected</string>
+    <string name="permissions_needed">Permissions needed</string>
+    <string name="usage_not_granted">Usage access not granted</string>
+    <string name="accessibility_not_enabled">Accessibility service not enabled</string>
+    <string name="overlay_not_granted">Display over other apps not granted</string>
+    <string name="open_accessibility_settings">Open Accessibility Settings</string>
+
+    <!-- Pickers -->
+    <string name="custom_duration">Custom duration</string>
+    <string name="custom_time">Custom time</string>
+    <string name="hours">Hours</string>
+    <string name="minutes">Minutes</string>
+    <string name="seconds">Seconds</string>
+    <string name="hour_range">Hour (0–23)</string>
+    <string name="minute">Minute</string>
+    <string name="duration_hours_minutes">%1$dh %2$dm</string>
+    <string name="duration_minutes_seconds">%1$dm %2$ds</string>
+    <string name="duration_seconds">%1$ds</string>
+    <string name="duration_infinity">∞</string>
+    <string name="duration_zero_minutes">0m</string>
+    <string name="step_minus_5m">-5m</string>
+    <string name="step_plus_5m">+5m</string>
+
+    <!-- Block overlay -->
+    <string name="overlay_answer_hint">Answer</string>
+    <string name="overlay_submit">Submit</string>
+    <string name="overlay_continue_anyway">Continue anyway</string>
+    <string name="overlay_close_app">Close app</string>
+    <string name="overlay_no_limit">No limit</string>
+    <string name="overlay_no_limit_today">No limit (for today)</string>
+    <string name="overlay_wait_to_continue">Wait to continue</string>
+    <string name="overlay_use_math_or_wait">Use math or wait in profile rules</string>
+    <string name="overlay_enter_profile_pin">Enter profile PIN</string>
+    <string name="overlay_break_ended">Break ended</string>
+    <string name="overlay_break_ends_in">Break ends in %1$s</string>
+    <string name="extension_minutes_format">+%1$dm</string>
+    <string name="countdown_seconds_format">%1$ds</string>
+
+    <!-- Block messages -->
+    <string name="block_focus_mode">Focus mode is active</string>
+    <string name="block_outside_schedule">Outside allowed time window</string>
+    <string name="block_take_break">Take a break</string>
+    <string name="block_session_limit">Session limit reached</string>
+    <string name="block_daily_limit">Daily limit reached</string>
+    <string name="block_hourly_limit">Hourly limit reached</string>
+    <string name="block_weekly_limit">Weekly limit reached</string>
+    <string name="block_generic">Limit reached</string>
+    <string name="block_open_gate">Open gate</string>
+    <string name="enter_profile_pin">Enter profile PIN</string>
+    <string name="enter_profile_pin_to_open">Enter profile PIN to open %1$s</string>
+    <string name="wait_before_opening">Wait before opening</string>
+    <string name="complete_challenge_to_open">Complete challenge to open</string>
+    <string name="usage_limit_reached_for_app">Usage limit reached for %1$s</string>
+    <string name="limit_reached_title">Limit reached</string>
+    <string name="approaching_limit_title">Approaching limit</string>
+    <string name="approaching_limit_body">%1$s is at 80%% of its limit</string>
+    <string name="extension_denied_title">Extension denied</string>
+    <string name="extension_denied_no_limit_today">No limit today is disabled</string>
+    <string name="extension_denied_not_allowed">Extension time not allowed</string>
+    <string name="extension_denied_daily_limit">Daily extension limit reached</string>
+    <string name="extension_denied_consecutive">Too many extensions in a row</string>
+
+    <!-- Notifications -->
+    <string name="weekly_report_title">Weekly Gatekeep Report</string>
+    <string name="weekly_report_body">Review your screen time stats in the app.</string>
+    <string name="hud_usage_title">%1$s — usage</string>
+    <string name="hud_session_format">Session %1$s</string>
+    <string name="hud_daily_used_format">Daily %1$s / %2$s</string>
+    <string name="hud_daily_left_format">Daily %1$s left</string>
+    <string name="hud_hourly_format">Hourly %1$s / %2$s</string>
+    <string name="hud_weekly_format">Weekly %1$s / %2$s</string>
+
+    <!-- Widget -->
+    <string name="widget_tap_to_open">Tap to open Gatekeep</string>
 </resources>

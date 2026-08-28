@@ -27,6 +27,10 @@ data class ProfileBackupData(
     val gradualTighteningEnabled: Boolean,
     val gradualTighteningTargetDailyMs: Long?,
     val gradualTighteningPercentPerWeek: Int,
+    val onOpenAction: String = "none",
+    val onLimitAction: String = "limitWithExtensions",
+    val onSessionLimitAction: String = "limitWithExtensions",
+    val extensionPolicyJson: String? = null,
 )
 
 @Serializable
@@ -91,6 +95,10 @@ object BackupManager {
             gradualTighteningEnabled = profile.gradualTighteningEnabled,
             gradualTighteningTargetDailyMs = profile.gradualTighteningTargetDailyMs,
             gradualTighteningPercentPerWeek = profile.gradualTighteningPercentPerWeek,
+            onOpenAction = profile.onOpenAction,
+            onLimitAction = profile.onLimitAction,
+            onSessionLimitAction = profile.onSessionLimitAction,
+            extensionPolicyJson = profile.extensionPolicyJson,
         ),
         monitoredApps = apps.map {
             MonitoredAppBackup(it.packageName, it.label, it.category, it.isWhitelistedEssential)

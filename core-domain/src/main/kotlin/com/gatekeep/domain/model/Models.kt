@@ -5,9 +5,48 @@ enum class PauseType {
     fifteenMin,
     sixtyMin,
     untilDatetime,
+    noLimitToday,
     focusMode,
     emergencyBypass,
 }
+
+enum class OnOpenAction {
+    none,
+    pinGate,
+    deterrentMath,
+    deterrentWait,
+}
+
+enum class OnLimitAction {
+    notifyOnly,
+    limitWithExtensions,
+    hardBlock,
+}
+
+enum class OnSessionLimitAction {
+    notifyOnly,
+    deterrentMath,
+    deterrentWait,
+    limitWithExtensions,
+    hardBlock,
+}
+
+data class ExtensionPolicy(
+    val optionMinutes: List<Int> = listOf(1, 5, 10),
+    val maxExtensionsPerDay: Int? = null,
+    val maxConsecutiveExtensions: Int? = null,
+    val showNoLimitToday: Boolean = true,
+)
+
+data class ProfileEnforcementConfig(
+    val onOpenAction: OnOpenAction = OnOpenAction.none,
+    val onLimitAction: OnLimitAction = OnLimitAction.limitWithExtensions,
+    val onSessionLimitAction: OnSessionLimitAction = OnSessionLimitAction.limitWithExtensions,
+    val deterrentDifficulty: FrictionDifficulty = FrictionDifficulty.medium,
+    val openWaitDurationSeconds: Int = 60,
+    val sessionWaitDurationSeconds: Int = 60,
+    val extensionPolicy: ExtensionPolicy = ExtensionPolicy(),
+)
 
 enum class FrictionMethod {
     math,
@@ -57,8 +96,23 @@ data class Profile(
     val weeklyLimitMs: Long? = null,
     val sessionLimitMs: Long? = null,
     val breakDurationMs: Long? = null,
-    val waitDurationSeconds: Int = 60,
+    val openWaitDurationSeconds: Int = 60,
+    val sessionWaitDurationSeconds: Int = 60,
+    val onOpenAction: OnOpenAction = OnOpenAction.none,
+    val onLimitAction: OnLimitAction = OnLimitAction.limitWithExtensions,
+    val onSessionLimitAction: OnSessionLimitAction = OnSessionLimitAction.limitWithExtensions,
+    val extensionPolicy: ExtensionPolicy = ExtensionPolicy(),
 ) {
+    fun enforcementConfig(): ProfileEnforcementConfig = ProfileEnforcementConfig(
+        onOpenAction = onOpenAction,
+        onLimitAction = onLimitAction,
+        onSessionLimitAction = onSessionLimitAction,
+        deterrentDifficulty = defaultFrictionDifficulty,
+        openWaitDurationSeconds = openWaitDurationSeconds,
+        sessionWaitDurationSeconds = sessionWaitDurationSeconds,
+        extensionPolicy = extensionPolicy,
+    )
+
     fun toAppLimit(packageName: String): AppLimit = AppLimit(
         profileId = id,
         packageName = packageName,
@@ -123,6 +177,8 @@ data class SessionState(
     val packageName: String,
     val sessionStartEpochMs: Long,
     val breakUntilEpochMs: Long? = null,
+    val excludedMs: Long = 0,
+    val frictionStartedAtEpochMs: Long? = null,
 )
 
 data class RuleEvaluationContext(
@@ -138,6 +194,7 @@ data class RuleEvaluationContext(
     val focusModeUntilMs: Long? = null,
     val emergencyBypassAvailable: Boolean = false,
     val lastEmergencyBypassEpochMs: Long? = null,
+    val enforcementConfig: ProfileEnforcementConfig = profile.enforcementConfig(),
 )
 
 sealed class RuleResult {
@@ -147,17 +204,24 @@ sealed class RuleResult {
         val remainingHourlyMs: Long?,
         val remainingWeeklyMs: Long?,
         val warningLevel: WarningLevel = WarningLevel.none,
+        val notifyLimitReached: Boolean = false,
+        val notifyLimitReason: BlockReason? = null,
     ) : RuleResult()
 
     data class Blocked(
         val reason: BlockReason,
         val breakUntilEpochMs: Long? = null,
-        val message: String,
+        val bypassAllowed: Boolean = true,
+        val sessionDeterrent: FrictionMethod? = null,
     ) : RuleResult()
 
     data class DelayOpen(
         val delaySeconds: Int,
-        val message: String,
+        val openDeterrent: FrictionMethod? = null,
+    ) : RuleResult()
+
+    data class OpenDeterrent(
+        val method: FrictionMethod,
     ) : RuleResult()
 }
 

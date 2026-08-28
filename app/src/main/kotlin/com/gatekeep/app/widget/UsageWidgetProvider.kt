@@ -11,7 +11,7 @@ class UsageWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         for (id in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_usage)
-            views.setTextViewText(R.id.widget_usage, "Tap to open Gatekeep")
+            views.setTextViewText(R.id.widget_usage, context.getString(R.string.widget_tap_to_open))
             appWidgetManager.updateAppWidget(id, views)
         }
     }

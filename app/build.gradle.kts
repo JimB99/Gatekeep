@@ -73,6 +73,7 @@ dependencies {
     implementation(project(":core-data"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel)
     implementation("androidx.lifecycle:lifecycle-process:2.8.7")
@@ -89,6 +90,7 @@ dependencies {
     implementation(libs.androidx.datastore)
     implementation(libs.androidx.work)
     implementation(libs.androidx.biometric)
+    implementation(libs.androidx.security.crypto)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
 

@@ -1,13 +1,17 @@
 package com.gatekeep.domain
 
-import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.SessionState
 
 object SessionTracker {
 
     fun sessionDurationMs(session: SessionState?, nowEpochMs: Long): Long {
         if (session == null) return 0
-        return (nowEpochMs - session.sessionStartEpochMs).coerceAtLeast(0)
+        var duration = (nowEpochMs - session.sessionStartEpochMs).coerceAtLeast(0)
+        duration -= session.excludedMs
+        session.frictionStartedAtEpochMs?.let { started ->
+            duration -= (nowEpochMs - started).coerceAtLeast(0)
+        }
+        return duration.coerceAtLeast(0)
     }
 
     fun isOnBreak(session: SessionState?, nowEpochMs: Long): Boolean {
@@ -21,7 +25,7 @@ object SessionTracker {
     }
 
     fun evaluateSession(
-        limit: AppLimit?,
+        limit: com.gatekeep.domain.model.AppLimit?,
         session: SessionState?,
         nowEpochMs: Long,
     ): SessionCheckResult {
@@ -61,6 +65,21 @@ object SessionTracker {
 
     fun clearBreak(session: SessionState): SessionState =
         session.copy(breakUntilEpochMs = null)
+
+    fun startFriction(session: SessionState, nowEpochMs: Long): SessionState =
+        session.copy(frictionStartedAtEpochMs = nowEpochMs)
+
+    fun endFriction(session: SessionState, nowEpochMs: Long): SessionState {
+        val started = session.frictionStartedAtEpochMs ?: return session
+        val added = (nowEpochMs - started).coerceAtLeast(0)
+        return session.copy(
+            excludedMs = session.excludedMs + added,
+            frictionStartedAtEpochMs = null,
+        )
+    }
+
+    fun addExcludedTime(session: SessionState, ms: Long): SessionState =
+        session.copy(excludedMs = session.excludedMs + ms.coerceAtLeast(0))
 
     sealed class SessionCheckResult {
         data class Allowed(val remainingSessionMs: Long?) : SessionCheckResult()

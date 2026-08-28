@@ -24,13 +24,13 @@ object LimitEvaluator {
         val weeklyRemaining = limit.weeklyLimitMs?.let { it - usage.weeklyMs }
 
         if (dailyRemaining != null && dailyRemaining <= 0) {
-            return LimitCheckResult.Blocked("Daily limit reached")
+            return LimitCheckResult.Blocked(com.gatekeep.domain.model.BlockReason.dailyLimit)
         }
         if (hourlyRemaining != null && hourlyRemaining <= 0) {
-            return LimitCheckResult.Blocked("Hourly limit reached")
+            return LimitCheckResult.Blocked(com.gatekeep.domain.model.BlockReason.hourlyLimit)
         }
         if (weeklyRemaining != null && weeklyRemaining <= 0) {
-            return LimitCheckResult.Blocked("Weekly limit reached")
+            return LimitCheckResult.Blocked(com.gatekeep.domain.model.BlockReason.weeklyLimit)
         }
 
         val warning = when {
@@ -61,6 +61,6 @@ object LimitEvaluator {
             val warningLevel: WarningLevel,
         ) : LimitCheckResult()
 
-        data class Blocked(val message: String) : LimitCheckResult()
+        data class Blocked(val reason: com.gatekeep.domain.model.BlockReason) : LimitCheckResult()
     }
 }

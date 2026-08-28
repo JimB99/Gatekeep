@@ -30,8 +30,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.gatekeep.app.R
 import com.gatekeep.app.ui.components.AppIcon
 import com.gatekeep.app.ui.viewmodel.AppPickerViewModel
 
@@ -61,10 +63,10 @@ fun AppPickerScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Select apps") },
+                title = { Text(stringResource(R.string.select_apps)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
                     }
                 },
             )
@@ -74,14 +76,20 @@ fun AppPickerScreen(
             OutlinedTextField(
                 value = search,
                 onValueChange = { search = it },
-                label = { Text("Search") },
+                label = { Text(stringResource(R.string.search)) },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
             LazyColumn(
                 modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
             ) {
                 if (selectedApps.isNotEmpty()) {
-                    item { Text("Selected", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 8.dp)) }
+                    item {
+                        Text(
+                            stringResource(R.string.selected),
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(vertical = 8.dp),
+                        )
+                    }
                     items(selectedApps, key = { "sel-${it.packageName}" }) { app ->
                         AppPickerRow(
                             app = app,
@@ -94,7 +102,13 @@ fun AppPickerScreen(
                     }
                 }
                 if (otherApps.isNotEmpty()) {
-                    item { Text("All apps", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 8.dp)) }
+                    item {
+                        Text(
+                            stringResource(R.string.all_apps),
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(vertical = 8.dp),
+                        )
+                    }
                     items(otherApps, key = { "all-${it.packageName}" }) { app ->
                         AppPickerRow(
                             app = app,
@@ -132,7 +146,7 @@ private fun AppPickerRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(app.label, color = contentColor)
             Text(
-                if (scheduleAllowed) app.packageName else "Not available right now",
+                if (scheduleAllowed) app.packageName else stringResource(R.string.not_available_now),
                 style = MaterialTheme.typography.bodySmall,
                 color = contentColor,
             )

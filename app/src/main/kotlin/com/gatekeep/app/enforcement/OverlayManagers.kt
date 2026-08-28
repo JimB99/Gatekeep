@@ -5,6 +5,8 @@ import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
@@ -13,6 +15,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import com.gatekeep.app.R
 import com.gatekeep.app.util.PasswordHasher
@@ -29,15 +32,19 @@ import javax.inject.Singleton
 class BlockOverlayManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val coordinator: dagger.Lazy<EnforcementCoordinator>,
+    private val screenStateMonitor: ScreenStateMonitor,
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val inputMethodManager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
     private val mainHandler = Handler(Looper.getMainLooper())
     private var overlayView: View? = null
     private var waitRunnable: Runnable? = null
+    private var breakRunnable: Runnable? = null
+    private var waitStopwatch: ScreenStateMonitor.PausedStopwatch? = null
     private var frictionInProgress = false
     private var currentChallenge: MathChallenge? = null
     private var overlayParams: WindowManager.LayoutParams? = null
+    private var currentRequest: BlockOverlayRequest? = null
 
     fun isFrictionInProgress(): Boolean = frictionInProgress
 
@@ -47,30 +54,17 @@ class BlockOverlayManager @Inject constructor(
     }
 
     @SuppressLint("InflateParams")
-    fun show(
-        packageName: String,
-        message: String,
-        reason: String,
-        breakUntilMs: Long?,
-        frictionMethod: FrictionMethod,
-        difficulty: FrictionDifficulty,
-        extensionMs: Long,
-        waitDurationSeconds: Int = 60,
-        profilePasswordHash: String? = null,
-        onProfileUnlocked: (() -> Unit)? = null,
-    ) {
+    fun show(request: BlockOverlayRequest) {
         mainHandler.post {
             try {
+                currentRequest = request
                 if (overlayView != null && frictionInProgress) return@post
                 if (overlayView != null) {
-                    updateBlock(message, reason, breakUntilMs)
+                    updateBlock(request.message, request.reason, request.breakUntilMs)
+                    startBreakTicker(request.breakUntilMs)
                     return@post
                 }
-                createBlockOverlay(
-                    packageName, message, reason, breakUntilMs,
-                    frictionMethod, difficulty, extensionMs, waitDurationSeconds,
-                    profilePasswordHash, onProfileUnlocked,
-                )
+                createBlockOverlay(request)
             } catch (_: Exception) { }
         }
     }
@@ -78,21 +72,24 @@ class BlockOverlayManager @Inject constructor(
     fun showDelay(delaySeconds: Int, message: String, onComplete: () -> Unit) {
         mainHandler.post {
             try {
-                hide()
+                hide(skipDismissCallback = true)
                 val view = LayoutInflater.from(context).inflate(R.layout.overlay_block, null)
                 view.findViewById<TextView>(R.id.block_message).text = message
                 view.findViewById<Button>(R.id.block_continue_btn).visibility = View.GONE
                 view.findViewById<Button>(R.id.block_back_btn).visibility = View.GONE
+                view.findViewById<LinearLayout>(R.id.extension_buttons).visibility = View.GONE
                 val countdown = view.findViewById<TextView>(R.id.wait_countdown)
                 countdown.visibility = View.VISIBLE
                 var remaining = delaySeconds
                 countdown.text = "${remaining}s"
+                val stopwatch = screenStateMonitor.createStopwatch()
                 addOverlay(view, focusable = false)
                 waitRunnable = object : Runnable {
                     override fun run() {
-                        remaining--
+                        val elapsedSec = (stopwatch.elapsedMs() / 1000).toInt()
+                        remaining = (delaySeconds - elapsedSec).coerceAtLeast(0)
                         if (remaining <= 0) {
-                            hide()
+                            removeOverlayOnly()
                             onComplete()
                         } else {
                             countdown.text = "${remaining}s"
@@ -105,57 +102,131 @@ class BlockOverlayManager @Inject constructor(
         }
     }
 
-    fun hide() {
+    fun hide(skipDismissCallback: Boolean = false) {
         mainHandler.post {
             waitRunnable?.let { mainHandler.removeCallbacks(it) }
             waitRunnable = null
+            breakRunnable?.let { mainHandler.removeCallbacks(it) }
+            breakRunnable = null
+            waitStopwatch = null
             frictionInProgress = false
             currentChallenge = null
-            overlayView?.let {
-                runCatching { windowManager.removeView(it) }
-                overlayView = null
-                overlayParams = null
+            currentRequest = null
+            removeOverlayOnly()
+            if (!skipDismissCallback) {
+                coordinator.get().onBlockDismissed()
             }
-            coordinator.get().onBlockDismissed()
+        }
+    }
+
+    private fun removeOverlayOnly() {
+        overlayView?.let {
+            runCatching { windowManager.removeView(it) }
+            overlayView = null
+            overlayParams = null
         }
     }
 
     @SuppressLint("InflateParams")
-    private fun createBlockOverlay(
-        packageName: String,
-        message: String,
-        reason: String,
-        breakUntilMs: Long?,
-        frictionMethod: FrictionMethod,
-        difficulty: FrictionDifficulty,
-        extensionMs: Long,
-        waitDurationSeconds: Int,
-        profilePasswordHash: String?,
-        onProfileUnlocked: (() -> Unit)?,
-    ) {
+    private fun createBlockOverlay(request: BlockOverlayRequest) {
         val view = LayoutInflater.from(context).inflate(R.layout.overlay_block, null)
-        updateBlockView(view, message, reason, breakUntilMs)
+        updateBlockView(view, request.message, request.reason, request.breakUntilMs)
 
-        val challenge = if (frictionMethod == FrictionMethod.math) {
-            FrictionChallenge.generate(difficulty).also { currentChallenge = it }
+        val challenge = if (request.frictionMethod == FrictionMethod.math) {
+            FrictionChallenge.generate(request.difficulty).also { currentChallenge = it }
         } else null
 
-        view.findViewById<Button>(R.id.block_back_btn).setOnClickListener {
-            ForegroundMonitorAccessibilityService.instance?.performGlobalAction(
-                android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME,
-            )
-            hide()
+        view.findViewById<Button>(R.id.block_back_btn).apply {
+            setBackgroundColor(0xFF424242.toInt())
+            setTextColor(0xFFFFFFFF.toInt())
+            setOnClickListener {
+                ForegroundMonitorAccessibilityService.instance?.performGlobalAction(
+                    android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME,
+                )
+                hide()
+            }
         }
 
         addOverlay(view, focusable = false)
+        startBreakTicker(request.breakUntilMs)
 
-        if (reason == "profilePin" || (frictionMethod == FrictionMethod.password && profilePasswordHash != null)) {
-            frictionInProgress = true
-            showPasswordFriction(view, profilePasswordHash, packageName, extensionMs, onProfileUnlocked)
-        } else {
-            view.findViewById<Button>(R.id.block_continue_btn).setOnClickListener {
-                showFriction(view, frictionMethod, challenge, packageName, extensionMs, waitDurationSeconds, profilePasswordHash)
+        val continueBtn = view.findViewById<Button>(R.id.block_continue_btn)
+        val extensionContainer = view.findViewById<LinearLayout>(R.id.extension_buttons)
+        val timeButtons = view.findViewById<LinearLayout>(R.id.extension_time_buttons)
+        val noLimitContainer = view.findViewById<LinearLayout>(R.id.extension_no_limit_container)
+
+        if (!request.bypassAllowed) {
+            continueBtn.visibility = View.GONE
+            extensionContainer.visibility = View.GONE
+        } else if (request.useExtensionButtons && request.extensionOptionMinutes.isNotEmpty()) {
+            continueBtn.visibility = View.GONE
+            extensionContainer.visibility = View.VISIBLE
+            bindExtensionQuota(view, request)
+            timeButtons.removeAllViews()
+            noLimitContainer.removeAllViews()
+            val density = context.resources.displayMetrics.density
+            val hMargin = (4 * density).toInt()
+            val vPadding = (8 * density).toInt()
+            request.extensionOptionMinutes.forEach { minutes ->
+                val btn = Button(context).apply {
+                    text = context.getString(R.string.extension_minutes_format, minutes)
+                    setTextColor(0xFFFFFFFF.toInt())
+                    setBackgroundColor(0xFF1976D2.toInt())
+                    setPadding((12 * density).toInt(), vPadding, (12 * density).toInt(), vPadding)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply {
+                        marginStart = hMargin
+                        marginEnd = hMargin
+                    }
+                    setOnClickListener {
+                        coordinator.get().grantExtensionMinutes(request.packageName, minutes)
+                    }
+                }
+                timeButtons.addView(btn)
             }
+            if (request.showNoLimitToday) {
+                val noLimitBtn = Button(context).apply {
+                    text = context.getString(R.string.overlay_no_limit_today)
+                    setTextColor(0xFFFFFFFF.toInt())
+                    setBackgroundColor(0xFFEF6C00.toInt())
+                    setPadding((16 * density).toInt(), vPadding, (16 * density).toInt(), vPadding)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply { gravity = Gravity.CENTER_HORIZONTAL }
+                    setOnClickListener {
+                        coordinator.get().grantNoLimitToday(request.packageName)
+                    }
+                }
+                noLimitContainer.addView(noLimitBtn)
+            }
+        } else if (request.isOpenGate) {
+            extensionContainer.visibility = View.GONE
+            continueBtn.visibility = View.GONE
+            frictionInProgress = true
+            showFriction(view, request.frictionMethod, challenge, request)
+        } else {
+            extensionContainer.visibility = View.GONE
+            continueBtn.visibility = View.VISIBLE
+            continueBtn.setOnClickListener {
+                showFriction(
+                    view,
+                    request.frictionMethod,
+                    challenge,
+                    request,
+                )
+            }
+        }
+
+        val hasProfilePin = !request.profilePasswordHash.isNullOrBlank()
+        if (request.reason == "profilePin" && hasProfilePin) {
+            frictionInProgress = true
+            continueBtn.visibility = View.GONE
+            showPasswordFriction(view, request)
         }
     }
 
@@ -163,10 +234,7 @@ class BlockOverlayManager @Inject constructor(
         view: View,
         method: FrictionMethod,
         challenge: MathChallenge?,
-        packageName: String,
-        extensionMs: Long,
-        waitDurationSeconds: Int,
-        profilePasswordHash: String?,
+        request: BlockOverlayRequest,
     ) {
         frictionInProgress = true
         makeOverlayFocusableForInput()
@@ -177,78 +245,89 @@ class BlockOverlayManager @Inject constructor(
 
         when (method) {
             FrictionMethod.math -> {
-                view.findViewById<TextView>(R.id.friction_prompt).text = challenge?.question ?: "Solve"
-                val input = view.findViewById<EditText>(R.id.friction_input)
-                input.visibility = View.VISIBLE
-                val submit = view.findViewById<Button>(R.id.friction_submit)
-                submit.visibility = View.VISIBLE
-                input.setOnEditorActionListener { _, actionId, _ ->
-                    if (actionId == EditorInfo.IME_ACTION_DONE) {
-                        submit.performClick()
-                        true
-                    } else false
-                }
-                submit.setOnClickListener {
-                    val answer = input.text.toString().toIntOrNull() ?: -1
-                    if (challenge != null && FrictionChallenge.verify(challenge, answer)) {
-                        frictionInProgress = false
-                        coordinator.get().grantExtension(packageName, extensionMs)
-                    }
-                }
-                showKeyboard(input)
+                val mathChallenge = challenge ?: FrictionChallenge.generate(request.difficulty)
+                    .also { currentChallenge = it }
+                showMathFriction(view, mathChallenge, request)
             }
-            FrictionMethod.password -> showPasswordFriction(view, profilePasswordHash, packageName, extensionMs, null)
+            FrictionMethod.password -> {
+                if (!request.profilePasswordHash.isNullOrBlank()) {
+                    showPasswordFriction(view, request)
+                } else {
+                    val mathChallenge = FrictionChallenge.generate(request.difficulty)
+                        .also { currentChallenge = it }
+                    showMathFriction(view, mathChallenge, request)
+                }
+            }
             FrictionMethod.waitOneMin -> {
-                view.findViewById<TextView>(R.id.friction_prompt).text = "Wait to continue"
+                view.findViewById<TextView>(R.id.friction_prompt).text =
+                    context.getString(R.string.overlay_wait_to_continue)
                 val countdown = view.findViewById<TextView>(R.id.wait_countdown)
                 countdown.visibility = View.VISIBLE
-                var remaining = waitDurationSeconds
-                countdown.text = "${remaining}s"
+                val totalMs = request.waitDurationSeconds * 1000L
+                val stopwatch = screenStateMonitor.createStopwatch().also { waitStopwatch = it }
                 waitRunnable = object : Runnable {
                     override fun run() {
-                        remaining--
-                        if (remaining <= 0) {
+                        val remainingMs = stopwatch.remainingMs(totalMs)
+                        val remainingSec = ((remainingMs + 999) / 1000).toInt()
+                        if (remainingSec <= 0) {
                             frictionInProgress = false
-                            coordinator.get().grantExtension(packageName, extensionMs)
+                            waitStopwatch = null
+                            onFrictionSuccess(request)
                         } else {
-                            countdown.text = "${remaining}s"
+                            countdown.text = "${remainingSec}s"
                             mainHandler.postDelayed(this, 1000)
                         }
                     }
                 }
+                countdown.text = "${request.waitDurationSeconds}s"
                 mainHandler.postDelayed(waitRunnable!!, 1000)
             }
             else -> {
-                view.findViewById<TextView>(R.id.friction_prompt).text = "Use math, wait, or profile PIN in settings"
+                view.findViewById<TextView>(R.id.friction_prompt).text =
+                    context.getString(R.string.overlay_use_math_or_wait)
             }
         }
     }
 
-    private fun showPasswordFriction(
-        view: View,
-        profilePasswordHash: String?,
-        packageName: String,
-        extensionMs: Long,
-        onProfileUnlocked: (() -> Unit)?,
-    ) {
+    private fun onFrictionSuccess(request: BlockOverlayRequest) {
+        coordinator.get().onFrictionCompleted(request.packageName)
+        if (request.isOpenGate) {
+            coordinator.get().onOpenGatePassed(request.packageName)
+        } else {
+            coordinator.get().grantExtensionMinutes(
+                request.packageName,
+                request.extensionOptionMinutes.firstOrNull() ?: 5,
+            )
+        }
+    }
+
+    private fun showPasswordFriction(view: View, request: BlockOverlayRequest) {
         makeOverlayFocusableForInput()
         val container = view.findViewById<LinearLayout>(R.id.friction_container)
         container.visibility = View.VISIBLE
         view.findViewById<Button>(R.id.block_continue_btn).visibility = View.GONE
-        view.findViewById<TextView>(R.id.friction_prompt).text = "Enter profile PIN"
+        view.findViewById<TextView>(R.id.friction_prompt).text =
+            context.getString(R.string.overlay_enter_profile_pin)
         val input = view.findViewById<EditText>(R.id.friction_input)
         input.visibility = View.VISIBLE
-        input.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        prepareInputField(input)
+        input.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+            android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
         val submit = view.findViewById<Button>(R.id.friction_submit)
         submit.visibility = View.VISIBLE
-        submit.text = "Unlock"
+        submit.text = context.getString(R.string.unlock)
         submit.setOnClickListener {
             val pin = input.text.toString()
-            if (profilePasswordHash != null && PasswordHasher.verify(pin, profilePasswordHash)) {
+            if (!request.profilePasswordHash.isNullOrBlank() &&
+                PasswordHasher.verify(pin, request.profilePasswordHash)
+            ) {
                 frictionInProgress = false
-                onProfileUnlocked?.invoke()
-                if (extensionMs > 0) {
-                    coordinator.get().grantExtension(packageName, extensionMs)
+                request.onProfileUnlocked?.invoke()
+                if (request.isOpenGate) {
+                    coordinator.get().onOpenGatePassed(request.packageName)
+                } else if (request.useExtensionButtons) {
+                    hide()
+                    coordinator.get().refresh()
                 } else {
                     coordinator.get().onBlockDismissed()
                     hide()
@@ -259,11 +338,51 @@ class BlockOverlayManager @Inject constructor(
         showKeyboard(input)
     }
 
+    private fun showMathFriction(view: View, challenge: MathChallenge, request: BlockOverlayRequest) {
+        view.findViewById<TextView>(R.id.friction_prompt).text = challenge.question
+        val input = view.findViewById<EditText>(R.id.friction_input)
+        input.visibility = View.VISIBLE
+        prepareInputField(input)
+        val submit = view.findViewById<Button>(R.id.friction_submit)
+        submit.visibility = View.VISIBLE
+        input.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                submit.performClick()
+                true
+            } else false
+        }
+        submit.setOnClickListener {
+            val answer = input.text.toString().toIntOrNull() ?: -1
+            if (FrictionChallenge.verify(challenge, answer)) {
+                frictionInProgress = false
+                onFrictionSuccess(request)
+            }
+        }
+        showKeyboard(input)
+    }
+
+    private fun scrollInputIntoView(input: EditText) {
+        var parent = input.parent
+        while (parent != null && parent !is ScrollView) {
+            parent = parent.parent
+        }
+        (parent as? ScrollView)?.post {
+            val scrollY = input.bottom - (parent.height * 0.6f).toInt()
+            parent.smoothScrollTo(0, scrollY.coerceAtLeast(0))
+        }
+    }
+
+    private fun prepareInputField(input: EditText) {
+        input.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) scrollInputIntoView(input)
+        }
+    }
+
     private fun makeOverlayFocusableForInput() {
         overlayParams?.let { params ->
             params.flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
-            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or
                 WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
             overlayView?.let { windowManager.updateViewLayout(it, params) }
         }
@@ -273,13 +392,65 @@ class BlockOverlayManager @Inject constructor(
     private fun showKeyboard(input: EditText) {
         input.requestFocus()
         mainHandler.postDelayed({
-            inputMethodManager.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
-        }, 100)
+            val shown = inputMethodManager.showSoftInput(input, InputMethodManager.SHOW_FORCED)
+            if (!shown) {
+                mainHandler.postDelayed({
+                    inputMethodManager.showSoftInput(input, InputMethodManager.SHOW_FORCED)
+                }, 200)
+            }
+        }, 200)
     }
 
     private fun updateBlock(message: String, reason: String, breakUntilMs: Long?) {
         if (frictionInProgress) return
         overlayView?.let { updateBlockView(it, message, reason, breakUntilMs) }
+        startBreakTicker(breakUntilMs)
+    }
+
+    private fun startBreakTicker(breakUntilMs: Long?) {
+        breakRunnable?.let { mainHandler.removeCallbacks(it) }
+        breakRunnable = null
+        if (breakUntilMs == null) return
+        val breakText = overlayView?.findViewById<TextView>(R.id.block_break_text) ?: return
+        breakText.visibility = View.VISIBLE
+        breakRunnable = object : Runnable {
+            override fun run() {
+                val remaining = breakUntilMs - System.currentTimeMillis()
+                if (remaining <= 0) {
+                    breakText.text = context.getString(R.string.overlay_break_ended)
+                    coordinator.get().refresh()
+                } else {
+                    breakText.text = context.getString(
+                        R.string.overlay_break_ends_in,
+                        formatDurationMs(context, remaining),
+                    )
+                    mainHandler.postDelayed(this, 1000)
+                }
+            }
+        }
+        mainHandler.post(breakRunnable!!)
+    }
+
+    private fun bindExtensionQuota(view: View, request: BlockOverlayRequest) {
+        val quotaView = view.findViewById<TextView>(R.id.extension_quota_text)
+        val todayText = request.maxExtensionsPerDay?.let { max ->
+            context.getString(R.string.extension_quota_today, request.extensionsUsedToday, max)
+        } ?: context.getString(
+            R.string.extension_quota_today_unlimited,
+            request.extensionsUsedToday,
+        )
+        val consecutiveText = request.maxConsecutiveExtensions?.let { max ->
+            context.getString(
+                R.string.extension_quota_consecutive,
+                request.consecutiveExtensionsUsed,
+                max,
+            )
+        } ?: context.getString(
+            R.string.extension_quota_consecutive_unlimited,
+            request.consecutiveExtensionsUsed,
+        )
+        quotaView.text = "$todayText · $consecutiveText"
+        quotaView.visibility = View.VISIBLE
     }
 
     private fun updateBlockView(view: View, message: String, reason: String, breakUntilMs: Long?) {
@@ -288,7 +459,10 @@ class BlockOverlayManager @Inject constructor(
         val breakText = view.findViewById<TextView>(R.id.block_break_text)
         if (breakUntilMs != null) {
             breakText.visibility = View.VISIBLE
-            breakText.text = "Break ends in ${formatDurationMs(breakUntilMs - System.currentTimeMillis())}"
+            breakText.text = context.getString(
+                R.string.overlay_break_ends_in,
+                formatDurationMs(context, breakUntilMs - System.currentTimeMillis()),
+            )
         } else {
             breakText.visibility = View.GONE
         }

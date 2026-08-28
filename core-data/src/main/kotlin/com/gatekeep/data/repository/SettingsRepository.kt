@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.gatekeep.data.locale.LocalePreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -34,7 +35,10 @@ data class AppSettings(
     val weeklyReportEnabled: Boolean = true,
     val quietHoursStartMinute: Int? = null,
     val quietHoursEndMinute: Int? = null,
-)
+    val languageTag: String = "en-GB",
+) {
+    fun hasAppPin(): Boolean = !appPasswordHash.isNullOrBlank()
+}
 
 class SettingsRepository(private val context: Context) {
 
@@ -56,6 +60,7 @@ class SettingsRepository(private val context: Context) {
         val WEEKLY_REPORT = booleanPreferencesKey("weekly_report_enabled")
         val QUIET_START = intPreferencesKey("quiet_hours_start")
         val QUIET_END = intPreferencesKey("quiet_hours_end")
+        val LANGUAGE = stringPreferencesKey("language_tag")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs -> readSettings(prefs) }
@@ -83,7 +88,7 @@ class SettingsRepository(private val context: Context) {
     private fun readSettings(prefs: Preferences) = AppSettings(
         onboardingComplete = prefs[Keys.ONBOARDING] ?: false,
         appLockEnabled = prefs[Keys.APP_LOCK] ?: false,
-        appPasswordHash = prefs[Keys.APP_PASSWORD],
+        appPasswordHash = prefs[Keys.APP_PASSWORD]?.takeIf { it.isNotBlank() },
         hudEnabled = prefs[Keys.HUD_ENABLED] ?: true,
         hudOpacity = prefs[Keys.HUD_OPACITY] ?: 0.9f,
         strictMode = prefs[Keys.STRICT_MODE] ?: false,
@@ -100,12 +105,18 @@ class SettingsRepository(private val context: Context) {
         weeklyReportEnabled = prefs[Keys.WEEKLY_REPORT] ?: true,
         quietHoursStartMinute = prefs[Keys.QUIET_START],
         quietHoursEndMinute = prefs[Keys.QUIET_END],
+        languageTag = prefs[Keys.LANGUAGE]?.takeIf { it in LocalePreferences.SUPPORTED_TAGS }
+            ?: LocalePreferences.read(context),
     )
 
     private fun writeSettings(prefs: MutablePreferences, updated: AppSettings) {
         prefs[Keys.ONBOARDING] = updated.onboardingComplete
         prefs[Keys.APP_LOCK] = updated.appLockEnabled
-        updated.appPasswordHash?.let { prefs[Keys.APP_PASSWORD] = it }
+        if (updated.appPasswordHash.isNullOrBlank()) {
+            prefs.remove(Keys.APP_PASSWORD)
+        } else {
+            prefs[Keys.APP_PASSWORD] = updated.appPasswordHash
+        }
         prefs[Keys.HUD_ENABLED] = updated.hudEnabled
         prefs[Keys.HUD_OPACITY] = updated.hudOpacity
         prefs[Keys.STRICT_MODE] = updated.strictMode
@@ -118,7 +129,9 @@ class SettingsRepository(private val context: Context) {
         prefs[Keys.SESSION_TIMER_NOTIF] = updated.showSessionTimerNotification
         prefs[Keys.WARNING_ALERTS] = updated.warningAlertsEnabled
         prefs[Keys.WEEKLY_REPORT] = updated.weeklyReportEnabled
-        updated.quietHoursStartMinute?.let { prefs[Keys.QUIET_START] = it }
         updated.quietHoursEndMinute?.let { prefs[Keys.QUIET_END] = it }
+        val languageTag = LocalePreferences.normalizeTag(updated.languageTag)
+        prefs[Keys.LANGUAGE] = languageTag
+        LocalePreferences.write(context, languageTag)
     }
 }

@@ -15,8 +15,7 @@ object ScheduleEvaluator {
         zoneId: ZoneId = ZoneId.systemDefault(),
     ): Boolean {
         val applicable = windows.filter { window ->
-            window.profileId == profileId &&
-                (window.packageName == null || window.packageName == packageName)
+            window.profileId == profileId
         }
         if (applicable.isEmpty()) return true
 

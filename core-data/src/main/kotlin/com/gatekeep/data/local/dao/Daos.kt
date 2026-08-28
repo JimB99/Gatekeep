@@ -95,6 +95,9 @@ interface PauseDao {
 
     @Query("DELETE FROM pauses WHERE untilEpochMs <= :now")
     suspend fun deleteExpired(now: Long)
+
+    @Query("DELETE FROM pauses WHERE profileId = :profileId AND type = 'noLimitToday'")
+    suspend fun deleteNoLimitTodayForProfile(profileId: Long)
 }
 
 @Dao
@@ -140,6 +143,31 @@ interface OverrideEventDao {
 
     @Query("SELECT COUNT(*) FROM override_events WHERE profileId = :profileId")
     suspend fun countForProfile(profileId: Long): Int
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM override_events
+        WHERE profileId = :profileId AND packageName = :packageName AND timestamp >= :dayStartMs
+        """,
+    )
+    suspend fun countOverridesForPackageToday(
+        profileId: Long,
+        packageName: String,
+        dayStartMs: Long,
+    ): Int
+
+    @Query(
+        """
+        SELECT * FROM override_events
+        WHERE profileId = :profileId AND packageName = :packageName
+        ORDER BY timestamp DESC LIMIT :limit
+        """,
+    )
+    suspend fun getRecentOverridesForPackage(
+        profileId: Long,
+        packageName: String,
+        limit: Int,
+    ): List<OverrideEventEntity>
 
     @Query("SELECT * FROM override_events WHERE profileId = :profileId ORDER BY timestamp DESC LIMIT :limit")
     suspend fun getRecent(profileId: Long, limit: Int): List<OverrideEventEntity>

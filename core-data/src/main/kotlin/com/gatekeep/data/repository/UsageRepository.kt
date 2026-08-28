@@ -122,6 +122,34 @@ class UsageRepository(
     suspend fun getOverrideCount(profileId: Long): Int =
         overrideEventDao.countForProfile(profileId)
 
+    suspend fun countOverridesForPackageToday(
+        profileId: Long,
+        packageName: String,
+        dayStartMs: Long,
+    ): Int = overrideEventDao.countOverridesForPackageToday(profileId, packageName, dayStartMs)
+
+    suspend fun getRecentOverridesForPackage(
+        profileId: Long,
+        packageName: String,
+        limit: Int = 10,
+    ): List<OverrideEventEntity> =
+        overrideEventDao.getRecentOverridesForPackage(profileId, packageName, limit)
+
+    suspend fun addNoLimitTodayPause(
+        profileId: Long,
+        packageName: String,
+        dayEndMs: Long,
+        nowEpochMs: Long,
+    ) {
+        addPause(
+            type = PauseType.noLimitToday,
+            nowEpochMs = nowEpochMs,
+            profileId = profileId,
+            packageName = packageName,
+            untilEpochMs = dayEndMs,
+        )
+    }
+
     suspend fun getRecentSessions(profileId: Long, limit: Int = 100) =
         usageSessionDao.getRecent(profileId, limit)
 }

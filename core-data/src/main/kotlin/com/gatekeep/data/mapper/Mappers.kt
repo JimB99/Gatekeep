@@ -11,6 +11,9 @@ import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.FrictionDifficulty
 import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.MonitoredApp
+import com.gatekeep.domain.model.OnLimitAction
+import com.gatekeep.domain.model.OnOpenAction
+import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.Pause
 import com.gatekeep.domain.model.PauseType
 import com.gatekeep.domain.model.Profile
@@ -36,15 +39,29 @@ fun ProfileEntity.toDomain() = Profile(
     weeklyLimitMs = weeklyLimitMs,
     sessionLimitMs = sessionLimitMs,
     breakDurationMs = breakDurationMs,
-    waitDurationSeconds = waitDurationSeconds,
+    openWaitDurationSeconds = openWaitDurationSeconds,
+    sessionWaitDurationSeconds = sessionWaitDurationSeconds,
+    onOpenAction = resolveOnOpenAction(),
+    onLimitAction = runCatching { OnLimitAction.valueOf(onLimitAction) }.getOrDefault(OnLimitAction.limitWithExtensions),
+    onSessionLimitAction = runCatching { OnSessionLimitAction.valueOf(onSessionLimitAction) }
+        .getOrDefault(OnSessionLimitAction.limitWithExtensions),
+    extensionPolicy = decodeExtensionPolicy(extensionPolicyJson),
 )
+
+private fun ProfileEntity.resolveOnOpenAction(): OnOpenAction {
+    val parsed = runCatching { OnOpenAction.valueOf(onOpenAction) }.getOrNull()
+    if (parsed != null && parsed != OnOpenAction.none) return parsed
+    if (lockEnabled && !passwordHash.isNullOrBlank()) return OnOpenAction.pinGate
+    if (delayOpenSeconds > 0) return OnOpenAction.deterrentWait
+    return OnOpenAction.none
+}
 
 fun Profile.toEntity() = ProfileEntity(
     id = id,
     name = name,
     isActive = isActive,
     passwordHash = passwordHash,
-    lockEnabled = lockEnabled,
+    lockEnabled = lockEnabled || onOpenAction == OnOpenAction.pinGate,
     sortOrder = sortOrder,
     autoScheduleEnabled = autoScheduleEnabled,
     defaultFrictionMethod = defaultFrictionMethod.name,
@@ -58,7 +75,12 @@ fun Profile.toEntity() = ProfileEntity(
     weeklyLimitMs = weeklyLimitMs,
     sessionLimitMs = sessionLimitMs,
     breakDurationMs = breakDurationMs,
-    waitDurationSeconds = waitDurationSeconds,
+    openWaitDurationSeconds = openWaitDurationSeconds,
+    sessionWaitDurationSeconds = sessionWaitDurationSeconds,
+    onOpenAction = onOpenAction.name,
+    onLimitAction = onLimitAction.name,
+    onSessionLimitAction = onSessionLimitAction.name,
+    extensionPolicyJson = encodeExtensionPolicy(extensionPolicy),
 )
 
 fun MonitoredAppEntity.toDomain() = MonitoredApp(
@@ -119,6 +141,8 @@ fun SessionStateEntity.toDomain() = SessionState(
     packageName = packageName,
     sessionStartEpochMs = sessionStartEpochMs,
     breakUntilEpochMs = breakUntilEpochMs,
+    excludedMs = excludedMs,
+    frictionStartedAtEpochMs = frictionStartedAtEpochMs,
 )
 
 fun SessionState.toEntity(profileId: Long) = SessionStateEntity(
@@ -126,4 +150,6 @@ fun SessionState.toEntity(profileId: Long) = SessionStateEntity(
     profileId = profileId,
     sessionStartEpochMs = sessionStartEpochMs,
     breakUntilEpochMs = breakUntilEpochMs,
+    excludedMs = excludedMs,
+    frictionStartedAtEpochMs = frictionStartedAtEpochMs,
 )

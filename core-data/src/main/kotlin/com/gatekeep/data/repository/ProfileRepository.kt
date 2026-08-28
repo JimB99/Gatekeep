@@ -2,6 +2,7 @@ package com.gatekeep.data.repository
 
 import com.gatekeep.data.local.dao.AppLimitDao
 import com.gatekeep.data.local.dao.MonitoredAppDao
+import com.gatekeep.data.local.dao.PauseDao
 import com.gatekeep.data.local.dao.ProfileDao
 import com.gatekeep.data.local.dao.ScheduleWindowDao
 import com.gatekeep.data.local.entity.ProfileEntity
@@ -20,6 +21,7 @@ class ProfileRepository(
     private val monitoredAppDao: MonitoredAppDao,
     private val appLimitDao: AppLimitDao,
     private val scheduleWindowDao: ScheduleWindowDao,
+    private val pauseDao: PauseDao,
 ) {
     fun observeProfiles(): Flow<List<Profile>> =
         profileDao.observeAll().map { list -> list.map { it.toDomain() } }
@@ -36,6 +38,7 @@ class ProfileRepository(
 
     suspend fun toggleProfileActive(id: Long, active: Boolean) {
         profileDao.setProfileActive(id, active)
+        pauseDao.deleteNoLimitTodayForProfile(id)
     }
 
     suspend fun activateProfile(id: Long) {

@@ -13,7 +13,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -31,8 +30,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.gatekeep.app.R
+import com.gatekeep.app.ui.components.GatekeepFilterChip
 import com.gatekeep.app.ui.viewmodel.PauseViewModel
 import com.gatekeep.domain.model.PauseType
 import java.util.Calendar
@@ -53,10 +55,10 @@ fun PauseScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Pause limits") },
+                title = { Text(stringResource(R.string.pause_limits)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
                     }
                 },
             )
@@ -66,18 +68,32 @@ fun PauseScreen(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Scope")
+            Text(stringResource(R.string.scope))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = scopeIndex == 0, onClick = { scopeIndex = 0 }, label = { Text("All") })
-                FilterChip(selected = scopeIndex == 1, onClick = { scopeIndex = 1 }, label = { Text("Active profile") })
+                GatekeepFilterChip(
+                    selected = scopeIndex == 0,
+                    onClick = { scopeIndex = 0 },
+                    label = { Text(stringResource(R.string.scope_all)) },
+                )
+                GatekeepFilterChip(
+                    selected = scopeIndex == 1,
+                    onClick = { scopeIndex = 1 },
+                    label = { Text(stringResource(R.string.scope_active_profile)) },
+                )
             }
-            PauseButton("Pause 5 minutes") { pauseQuick(viewModel, PauseType.fiveMin, profiles, scopeIndex) }
-            PauseButton("Pause 15 minutes") { pauseQuick(viewModel, PauseType.fifteenMin, profiles, scopeIndex) }
-            PauseButton("Pause 60 minutes") { pauseQuick(viewModel, PauseType.sixtyMin, profiles, scopeIndex) }
-            PauseButton("Pause until date…") { showDatePicker = true }
-            PauseButton("Focus mode (25 min)") { viewModel.activateFocusMode() }
+            PauseButton(stringResource(R.string.pause_5_min)) {
+                pauseQuick(viewModel, PauseType.fiveMin, profiles, scopeIndex)
+            }
+            PauseButton(stringResource(R.string.pause_15_min)) {
+                pauseQuick(viewModel, PauseType.fifteenMin, profiles, scopeIndex)
+            }
+            PauseButton(stringResource(R.string.pause_60_min)) {
+                pauseQuick(viewModel, PauseType.sixtyMin, profiles, scopeIndex)
+            }
+            PauseButton(stringResource(R.string.pause_until_date)) { showDatePicker = true }
+            PauseButton(stringResource(R.string.focus_mode_25)) { viewModel.activateFocusMode() }
             if (!settings.strictMode) {
-                PauseButton("Emergency bypass (15 min)") { viewModel.emergencyBypass() }
+                PauseButton(stringResource(R.string.emergency_bypass)) { viewModel.emergencyBypass() }
             }
         }
     }
@@ -91,9 +107,11 @@ fun PauseScreen(
                     selectedDateMs = dateState.selectedDateMillis
                     showDatePicker = false
                     showTimePicker = true
-                }) { Text("Next") }
+                }) { Text(stringResource(R.string.next)) }
             },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text(stringResource(R.string.cancel)) }
+            },
         ) { DatePicker(state = dateState) }
     }
 
@@ -112,7 +130,7 @@ fun PauseScreen(
                     val profileId = if (scopeIndex == 1) profiles.firstOrNull { it.isActive }?.id else null
                     viewModel.pause(PauseType.untilDatetime, profileId, null, cal.timeInMillis)
                     showTimePicker = false
-                }) { Text("Pause") }
+                }) { Text(stringResource(R.string.pause)) }
             },
             text = { TimePicker(state = timeState) },
         )

@@ -1,0 +1,45 @@
+---
+description: Gatekeep Android build toolchain paths and Gradle commands
+alwaysApply: true
+---
+
+# Gatekeep — build and test
+
+## Tool paths (workspace `.tools/`)
+
+JDK and the Android SDK are **not** on global PATH. They live under the **Private workspace root** (`../.tools/` from `Gatekeep/`):
+
+| Tool | Path |
+|------|------|
+| **JDK 17** | `c:/Users/JimBuisman/Desktop/Private/.tools/jdk-17.0.14+7` |
+| **Android SDK** | `c:/Users/JimBuisman/Desktop/Private/.tools/android-sdk` |
+
+`Gatekeep/local.properties` already points `sdk.dir` at the Android SDK.
+
+Before Gradle, set:
+
+```bash
+export JAVA_HOME="c:/Users/JimBuisman/Desktop/Private/.tools/jdk-17.0.14+7"
+export ANDROID_HOME="c:/Users/JimBuisman/Desktop/Private/.tools/android-sdk"
+```
+
+From `Gatekeep/`:
+
+```bash
+cd Gatekeep
+export JAVA_HOME="c:/Users/JimBuisman/Desktop/Private/.tools/jdk-17.0.14+7"
+export ANDROID_HOME="c:/Users/JimBuisman/Desktop/Private/.tools/android-sdk"
+./gradlew :core-domain:test :app:assembleDebug
+```
+
+APK output: `app/build/outputs/apk/debug/app-debug.apk` (arm64-v8a only; see `app/build.gradle.kts` `abiFilters`).
+
+## Requirements
+
+- JDK 17
+- Android SDK 35 (installed in `.tools/android-sdk`)
+
+## Notes
+
+- Room uses `fallbackToDestructiveMigration()` — schema bumps reset local app data on upgrade.
+- Do not assume `java` or `adb` are on PATH; use the paths above or `local.properties`.

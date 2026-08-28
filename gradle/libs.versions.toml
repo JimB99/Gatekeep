@@ -1,6 +1,7 @@
 [versions]
 agp = "8.7.3"
 kotlin = "2.0.21"
+ksp = "2.0.21-1.0.28"
 coreKtx = "1.15.0"
 lifecycle = "2.8.7"
 activityCompose = "1.9.3"
@@ -11,12 +12,13 @@ room = "2.6.1"
 datastore = "1.1.1"
 work = "2.10.0"
 biometric = "1.1.0"
+securityCrypto = "1.1.0-alpha06"
 vico = "2.0.0-alpha.28"
 junit = "4.13.2"
 junit5 = "5.11.3"
 coroutines = "1.9.0"
 serialization = "1.7.3"
-ksp = "2.0.21-1.0.28"
+appcompat = "1.7.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -33,6 +35,7 @@ androidx-navigation-compose = { group = "androidx.navigation", name = "navigatio
 androidx-datastore = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 androidx-work = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
@@ -52,6 +55,7 @@ androidx-test-ext = { group = "androidx.test.ext", name = "junit", version = "1.
 androidx-test-espresso = { group = "androidx.test.espresso", name = "espresso-core", version = "3.6.1" }
 androidx-compose-ui-test = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-compose-ui-tooling-debug = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

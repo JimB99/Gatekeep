@@ -22,6 +22,7 @@ class ForegroundMonitorAccessibilityService : AccessibilityService() {
                     val packageName = event.packageName?.toString() ?: return
                     if (packageName == this.packageName) return
                     coordinator.onForegroundAppChanged(packageName)
+                    coordinator.pollForeground()
                 }
             }
         } catch (e: Exception) {

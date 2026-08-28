@@ -1,5 +1,6 @@
 package com.gatekeep.app
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,7 +11,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
@@ -22,6 +23,7 @@ import com.gatekeep.app.ui.GatekeepNavHost
 import com.gatekeep.app.ui.Routes
 import com.gatekeep.app.ui.lock.AppLockScreen
 import com.gatekeep.app.ui.theme.GatekeepTheme
+import com.gatekeep.app.util.LocaleController
 import com.gatekeep.app.worker.UsageSyncWorker
 import com.gatekeep.app.worker.WeeklyReportWorker
 import com.gatekeep.data.repository.ProfileRepository
@@ -38,6 +40,11 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var coordinator: EnforcementCoordinator
     @Inject lateinit var profileRepository: ProfileRepository
 
+    override fun attachBaseContext(newBase: Context) {
+        LocaleController.applyStored(newBase)
+        super.attachBaseContext(newBase)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -45,7 +52,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             val profiles = profileRepository.observeProfiles().first()
             if (profiles.isEmpty()) {
-                val id = profileRepository.createProfile("Default")
+                val id = profileRepository.createProfile(getString(R.string.default_profile_name))
                 profileRepository.toggleProfileActive(id, true)
             }
         }
@@ -57,16 +64,17 @@ class MainActivity : ComponentActivity() {
             val settings by settingsRepository.settings.collectAsState(
                 initial = com.gatekeep.data.repository.AppSettings(),
             )
-            val lockKey = "${settings.appLockEnabled}_${settings.appPasswordHash.orEmpty()}"
-            var unlocked by rememberSaveable(lockKey) {
-                mutableStateOf(!settings.appLockEnabled || settings.appPasswordHash == null)
+            val hasAppPin = settings.hasAppPin()
+            var unlocked by remember {
+                mutableStateOf(!settings.appLockEnabled || !hasAppPin)
             }
             val lifecycleOwner = LocalLifecycleOwner.current
             DisposableEffect(lifecycleOwner, settings.appLockEnabled, settings.appPasswordHash) {
                 val observer = LifecycleEventObserver { _, event ->
                     if (event == Lifecycle.Event.ON_STOP &&
+                        !this@MainActivity.isChangingConfigurations &&
                         settings.appLockEnabled &&
-                        settings.appPasswordHash != null
+                        settings.hasAppPin()
                     ) {
                         unlocked = false
                     }
@@ -78,7 +86,7 @@ class MainActivity : ComponentActivity() {
 
             GatekeepTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    if (!unlocked && settings.appLockEnabled && settings.appPasswordHash != null) {
+                    if (!unlocked && settings.appLockEnabled && settings.hasAppPin()) {
                         AppLockScreen(passwordHash = settings.appPasswordHash) { unlocked = true }
                     } else {
                         GatekeepNavHost(

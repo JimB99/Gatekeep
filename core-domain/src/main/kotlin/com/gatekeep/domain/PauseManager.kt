@@ -45,6 +45,7 @@ object PauseManager {
             PauseType.focusMode -> nowEpochMs + 25 * 60_000L
             PauseType.emergencyBypass -> nowEpochMs + 15 * 60_000L
             PauseType.untilDatetime -> error("untilDatetime requires explicit untilEpochMs")
+            PauseType.noLimitToday -> error("noLimitToday requires explicit untilEpochMs")
         }
         return Pause(
             profileId = profileId,

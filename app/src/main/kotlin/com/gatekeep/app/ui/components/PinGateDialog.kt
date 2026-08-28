@@ -12,7 +12,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.gatekeep.app.R
 import com.gatekeep.app.util.PasswordHasher
 
 @Composable
@@ -33,25 +35,29 @@ fun PinGateDialog(
                 PinTextField(
                     value = pin,
                     onValueChange = { pin = it; error = false },
-                    label = "PIN",
+                    label = stringResource(R.string.pin),
                     isError = error,
+                    requestInitialFocus = true,
                 )
                 if (error) {
-                    Text("Incorrect PIN", modifier = Modifier.padding(top = 8.dp))
+                    Text(
+                        stringResource(R.string.incorrect_pin),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                if (passwordHash != null && PasswordHasher.verify(pin, passwordHash)) {
+                if (!passwordHash.isNullOrBlank() && PasswordHasher.verify(pin, passwordHash)) {
                     onVerified()
                 } else {
                     error = true
                 }
-            }) { Text("Confirm") }
+            }) { Text(stringResource(R.string.confirm)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }

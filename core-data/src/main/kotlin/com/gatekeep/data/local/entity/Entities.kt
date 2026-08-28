@@ -24,7 +24,12 @@ data class ProfileEntity(
     val weeklyLimitMs: Long? = null,
     val sessionLimitMs: Long? = null,
     val breakDurationMs: Long? = null,
-    val waitDurationSeconds: Int = 60,
+    val openWaitDurationSeconds: Int = 60,
+    val sessionWaitDurationSeconds: Int = 60,
+    val onOpenAction: String = "none",
+    val onLimitAction: String = "limitWithExtensions",
+    val onSessionLimitAction: String = "limitWithExtensions",
+    val extensionPolicyJson: String? = null,
 )
 
 @Entity(
@@ -128,4 +133,6 @@ data class SessionStateEntity(
     val profileId: Long,
     val sessionStartEpochMs: Long,
     val breakUntilEpochMs: Long? = null,
+    val excludedMs: Long = 0,
+    val frictionStartedAtEpochMs: Long? = null,
 )

@@ -3,12 +3,17 @@ package com.gatekeep.domain
 import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.BlockReason
 import com.gatekeep.domain.model.FrictionMethod
+import com.gatekeep.domain.model.OnLimitAction
+import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.Profile
+import com.gatekeep.domain.model.ProfileEnforcementConfig
 import com.gatekeep.domain.model.RuleEvaluationContext
 import com.gatekeep.domain.model.RuleResult
 import com.gatekeep.domain.model.ScheduleWindow
 import com.gatekeep.domain.model.UsageSnapshot
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.ZoneId
@@ -27,6 +32,18 @@ class ProfileMergeEngineTest {
         )
         assertEquals(1800_000, merged?.dailyLimitMs)
         assertEquals(600_000, merged?.sessionLimitMs)
+        assertEquals(300_000, merged?.breakDurationMs)
+    }
+
+    @Test
+    fun `merged break includes explicit zero`() {
+        val merged = ProfileMergeEngine.mergedLimitForApp(
+            listOf(
+                AppLimit(1, "com.test", dailyLimitMs = 3600_000, breakDurationMs = 0L, enabled = true),
+                AppLimit(2, "com.test", dailyLimitMs = 1800_000, breakDurationMs = 300_000, enabled = true),
+            ),
+            "com.test",
+        )
         assertEquals(300_000, merged?.breakDurationMs)
     }
 
@@ -96,11 +113,54 @@ class RuleEngineTest {
         assertTrue(result is RuleResult.Allowed)
     }
 
+    @Test
+    fun `notify only on limit returns allowed with flag`() {
+        val notifyProfile = profile.copy(onLimitAction = OnLimitAction.notifyOnly)
+        val result = RuleEngine.evaluate(
+            baseContext(
+                profile = notifyProfile,
+                usage = UsageSnapshot(dailyMs = 61 * 60_000L),
+                enforcementConfig = notifyProfile.enforcementConfig(),
+            ),
+        )
+        assertTrue(result is RuleResult.Allowed)
+        val allowed = result as RuleResult.Allowed
+        assertTrue(allowed.notifyLimitReached)
+    }
+
+    @Test
+    fun `hard block on limit disallows bypass`() {
+        val hardProfile = profile.copy(onLimitAction = OnLimitAction.hardBlock)
+        val result = RuleEngine.evaluate(
+            baseContext(
+                profile = hardProfile,
+                usage = UsageSnapshot(dailyMs = 61 * 60_000L),
+                enforcementConfig = hardProfile.enforcementConfig(),
+            ),
+        )
+        assertTrue(result is RuleResult.Blocked)
+        assertEquals(false, (result as RuleResult.Blocked).bypassAllowed)
+    }
+
+    @Test
+    fun `open deterrent when configured`() {
+        val openProfile = profile.copy(onOpenAction = OnOpenAction.deterrentMath)
+        val result = RuleEngine.evaluate(
+            baseContext(
+                profile = openProfile,
+                enforcementConfig = openProfile.enforcementConfig(),
+            ),
+        )
+        assertTrue(result is RuleResult.OpenDeterrent)
+    }
+
     private fun baseContext(
         now: Long = 1_000_000L,
+        profile: Profile = this.profile,
         usage: UsageSnapshot = UsageSnapshot(),
         scheduleWindows: List<ScheduleWindow> = emptyList(),
         pauses: List<com.gatekeep.domain.model.Pause> = emptyList(),
+        enforcementConfig: ProfileEnforcementConfig = profile.enforcementConfig(),
     ) = RuleEvaluationContext(
         nowEpochMs = now,
         packageName = "com.test.app",
@@ -111,7 +171,58 @@ class RuleEngineTest {
         sessionState = null,
         pauses = pauses,
         scheduleWindows = scheduleWindows,
+        enforcementConfig = enforcementConfig,
     )
+}
+
+class ExtensionPolicyEvaluatorTest {
+
+  @Test
+  fun `allows configured minute option`() {
+    val policy = com.gatekeep.domain.model.ExtensionPolicy(optionMinutes = listOf(1, 5, 10))
+    val result = ExtensionPolicyEvaluator.evaluateExtension(policy, 5, overridesToday = 0, consecutiveInSession = 0)
+    assertTrue(result is ExtensionPolicyEvaluator.ExtensionDecision.Allowed)
+  }
+
+  @Test
+  fun `denies when daily cap reached`() {
+    val policy = com.gatekeep.domain.model.ExtensionPolicy(
+      optionMinutes = listOf(5),
+      maxExtensionsPerDay = 2,
+    )
+    val result = ExtensionPolicyEvaluator.evaluateExtension(policy, 5, overridesToday = 2, consecutiveInSession = 0)
+    assertTrue(result is ExtensionPolicyEvaluator.ExtensionDecision.Denied)
+  }
+
+  @Test
+  fun `denies consecutive cap`() {
+    val policy = com.gatekeep.domain.model.ExtensionPolicy(
+      optionMinutes = listOf(5),
+      maxConsecutiveExtensions = 1,
+    )
+    val result = ExtensionPolicyEvaluator.evaluateExtension(policy, 5, overridesToday = 0, consecutiveInSession = 1)
+    assertTrue(result is ExtensionPolicyEvaluator.ExtensionDecision.Denied)
+  }
+
+  @Test
+  fun `consecutive cap cannot exceed daily cap`() {
+    val policy = com.gatekeep.domain.model.ExtensionPolicy(
+      optionMinutes = listOf(5),
+      maxExtensionsPerDay = 2,
+      maxConsecutiveExtensions = 5,
+    )
+    val result = ExtensionPolicyEvaluator.evaluateExtension(policy, 5, overridesToday = 0, consecutiveInSession = 2)
+    assertTrue(result is ExtensionPolicyEvaluator.ExtensionDecision.Denied)
+  }
+
+  @Test
+  fun `no limit today when enabled`() {
+    val policy = com.gatekeep.domain.model.ExtensionPolicy(showNoLimitToday = true)
+    val result = ExtensionPolicyEvaluator.evaluateExtension(
+      policy, 0, 0, 0, isNoLimitTodayRequest = true,
+    )
+    assertTrue(result is ExtensionPolicyEvaluator.ExtensionDecision.NoLimitToday)
+  }
 }
 
 class ScheduleEvaluatorTest {
@@ -156,6 +267,39 @@ class SessionTrackerTest {
             now,
         )
         assertTrue(result is SessionTracker.SessionCheckResult.SessionExceeded)
+    }
+
+    @Test
+    fun `session exceeded with zero break has no break until`() {
+        val now = 1_000_000L
+        val session = SessionTracker.startSession("com.test", now - 20 * 60_000L)
+        val result = SessionTracker.evaluateSession(
+            AppLimit(1, "com.test", sessionLimitMs = 15 * 60_000L, breakDurationMs = 0L),
+            session,
+            now,
+        )
+        assertTrue(result is SessionTracker.SessionCheckResult.SessionExceeded)
+        val exceeded = result as SessionTracker.SessionCheckResult.SessionExceeded
+        assertEquals(null, exceeded.breakUntilEpochMs)
+    }
+
+    @Test
+    fun `clearBreak removes break until`() {
+        val now = 1_000_000L
+        val session = SessionTracker.startSession("com.test", now).copy(breakUntilEpochMs = now + 60_000L)
+        val cleared = SessionTracker.clearBreak(session)
+        assertNull(cleared.breakUntilEpochMs)
+        assertFalse(SessionTracker.isOnBreak(cleared, now))
+    }
+
+    @Test
+    fun `excluded and friction time reduce session duration`() {
+        val now = 1_000_000L
+        var session = SessionTracker.startSession("com.test", now - 10 * 60_000L)
+        session = SessionTracker.startFriction(session, now - 2 * 60_000L)
+        session = SessionTracker.endFriction(session, now)
+        val duration = SessionTracker.sessionDurationMs(session, now)
+        assertEquals(8 * 60_000L, duration)
     }
 }
 

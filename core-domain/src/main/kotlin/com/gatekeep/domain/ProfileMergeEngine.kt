@@ -17,7 +17,7 @@ object ProfileMergeEngine {
             weeklyLimitMs = applicable.mapNotNull { it.weeklyLimitMs }.minOrNull(),
             hourlyLimitMs = applicable.mapNotNull { it.hourlyLimitMs }.minOrNull(),
             sessionLimitMs = applicable.mapNotNull { it.sessionLimitMs }.minOrNull(),
-            breakDurationMs = applicable.mapNotNull { it.breakDurationMs }.maxOrNull(),
+            breakDurationMs = applicable.map { it.breakDurationMs }.filterNotNull().maxOrNull(),
             enabled = true,
             frictionMethod = applicable.firstNotNullOfOrNull { it.frictionMethod }
                 ?: applicable.first().frictionMethod,
@@ -34,9 +34,7 @@ object ProfileMergeEngine {
         nowEpochMs: Long,
     ): Boolean {
         val applicable = windows.filter { window ->
-            window.profileId in profileIds &&
-                (window.packageName == null || window.packageName == packageName) &&
-                !window.isProfileAutoSwitch
+            window.profileId in profileIds && !window.isProfileAutoSwitch
         }
         if (applicable.isEmpty()) return true
 

@@ -34,6 +34,7 @@ object AppModule {
             db.monitoredAppDao(),
             db.appLimitDao(),
             db.scheduleWindowDao(),
+            db.pauseDao(),
         )
 
     @Provides

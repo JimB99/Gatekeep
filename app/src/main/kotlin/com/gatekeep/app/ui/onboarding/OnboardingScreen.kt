@@ -22,9 +22,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.gatekeep.app.R
 import com.gatekeep.app.ui.viewmodel.SettingsViewModel
 import com.gatekeep.app.util.PermissionHelper
 
@@ -34,7 +36,7 @@ fun OnboardingScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
-    val settings by viewModel.settings.collectAsState()
+    viewModel.settings.collectAsState()
 
     val notificationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -47,48 +49,50 @@ fun OnboardingScreen(
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Welcome to Gatekeep", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text(
-            "Gatekeep helps you manage screen time with profiles, session limits, schedules, and friction unlocks.",
-            style = MaterialTheme.typography.bodyMedium,
+            stringResource(R.string.welcome_title),
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
         )
+        Text(stringResource(R.string.welcome_body), style = MaterialTheme.typography.bodyMedium)
         Text(
-            "The Session HUD shows a timer bar at the bottom of apps (like Digital Wellbeing). " +
-                "It cannot appear in the Recents screen — that requires system privileges.",
+            stringResource(R.string.welcome_hud_note),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         PermissionCard(
-            title = "Usage Access",
-            description = "Required to track how long you use each app.",
+            title = stringResource(R.string.perm_usage_title),
+            description = stringResource(R.string.perm_usage_desc),
             granted = PermissionHelper.hasUsageStatsPermission(context),
             onGrant = { context.startActivity(PermissionHelper.usageStatsIntent()) },
         )
         PermissionCard(
-            title = "Accessibility Service",
-            description = "Detects which app is in the foreground to enforce limits.",
+            title = stringResource(R.string.perm_accessibility_title),
+            description = stringResource(R.string.perm_accessibility_desc),
             granted = PermissionHelper.isAccessibilityEnabled(context),
             onGrant = { context.startActivity(PermissionHelper.accessibilityIntent()) },
         )
         PermissionCard(
-            title = "Display Over Apps",
-            description = "Shows block screen and session timer HUD.",
+            title = stringResource(R.string.perm_overlay_title),
+            description = stringResource(R.string.perm_overlay_desc),
             granted = PermissionHelper.hasOverlayPermission(context),
             onGrant = { context.startActivity(PermissionHelper.overlayIntent(context)) },
         )
         PermissionCard(
-            title = "Battery Optimization",
-            description = "Prevents the system from killing Gatekeep on some devices.",
+            title = stringResource(R.string.perm_battery_title),
+            description = stringResource(R.string.perm_battery_desc),
             granted = PermissionHelper.isIgnoringBatteryOptimizations(context),
             onGrant = { context.startActivity(PermissionHelper.batteryOptimizationIntent(context)) },
         )
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !PermissionHelper.hasNotificationPermission(context)) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !PermissionHelper.hasNotificationPermission(context)
+        ) {
             Button(
                 onClick = { notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Allow notifications") }
+            ) { Text(stringResource(R.string.allow_notifications)) }
         }
 
         Spacer(Modifier.height(8.dp))
@@ -101,7 +105,7 @@ fun OnboardingScreen(
             enabled = PermissionHelper.hasUsageStatsPermission(context) &&
                 PermissionHelper.isAccessibilityEnabled(context) &&
                 PermissionHelper.hasOverlayPermission(context),
-        ) { Text("Get started") }
+        ) { Text(stringResource(R.string.get_started)) }
 
         Button(
             onClick = {
@@ -109,7 +113,7 @@ fun OnboardingScreen(
                 onComplete()
             },
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Skip for now") }
+        ) { Text(stringResource(R.string.skip_for_now)) }
     }
 }
 
@@ -126,12 +130,12 @@ private fun PermissionCard(
             Text(description, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
             Text(
-                if (granted) "Granted" else "Not granted",
+                if (granted) stringResource(R.string.granted) else stringResource(R.string.not_granted),
                 color = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
             )
             if (!granted) {
                 Button(onClick = onGrant, modifier = Modifier.fillMaxWidth()) {
-                    Text("Open Settings")
+                    Text(stringResource(R.string.open_settings))
                 }
             }
         }
