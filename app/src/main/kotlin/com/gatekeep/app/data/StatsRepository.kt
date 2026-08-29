@@ -1,7 +1,8 @@
 package com.gatekeep.app.data
 
 import android.content.Context
-import androidx.appcompat.app.AppCompatDelegate
+import com.gatekeep.app.util.appLocale
+import com.gatekeep.app.util.withAppLocale
 import com.gatekeep.app.R
 import com.gatekeep.app.util.UsageStatsCollector
 import com.gatekeep.data.repository.ProfileRepository
@@ -54,13 +55,7 @@ class StatsRepository @Inject constructor(
     private val zoneId: ZoneId = ZoneId.systemDefault()
 
     private val appLocale: Locale
-        get() {
-            val tag = AppCompatDelegate.getApplicationLocales().toLanguageTags()
-                .split(",")
-                .firstOrNull()
-                ?.takeIf { it.isNotBlank() }
-            return if (tag != null) Locale.forLanguageTag(tag) else Locale.getDefault()
-        }
+        get() = context.appLocale()
 
     suspend fun overviewForRange(range: StatsTimeRange): StatsOverview {
         val bounds = buildRangeBounds(range)
@@ -252,25 +247,45 @@ class StatsRepository @Inject constructor(
         }
     }
 
-    fun formatRangeLabel(range: StatsTimeRange): String = when (range) {
-        is StatsTimeRange.SingleDay -> {
-            val zdt = ZonedDateTime.ofInstant(Instant.ofEpochMilli(range.dayEpochMs), zoneId)
-            val today = ZonedDateTime.now(zoneId).toLocalDate()
-            val date = zdt.toLocalDate()
-            val formatted = date.toString()
-            if (date == today) "$formatted ${context.getString(R.string.today_suffix)}" else formatted
+    fun formatRangeLabel(range: StatsTimeRange): String {
+        val localized = context.withAppLocale()
+        return when (range) {
+            is StatsTimeRange.SingleDay -> {
+                val zdt = ZonedDateTime.ofInstant(Instant.ofEpochMilli(range.dayEpochMs), zoneId)
+                val today = ZonedDateTime.now(zoneId).toLocalDate()
+                val date = zdt.toLocalDate()
+                if (date == today) {
+                    localized.getString(R.string.stats_period_today)
+                } else {
+                    date.format(
+                        java.time.format.DateTimeFormatter
+                            .ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
+                            .withLocale(appLocale),
+                    )
+                }
+            }
+            is StatsTimeRange.Week -> {
+                val weekFields = java.time.temporal.WeekFields.of(appLocale)
+                val startDate = LocalDate.of(range.year, 1, 1)
+                    .with(weekFields.weekOfWeekBasedYear(), range.weekOfYear.toLong())
+                    .with(weekFields.dayOfWeek(), 1)
+                val endDate = startDate.plusDays(6)
+                val formatter = java.time.format.DateTimeFormatter
+                    .ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
+                    .withLocale(appLocale)
+                localized.getString(
+                    R.string.stats_week_range_format,
+                    startDate.format(formatter),
+                    endDate.format(formatter),
+                )
+            }
+            is StatsTimeRange.Month -> {
+                val monthName = ZonedDateTime.of(range.year, range.month, 1, 0, 0, 0, 0, zoneId)
+                    .month.getDisplayName(TextStyle.FULL, appLocale)
+                val monthNum = "%02d".format(range.month)
+                "$monthName ($monthNum/${range.year})"
+            }
+            is StatsTimeRange.Year -> range.year.toString()
         }
-        is StatsTimeRange.Week -> context.getString(
-            R.string.week_label_format,
-            range.weekOfYear,
-            range.year,
-        )
-        is StatsTimeRange.Month -> {
-            val monthName = ZonedDateTime.of(range.year, range.month, 1, 0, 0, 0, 0, zoneId)
-                .month.getDisplayName(TextStyle.FULL, appLocale)
-            val monthNum = "%02d".format(range.month)
-            "$monthName ($monthNum/${range.year})"
-        }
-        is StatsTimeRange.Year -> range.year.toString()
     }
 }

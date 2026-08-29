@@ -233,18 +233,23 @@ class AppPickerViewModel @Inject constructor(
 
     val installedApps = installedAppsRepository.apps
 
-    val monitoredApps = profileIdFlow
-        .flatMapLatest { id ->
-            if (id == null) flowOf(emptyList())
-            else profileRepository.observeMonitoredApps(id)
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val savedMonitored = MutableStateFlow<Set<String>>(emptySet())
+    private val draftMonitored = MutableStateFlow<Set<String>>(emptySet())
 
-    val visibleApps = combine(installedApps, monitoredApps) { installed, monitored ->
-        installedAppsRepository.filterVisibleApps(
-            installed,
-            monitored.map { it.packageName }.toSet(),
-        )
+    val isDirty = combine(savedMonitored, draftMonitored) { saved, draft -> saved != draft }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val draftMonitoredPackages = draftMonitored.asStateFlow()
+
+    private val _showSystemApps = MutableStateFlow(false)
+    val showSystemApps = _showSystemApps.asStateFlow()
+
+    val visibleApps = combine(installedApps, draftMonitored, showSystemApps) { installed, draft, showSystem ->
+        if (showSystem) {
+            installed
+        } else {
+            installedAppsRepository.filterVisibleApps(installed, draft)
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val scheduleAllowedNow = profileIdFlow
@@ -269,15 +274,53 @@ class AppPickerViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { installedAppsRepository.loadIfNeeded() }
+        viewModelScope.launch {
+            profileIdFlow
+                .flatMapLatest { id ->
+                    if (id == null) flowOf(emptyList())
+                    else profileRepository.observeMonitoredApps(id)
+                }
+                .collect { apps ->
+                    val packages = apps.map { it.packageName }.toSet()
+                    savedMonitored.value = packages
+                    if (!isDirty.value) {
+                        draftMonitored.value = packages
+                    }
+                }
+        }
     }
 
     fun bindProfile(profileId: Long) {
         profileIdFlow.value = profileId
     }
 
-    fun toggleApp(profileId: Long, app: InstalledAppEntry, selected: Boolean) {
+    fun setShowSystemApps(show: Boolean) {
+        if (_showSystemApps.value == show) return
+        _showSystemApps.value = show
         viewModelScope.launch {
-            if (selected) {
+            installedAppsRepository.loadIfNeeded(force = true, includeSystemApps = show)
+        }
+    }
+
+    fun toggleApp(packageName: String, selected: Boolean) {
+        draftMonitored.value = if (selected) {
+            draftMonitored.value + packageName
+        } else {
+            draftMonitored.value - packageName
+        }
+    }
+
+    fun discardChanges() {
+        draftMonitored.value = savedMonitored.value
+    }
+
+    fun commitChanges(profileId: Long) {
+        viewModelScope.launch {
+            val saved = savedMonitored.value
+            val draft = draftMonitored.value
+            val installedByPackage = installedApps.value.associateBy { it.packageName }
+            (draft - saved).forEach { packageName ->
+                val app = installedByPackage[packageName] ?: return@forEach
                 profileRepository.addMonitoredApp(
                     MonitoredApp(
                         profileId = profileId,
@@ -286,9 +329,11 @@ class AppPickerViewModel @Inject constructor(
                         category = AppCategories.categoryForPackage(app.packageName),
                     ),
                 )
-            } else {
-                profileRepository.removeMonitoredApp(profileId, app.packageName)
             }
+            (saved - draft).forEach { packageName ->
+                profileRepository.removeMonitoredApp(profileId, packageName)
+            }
+            savedMonitored.value = draft
         }
     }
 }
@@ -333,8 +378,7 @@ class ScheduleViewModel @Inject constructor(
             get() {
                 fun keys(windows: List<ScheduleWindow>) =
                     windows.map { "${it.dayOfWeek}:${it.startMinute}:${it.endMinute}" }.toSet()
-                return keys(savedWindows) != keys(draftWindows) ||
-                    savedForm.normalizedKey() != draftForm.normalizedKey()
+                return keys(savedWindows) != keys(draftWindows)
             }
     }
 
@@ -354,12 +398,10 @@ class ScheduleViewModel @Inject constructor(
             windows.collect { loaded ->
                 val userWindows = loaded.filter { !it.isProfileAutoSwitch }
                 val current = _editorState.value
-                if (windowKeys(current.savedWindows) != windowKeys(userWindows)) {
+                if (!current.isDirty && windowKeys(current.savedWindows) != windowKeys(userWindows)) {
                     _editorState.value = current.copy(
                         savedWindows = userWindows,
                         draftWindows = userWindows,
-                        savedForm = current.savedForm,
-                        draftForm = current.draftForm,
                     )
                 }
             }
@@ -377,10 +419,15 @@ class ScheduleViewModel @Inject constructor(
     }
 
     fun addDraftWindows(windows: List<ScheduleWindow>) {
+        val withIds = windows.map { window ->
+            window.copy(id = nextDraftWindowId--)
+        }
         _editorState.value = _editorState.value.copy(
-            draftWindows = _editorState.value.draftWindows + windows,
+            draftWindows = _editorState.value.draftWindows + withIds,
         )
     }
+
+    private var nextDraftWindowId = -1L
 
     fun removeDraftWindows(windowIds: List<Long>) {
         _editorState.value = _editorState.value.copy(
@@ -392,7 +439,6 @@ class ScheduleViewModel @Inject constructor(
         val current = _editorState.value
         _editorState.value = current.copy(
             draftWindows = current.savedWindows,
-            draftForm = current.savedForm,
         )
     }
 
@@ -415,7 +461,7 @@ class ScheduleViewModel @Inject constructor(
                 }
 
             _editorState.value = state.copy(
-                savedForm = state.draftForm,
+                savedWindows = state.draftWindows,
             )
         }
     }
@@ -545,7 +591,7 @@ class StatsViewModel @Inject constructor(
     val profileOverviews = _profileOverviews.asStateFlow()
 
     private val _allTopApps = MutableStateFlow<List<TopAppUsage>>(emptyList())
-    private val _visibleTopAppCount = MutableStateFlow(10)
+    private val _visibleTopAppCount = MutableStateFlow(5)
     val topApps = combine(_allTopApps, _visibleTopAppCount) { all, count ->
         all.take(count)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -553,6 +599,8 @@ class StatsViewModel @Inject constructor(
     val canLoadMoreTopApps = combine(_allTopApps, _visibleTopAppCount) { all, count ->
         all.size > count
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    private var lastStatsKey: String? = null
 
     private val _trackedApps = MutableStateFlow<List<AppUsageStat>>(emptyList())
     val trackedApps = _trackedApps.asStateFlow()
@@ -599,15 +647,23 @@ class StatsViewModel @Inject constructor(
         anchorMs: Long,
         profileList: List<com.gatekeep.domain.model.Profile>,
     ) {
+        val statsKey = "$kind:$anchorMs"
+        if (statsKey != lastStatsKey) {
+            lastStatsKey = statsKey
+            _visibleTopAppCount.value = 5
+        }
         val range = buildRange(kind, anchorMs)
         coroutineScope {
             val overviewDeferred = async { statsRepository.overviewForRange(range) }
-            val topAppsDeferred = async { statsRepository.topAppsForRange(range, limit = 10) }
+            val topAppsDeferred = async { statsRepository.topAppsForRange(range, limit = 50) }
             val profileIds = profileList.map { it.id }
             val trackedDeferred = async {
                 if (profileIds.isEmpty()) emptyList()
                 else statsRepository.trackedAppsForProfiles(profileIds, range)
             }
+            _overview.value = overviewDeferred.await()
+            _allTopApps.value = topAppsDeferred.await()
+            _trackedApps.value = trackedDeferred.await()
             val profileOverviewsDeferred = async {
                 profileList
                     .sortedWith(compareByDescending<com.gatekeep.domain.model.Profile> { it.isActive }.thenBy { it.name })
@@ -625,24 +681,24 @@ class StatsViewModel @Inject constructor(
                         }
                     }.awaitAll()
             }
-            _overview.value = overviewDeferred.await()
-            _visibleTopAppCount.value = 10
-            _allTopApps.value = topAppsDeferred.await()
-            _trackedApps.value = trackedDeferred.await()
             _profileOverviews.value = profileOverviewsDeferred.await()
         }
     }
 
     fun loadMoreTopApps() {
-        val current = _allTopApps.value.size
-        if (current >= 50) {
-            _visibleTopAppCount.value += 10
+        val visible = _visibleTopAppCount.value
+        val total = _allTopApps.value.size
+        if (visible < total) {
+            _visibleTopAppCount.value = visible + 10
             return
         }
         viewModelScope.launch {
             val range = buildRange(_rangeKind.value, _anchorMs.value)
-            _allTopApps.value = statsRepository.topAppsForRange(range, limit = 50)
-            _visibleTopAppCount.value += 10
+            val expanded = statsRepository.topAppsForRange(range, limit = 50)
+            if (expanded.size > total) {
+                _allTopApps.value = expanded
+            }
+            _visibleTopAppCount.value = visible + 10
         }
     }
 

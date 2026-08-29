@@ -209,11 +209,33 @@ fun DurationPickerWithSeconds(
     var customMinutesText by remember { mutableStateOf(minutes.toString()) }
     var customSecondsText by remember { mutableStateOf(seconds.toString()) }
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(label, style = MaterialTheme.typography.labelMedium)
+    val isSet = totalSeconds > 0
+    val containerColor = if (isSet) {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f)
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+    val border = if (isSet) {
+        BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+    } else {
+        null
+    }
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = containerColor,
+        border = border,
+    ) {
+    Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (isSet) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HoldRepeatStepperButton("-5m") {
@@ -229,6 +251,7 @@ fun DurationPickerWithSeconds(
                     else -> "${seconds}s"
                 },
                 textAlign = TextAlign.Center,
+                fontWeight = if (isSet) FontWeight.SemiBold else FontWeight.Normal,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -246,6 +269,7 @@ fun DurationPickerWithSeconds(
                 onDurationChange(totalSeconds + 300)
             }
         }
+    }
     }
 
     if (showCustom) {
@@ -297,6 +321,7 @@ fun DurationPicker(
     fineStepMinutes: Int = 15,
     minutesOnly: Boolean = false,
     isSet: Boolean = totalMs > 0,
+    supportingText: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val totalMinutes = (totalMs / 60_000).toInt()
@@ -339,6 +364,14 @@ fun DurationPicker(
             style = MaterialTheme.typography.labelMedium,
             color = if (isSet) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (supportingText != null) {
+            Text(
+                supportingText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),

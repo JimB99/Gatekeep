@@ -41,5 +41,5 @@ APK output: `app/build/outputs/apk/debug/app-debug.apk` (arm64-v8a only; see `ap
 
 ## Notes
 
-- Room uses `fallbackToDestructiveMigration()` — schema bumps reset local app data on upgrade.
+- Room schema bumps require an explicit `Migration` in `core-data` — do **not** use `fallbackToDestructiveMigration()` (profiles would be wiped on upgrade).
 - Do not assume `java` or `adb` are on PATH; use the paths above or `local.properties`.

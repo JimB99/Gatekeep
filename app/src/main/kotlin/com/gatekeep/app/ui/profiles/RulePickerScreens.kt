@@ -354,7 +354,11 @@ fun RuleLimitActionScreen(
                 onLimitAction = onLimit,
                 defaultFrictionDifficulty = difficulty,
                 limitWaitDurationSeconds = limitWaitSeconds.coerceIn(1, 3600),
-                limitBreakDurationMs = limitBreakMs.takeIf { it > 0 },
+                limitBreakDurationMs = if (onLimit == OnLimitAction.mandatoryBreak) {
+                    limitBreakMs.takeIf { it > 0 }
+                } else {
+                    null
+                },
             ),
         )
         savedOnLimit = onLimit
@@ -451,7 +455,11 @@ fun RuleSessionActionScreen(
                 onSessionLimitAction = onSession,
                 defaultFrictionDifficulty = difficulty,
                 sessionWaitDurationSeconds = sessionWaitSeconds.coerceIn(1, 3600),
-                breakDurationMs = sessionBreakMs.takeIf { it > 0 },
+                breakDurationMs = if (onSession == OnSessionLimitAction.mandatoryBreak) {
+                    sessionBreakMs.takeIf { it > 0 }
+                } else {
+                    null
+                },
             ),
         )
         savedOnSession = onSession
@@ -663,6 +671,11 @@ internal fun LimitActionRuleEditor(
         RuleGroupLabel(stringResource(R.string.rules_group_block))
         RuleChipRow {
             GatekeepFilterChip(
+                selected = onLimit == OnLimitAction.mandatoryBreak,
+                onClick = { onLimitChange(OnLimitAction.mandatoryBreak) },
+                label = { Text(limitActionLabel(OnLimitAction.mandatoryBreak)) },
+            )
+            GatekeepFilterChip(
                 selected = onLimit == OnLimitAction.hardBlock,
                 onClick = { onLimitChange(OnLimitAction.hardBlock) },
                 label = { Text(limitActionLabel(OnLimitAction.hardBlock)) },
@@ -692,7 +705,7 @@ internal fun LimitActionRuleEditor(
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
-        if (onLimit != OnLimitAction.notifyOnly) {
+        if (onLimit == OnLimitAction.mandatoryBreak) {
             DurationPicker(
                 label = stringResource(R.string.limit_break_duration),
                 totalMs = limitBreakMs,
@@ -751,6 +764,11 @@ internal fun SessionActionRuleEditor(
         RuleGroupLabel(stringResource(R.string.rules_group_block))
         RuleChipRow {
             GatekeepFilterChip(
+                selected = onSession == OnSessionLimitAction.mandatoryBreak,
+                onClick = { onSessionChange(OnSessionLimitAction.mandatoryBreak) },
+                label = { Text(sessionActionLabel(OnSessionLimitAction.mandatoryBreak)) },
+            )
+            GatekeepFilterChip(
                 selected = onSession == OnSessionLimitAction.hardBlock,
                 onClick = { onSessionChange(OnSessionLimitAction.hardBlock) },
                 label = { Text(sessionActionLabel(OnSessionLimitAction.hardBlock)) },
@@ -780,7 +798,7 @@ internal fun SessionActionRuleEditor(
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
-        if (onSession != OnSessionLimitAction.notifyOnly) {
+        if (onSession == OnSessionLimitAction.mandatoryBreak) {
             DurationPicker(
                 label = stringResource(R.string.break_duration_session),
                 totalMs = sessionBreakMs,

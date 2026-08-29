@@ -95,6 +95,25 @@ object SessionTracker {
     fun addExcludedTime(session: SessionState, ms: Long): SessionState =
         session.copy(excludedMs = session.excludedMs + ms.coerceAtLeast(0))
 
+    fun hasPendingWait(session: SessionState?, nowEpochMs: Long): Boolean {
+        val until = session?.pendingWaitUntilEpochMs ?: return false
+        return nowEpochMs < until
+    }
+
+    fun pendingWaitRemainingMs(session: SessionState?, nowEpochMs: Long): Long {
+        if (!hasPendingWait(session, nowEpochMs)) return 0
+        return (session!!.pendingWaitUntilEpochMs!! - nowEpochMs).coerceAtLeast(0)
+    }
+
+    fun setPendingWait(session: SessionState, untilEpochMs: Long): SessionState =
+        session.copy(pendingWaitUntilEpochMs = untilEpochMs)
+
+    fun clearPendingWait(session: SessionState): SessionState =
+        session.copy(pendingWaitUntilEpochMs = null)
+
+    fun markSessionLimitNotified(session: SessionState): SessionState =
+        session.copy(sessionLimitNotified = true)
+
     sealed class SessionCheckResult {
         data class Allowed(val remainingSessionMs: Long?) : SessionCheckResult()
         data class OnBreak(val breakUntilEpochMs: Long, val remainingMs: Long) : SessionCheckResult()

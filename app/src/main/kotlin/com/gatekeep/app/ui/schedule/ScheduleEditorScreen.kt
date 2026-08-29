@@ -196,18 +196,13 @@ fun ScheduleEditorScreen(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !validation.invalidRange && validation.selectedDays.isNotEmpty(),
                 ) { Text(stringResource(R.string.add_windows)) }
-                SaveChangesButton(
-                    visible = editorState.isDirty,
-                    onClick = ::saveSchedule,
-                    label = stringResource(R.string.save_schedule),
-                )
             }
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(groupedWindows, key = { group ->
-                    group.windowIds.firstOrNull() ?: group.days.hashCode()
+                    "${group.startMinute}-${group.endMinute}-${group.days.sorted().joinToString(",")}"
                 }) { group ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(12.dp)) {
@@ -223,6 +218,11 @@ fun ScheduleEditorScreen(
                     }
                 }
             }
+            SaveChangesButton(
+                visible = editorState.isDirty,
+                onClick = ::saveSchedule,
+                label = stringResource(R.string.save_schedule),
+            )
         }
     }
 }

@@ -147,6 +147,8 @@ fun SessionStateEntity.toDomain() = SessionState(
     breakUntilEpochMs = breakUntilEpochMs,
     excludedMs = excludedMs,
     frictionStartedAtEpochMs = frictionStartedAtEpochMs,
+    pendingWaitUntilEpochMs = pendingWaitUntilEpochMs,
+    sessionLimitNotified = sessionLimitNotified,
 )
 
 fun SessionState.toEntity(profileId: Long) = SessionStateEntity(
@@ -156,4 +158,6 @@ fun SessionState.toEntity(profileId: Long) = SessionStateEntity(
     breakUntilEpochMs = breakUntilEpochMs,
     excludedMs = excludedMs,
     frictionStartedAtEpochMs = frictionStartedAtEpochMs,
+    pendingWaitUntilEpochMs = pendingWaitUntilEpochMs,
+    sessionLimitNotified = sessionLimitNotified,
 )

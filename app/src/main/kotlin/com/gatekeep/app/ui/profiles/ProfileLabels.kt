@@ -22,6 +22,7 @@ fun limitActionLabel(action: OnLimitAction): String = when (action) {
     OnLimitAction.limitWithExtensions -> stringResource(R.string.limit_action_extend)
     OnLimitAction.deterrentMath -> stringResource(R.string.open_action_math)
     OnLimitAction.deterrentWait -> stringResource(R.string.open_action_wait)
+    OnLimitAction.mandatoryBreak -> stringResource(R.string.limit_action_break)
     OnLimitAction.hardBlock -> stringResource(R.string.limit_action_hard_block)
 }
 
@@ -31,6 +32,7 @@ fun sessionActionLabel(action: OnSessionLimitAction): String = when (action) {
     OnSessionLimitAction.deterrentMath -> stringResource(R.string.open_action_math)
     OnSessionLimitAction.deterrentWait -> stringResource(R.string.open_action_wait)
     OnSessionLimitAction.limitWithExtensions -> stringResource(R.string.limit_action_extend)
+    OnSessionLimitAction.mandatoryBreak -> stringResource(R.string.limit_action_break)
     OnSessionLimitAction.hardBlock -> stringResource(R.string.limit_action_hard_block)
 }
 

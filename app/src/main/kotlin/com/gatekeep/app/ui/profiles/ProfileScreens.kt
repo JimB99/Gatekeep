@@ -216,10 +216,10 @@ fun ProfileHubScreen(
             }
             ProfileNavRow(
                 title = stringResource(R.string.profile_pin),
-                subtitle = if (!profile?.passwordHash.isNullOrBlank()) {
-                    stringResource(R.string.pin_set)
+                subtitle = if (profile?.onOpenAction == OnOpenAction.pinGate) {
+                    stringResource(R.string.profile_pin_on)
                 } else {
-                    stringResource(R.string.pin_not_set)
+                    stringResource(R.string.profile_pin_off)
                 },
                 onClick = onEditPin,
             )
@@ -390,12 +390,8 @@ fun ProfileLimitsScreen(
                 fineStepMinutes = 5,
                 minutesOnly = true,
                 isSet = hourlyMs > 0,
+                supportingText = stringResource(R.string.hourly_limit_resets),
                 onDurationChange = { hourlyMs = it },
-            )
-            Text(
-                stringResource(R.string.hourly_limit_resets),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             DurationPicker(
                 label = stringResource(R.string.session_limit),

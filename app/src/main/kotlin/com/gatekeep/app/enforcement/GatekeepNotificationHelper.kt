@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import com.gatekeep.app.MainActivity
 import com.gatekeep.app.R
 import com.gatekeep.app.util.formatDurationMs
+import com.gatekeep.app.util.withAppLocale
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -30,8 +31,9 @@ data class UsageHudInfo(
 class GatekeepNotificationHelper @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
+    private val localizedContext = context.withAppLocale()
     private val notificationManager =
-        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        localizedContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     init {
         createChannels()
@@ -42,21 +44,21 @@ class GatekeepNotificationHelper @Inject constructor(
             notificationManager.createNotificationChannel(
                 NotificationChannel(
                     CHANNEL_SERVICE,
-                    context.getString(R.string.channel_service),
+                    localizedContext.getString(R.string.channel_service),
                     NotificationManager.IMPORTANCE_MIN,
                 ).apply { setShowBadge(false) },
             )
             notificationManager.createNotificationChannel(
                 NotificationChannel(
                     CHANNEL_SESSION_TIMER,
-                    context.getString(R.string.channel_session_timer),
+                    localizedContext.getString(R.string.channel_session_timer),
                     NotificationManager.IMPORTANCE_LOW,
                 ),
             )
             notificationManager.createNotificationChannel(
                 NotificationChannel(
                     CHANNEL_WARNINGS,
-                    context.getString(R.string.channel_warnings),
+                    localizedContext.getString(R.string.channel_warnings),
                     NotificationManager.IMPORTANCE_DEFAULT,
                 ),
             )
@@ -66,9 +68,9 @@ class GatekeepNotificationHelper @Inject constructor(
     fun buildServiceNotification(): Notification {
         val intent = Intent(context, MainActivity::class.java)
         val pending = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
-        return NotificationCompat.Builder(context, CHANNEL_SERVICE)
-            .setContentTitle(context.getString(R.string.enforcement_notification_title))
-            .setContentText(context.getString(R.string.enforcement_notification_text))
+        return NotificationCompat.Builder(localizedContext, CHANNEL_SERVICE)
+            .setContentTitle(localizedContext.getString(R.string.enforcement_notification_title))
+            .setContentText(localizedContext.getString(R.string.enforcement_notification_text))
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentIntent(pending)
             .setOngoing(true)
@@ -82,16 +84,16 @@ class GatekeepNotificationHelper @Inject constructor(
         hud: UsageHudInfo,
         lastBody: String? = null,
         onBodyPosted: (String) -> Unit = {},
-    ) {
+    ): Boolean {
         val intent = Intent(context, MainActivity::class.java)
         val pending = PendingIntent.getActivity(context, 1, intent, PendingIntent.FLAG_IMMUTABLE)
         val parts = buildList {
-            hud.sessionRemainingMs?.let {
-                add(context.getString(R.string.hud_session_format, formatDurationMs(context, it)))
+            hud.sessionRemainingMs?.takeIf { it > 0 }?.let {
+                add(localizedContext.getString(R.string.hud_session_format, formatDurationMs(context, it)))
             }
             if (hud.dailyLimitMs != null && hud.dailyUsedMs != null) {
                 add(
-                    context.getString(
+                    localizedContext.getString(
                         R.string.hud_daily_used_format,
                         formatDurationMs(context, hud.dailyUsedMs),
                         formatDurationMs(context, hud.dailyLimitMs),
@@ -99,13 +101,13 @@ class GatekeepNotificationHelper @Inject constructor(
                 )
             } else {
                 hud.dailyRemainingMs?.let {
-                    add(context.getString(R.string.hud_daily_left_format, formatDurationMs(context, it)))
+                    add(localizedContext.getString(R.string.hud_daily_left_format, formatDurationMs(context, it)))
                 }
             }
             if (hud.hourlyLimitMs != null && hud.hourlyRemainingMs != null) {
                 val used = (hud.hourlyLimitMs - hud.hourlyRemainingMs).coerceAtLeast(0)
                 add(
-                    context.getString(
+                    localizedContext.getString(
                         R.string.hud_hourly_format,
                         formatDurationMs(context, used),
                         formatDurationMs(context, hud.hourlyLimitMs),
@@ -115,7 +117,7 @@ class GatekeepNotificationHelper @Inject constructor(
             if (hud.weeklyLimitMs != null && hud.weeklyRemainingMs != null) {
                 val used = (hud.weeklyLimitMs - hud.weeklyRemainingMs).coerceAtLeast(0)
                 add(
-                    context.getString(
+                    localizedContext.getString(
                         R.string.hud_weekly_format,
                         formatDurationMs(context, used),
                         formatDurationMs(context, hud.weeklyLimitMs),
@@ -123,12 +125,15 @@ class GatekeepNotificationHelper @Inject constructor(
                 )
             }
         }
-        if (parts.isEmpty()) return
+        if (parts.isEmpty()) {
+            hideCountdown()
+            return false
+        }
 
         val body = parts.joinToString(" · ")
-        if (body == lastBody) return
+        if (body == lastBody) return true
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_SESSION_TIMER)
+        val builder = NotificationCompat.Builder(localizedContext, CHANNEL_SESSION_TIMER)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(parts.joinToString("\n")))
@@ -139,6 +144,7 @@ class GatekeepNotificationHelper @Inject constructor(
             .setOnlyAlertOnce(true)
         notificationManager.notify(COUNTDOWN_NOTIFICATION_ID, builder.build())
         onBodyPosted(body)
+        return true
     }
 
     fun hideCountdown() {
@@ -146,12 +152,12 @@ class GatekeepNotificationHelper @Inject constructor(
     }
 
     fun showWarning(title: String, text: String) {
-        val notification = NotificationCompat.Builder(context, CHANNEL_WARNINGS)
+        val builder = NotificationCompat.Builder(localizedContext, CHANNEL_WARNINGS)
             .setContentTitle(title)
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .build()
-        notificationManager.notify(WARNING_ID, notification)
+            .setOnlyAlertOnce(true)
+        notificationManager.notify(WARNING_ID, builder.build())
     }
 
     companion object {

@@ -154,6 +154,79 @@ class RuleEngineTest {
         assertTrue(result is RuleResult.OpenDeterrent)
     }
 
+    @Test
+    fun `mandatory break on limit sets break until`() {
+        val breakProfile = profile.copy(
+            onLimitAction = OnLimitAction.mandatoryBreak,
+            limitBreakDurationMs = 5 * 60_000L,
+        )
+        val now = 1_000_000L
+        val result = RuleEngine.evaluate(
+            baseContext(
+                profile = breakProfile,
+                now = now,
+                usage = UsageSnapshot(dailyMs = 61 * 60_000L),
+                enforcementConfig = breakProfile.enforcementConfig(),
+            ),
+        )
+        assertTrue(result is RuleResult.Blocked)
+        val blocked = result as RuleResult.Blocked
+        assertEquals(false, blocked.bypassAllowed)
+        assertTrue(blocked.breakUntilEpochMs != null)
+    }
+
+    @Test
+    fun `deterrent on limit does not set break until`() {
+        val deterrentProfile = profile.copy(onLimitAction = OnLimitAction.deterrentMath)
+        val result = RuleEngine.evaluate(
+            baseContext(
+                profile = deterrentProfile,
+                usage = UsageSnapshot(dailyMs = 61 * 60_000L),
+                enforcementConfig = deterrentProfile.enforcementConfig(),
+            ),
+        )
+        assertTrue(result is RuleResult.Blocked)
+        assertNull((result as RuleResult.Blocked).breakUntilEpochMs)
+    }
+
+    @Test
+    fun `mandatory break on session sets break until`() {
+        val breakProfile = profile.copy(onSessionLimitAction = com.gatekeep.domain.model.OnSessionLimitAction.mandatoryBreak)
+        val now = 1_000_000L
+        val session = SessionTracker.startSession("com.test.app", now - 20 * 60_000L)
+        val result = RuleEngine.evaluate(
+            baseContext(
+                profile = breakProfile,
+                now = now,
+                sessionState = session,
+                enforcementConfig = breakProfile.enforcementConfig(),
+            ),
+        )
+        assertTrue(result is RuleResult.Blocked)
+        val blocked = result as RuleResult.Blocked
+        assertEquals(BlockReason.sessionLimit, blocked.reason)
+        assertTrue(blocked.breakUntilEpochMs != null)
+    }
+
+    @Test
+    fun `deterrent on session does not set break until`() {
+        val deterrentProfile = profile.copy(
+            onSessionLimitAction = com.gatekeep.domain.model.OnSessionLimitAction.deterrentMath,
+        )
+        val now = 1_000_000L
+        val session = SessionTracker.startSession("com.test.app", now - 20 * 60_000L)
+        val result = RuleEngine.evaluate(
+            baseContext(
+                profile = deterrentProfile,
+                now = now,
+                sessionState = session,
+                enforcementConfig = deterrentProfile.enforcementConfig(),
+            ),
+        )
+        assertTrue(result is RuleResult.Blocked)
+        assertNull((result as RuleResult.Blocked).breakUntilEpochMs)
+    }
+
     private fun baseContext(
         now: Long = 1_000_000L,
         profile: Profile = this.profile,
@@ -161,6 +234,7 @@ class RuleEngineTest {
         scheduleWindows: List<ScheduleWindow> = emptyList(),
         pauses: List<com.gatekeep.domain.model.Pause> = emptyList(),
         enforcementConfig: ProfileEnforcementConfig = profile.enforcementConfig(),
+        sessionState: com.gatekeep.domain.model.SessionState? = null,
     ) = RuleEvaluationContext(
         nowEpochMs = now,
         packageName = "com.test.app",
@@ -168,7 +242,7 @@ class RuleEngineTest {
         limit = limit,
         isMonitored = true,
         usage = usage,
-        sessionState = null,
+        sessionState = sessionState,
         pauses = pauses,
         scheduleWindows = scheduleWindows,
         enforcementConfig = enforcementConfig,
@@ -373,6 +447,39 @@ class SessionTrackerTest {
         assertTrue(result is SessionTracker.SessionCheckResult.Allowed)
         val allowed = result as SessionTracker.SessionCheckResult.Allowed
         assertEquals(sessionLimit - 30_000L, allowed.remainingSessionMs)
+    }
+    @Test
+    fun `pending wait blocks until deadline`() {
+        val now = 1_000_000L
+        val session = SessionTracker.setPendingWait(
+            SessionTracker.startSession("com.test", now),
+            now + 60_000L,
+        )
+        assertTrue(SessionTracker.hasPendingWait(session, now + 30_000L))
+        assertFalse(SessionTracker.hasPendingWait(session, now + 60_000L))
+        assertEquals(30_000L, SessionTracker.pendingWaitRemainingMs(session, now + 30_000L))
+    }
+
+    @Test
+    fun `clear pending wait removes deadline`() {
+        val now = 1_000_000L
+        val session = SessionTracker.setPendingWait(
+            SessionTracker.startSession("com.test", now),
+            now + 60_000L,
+        )
+        val cleared = SessionTracker.clearPendingWait(session)
+        assertFalse(SessionTracker.hasPendingWait(cleared, now + 30_000L))
+    }
+
+    @Test
+    fun `session limit notified flag set and cleared on new session`() {
+        val now = 1_000_000L
+        var session = SessionTracker.startSession("com.test", now)
+        assertFalse(session.sessionLimitNotified)
+        session = SessionTracker.markSessionLimitNotified(session)
+        assertTrue(session.sessionLimitNotified)
+        val newSession = SessionTracker.startSession("com.test", now + 1000)
+        assertFalse(newSession.sessionLimitNotified)
     }
 }
 

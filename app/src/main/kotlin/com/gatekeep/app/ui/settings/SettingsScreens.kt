@@ -165,14 +165,13 @@ fun SettingsHubScreen(
 
                 title = stringResource(R.string.security),
 
-                subtitle = if (settings.hasAppPin()) {
-
-                    stringResource(R.string.pin_set)
-
-                } else {
-
-                    stringResource(R.string.no_pin)
-
+                subtitle = when {
+                    settings.appLockEnabled && settings.hasAppPin() ->
+                        stringResource(R.string.pin_required)
+                    settings.hasAppPin() ->
+                        stringResource(R.string.pin_set_not_required)
+                    else ->
+                        stringResource(R.string.no_pin)
                 },
 
                 onClick = onNavigateSecurity,

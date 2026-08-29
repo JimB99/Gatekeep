@@ -45,6 +45,12 @@
     <string name="about">About</string>
     <string name="pin_set">PIN set</string>
     <string name="pin_not_set">No PIN set</string>
+    <string name="pin_required">PIN required</string>
+    <string name="pin_set_not_required">PIN set, not required</string>
+    <string name="profile_pin_on">PIN on</string>
+    <string name="profile_pin_off">PIN off</string>
+    <string name="limit_action_break">Break</string>
+    <string name="show_system_apps">Show system apps</string>
     <string name="profile_apps_tracked">%1$d apps tracked</string>
     <string name="profile_schedule_always">Always allowed</string>
     <string name="profile_schedule_windows">%1$d allowed windows</string>
@@ -215,6 +221,8 @@
     <string name="statistics">Statistics</string>
     <string name="range_day">Day</string>
     <string name="range_week">Week</string>
+    <string name="stats_period_today">Today</string>
+    <string name="stats_week_range_format">%1$s – %2$s</string>
     <string name="range_month">Month</string>
     <string name="range_year">Year</string>
     <string name="screen_time">Screen time</string>

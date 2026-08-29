@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -43,12 +44,18 @@ fun rememberUnsavedChangesGuard(
     onDiscardChanges: () -> Unit,
 ): UnsavedChangesGuardState {
     var showDialog by remember { mutableStateOf(false) }
+    val isDirtyState = rememberUpdatedState(isDirty)
+    val onNavigateBackState = rememberUpdatedState(onNavigateBack)
+    val onSaveState = rememberUpdatedState(onSave)
+    val onDiscardChangesState = rememberUpdatedState(onDiscardChanges)
 
-    fun attemptBack() {
-        if (isDirty) {
-            showDialog = true
-        } else {
-            onNavigateBack()
+    val state = remember {
+        UnsavedChangesGuardState {
+            if (isDirtyState.value) {
+                showDialog = true
+            } else {
+                onNavigateBackState.value()
+            }
         }
     }
 
@@ -64,19 +71,19 @@ fun rememberUnsavedChangesGuard(
             confirmButton = {
                 TextButton(onClick = {
                     showDialog = false
-                    onSave()
-                    onNavigateBack()
+                    onSaveState.value()
+                    onNavigateBackState.value()
                 }) { Text(stringResource(R.string.save)) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showDialog = false
-                    onDiscardChanges()
-                    onNavigateBack()
+                    onDiscardChangesState.value()
+                    onNavigateBackState.value()
                 }) { Text(stringResource(R.string.discard)) }
             },
         )
     }
 
-    return remember { UnsavedChangesGuardState(::attemptBack) }
+    return state
 }

@@ -23,34 +23,42 @@ class InstalledAppsRepository @Inject constructor(
     private val mutex = Mutex()
     private val _apps = MutableStateFlow<List<InstalledAppEntry>>(emptyList())
     val apps: StateFlow<List<InstalledAppEntry>> = _apps.asStateFlow()
+    private var includeSystemApps = false
 
-    suspend fun loadIfNeeded(force: Boolean = false) {
-        if (!force && _apps.value.isNotEmpty()) return
+    suspend fun loadIfNeeded(force: Boolean = false, includeSystemApps: Boolean = this.includeSystemApps) {
+        if (!force && _apps.value.isNotEmpty() && includeSystemApps == this.includeSystemApps) return
         mutex.withLock {
-            if (!force && _apps.value.isNotEmpty()) return
-            _apps.value = withContext(Dispatchers.IO) { queryInstalledApps() }
+            if (!force && _apps.value.isNotEmpty() && includeSystemApps == this.includeSystemApps) return
+            this.includeSystemApps = includeSystemApps
+            _apps.value = withContext(Dispatchers.IO) { queryInstalledApps(includeSystemApps) }
         }
     }
 
-    suspend fun refresh() = loadIfNeeded(force = true)
+    suspend fun refresh(includeSystemApps: Boolean = this.includeSystemApps) =
+        loadIfNeeded(force = true, includeSystemApps = includeSystemApps)
 
     private fun isUserSelectableApp(packageName: String, pm: PackageManager): Boolean {
         if (pm.getLaunchIntentForPackage(packageName) == null) return false
         if (packageName == context.packageName) return false
-        if (packageName.startsWith("com.android.")) return false
         if (packageName.startsWith("com.google.android.gms")) return false
         if (packageName.startsWith("com.google.android.gsf")) return false
         if (packageName.startsWith("com.samsung.android.app.telephonyui")) return false
         return true
     }
 
-    private fun queryInstalledApps(): List<InstalledAppEntry> {
+    private fun queryInstalledApps(includeSystemApps: Boolean): List<InstalledAppEntry> {
         val pm = context.packageManager
         return pm.getInstalledApplications(PackageManager.GET_META_DATA)
             .filter { info ->
                 val isUpdatedSystem = info.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0
                 val isUserApp = info.flags and ApplicationInfo.FLAG_SYSTEM == 0
-                (isUserApp || isUpdatedSystem) && isUserSelectableApp(info.packageName, pm)
+                val isSystemApp = info.flags and ApplicationInfo.FLAG_SYSTEM != 0
+                when {
+                    includeSystemApps -> isUserSelectableApp(info.packageName, pm)
+                    (isUserApp || isUpdatedSystem) -> isUserSelectableApp(info.packageName, pm)
+                    isSystemApp -> false
+                    else -> false
+                }
             }
             .map { InstalledAppEntry(it.packageName, pm.getApplicationLabel(it).toString()) }
             .sortedBy { it.label.lowercase() }

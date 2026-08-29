@@ -3,6 +3,7 @@ package com.gatekeep.app.di
 import android.content.Context
 import androidx.room.Room
 import com.gatekeep.data.local.GatekeepDatabase
+import com.gatekeep.data.local.GatekeepMigrations
 import com.gatekeep.app.util.EnforcementLog
 import com.gatekeep.app.util.UsageStatsCollector
 import com.gatekeep.data.repository.ProfileRepository
@@ -23,7 +24,11 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GatekeepDatabase =
         Room.databaseBuilder(context, GatekeepDatabase::class.java, "gatekeep.db")
-            .fallbackToDestructiveMigration()
+            .addMigrations(
+                GatekeepMigrations.MIGRATION_5_6,
+                GatekeepMigrations.MIGRATION_6_7,
+                GatekeepMigrations.MIGRATION_7_8,
+            )
             .build()
 
     @Provides

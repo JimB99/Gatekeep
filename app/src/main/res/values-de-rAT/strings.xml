@@ -41,6 +41,12 @@
     <string name="enforcement">Durchsetzung</string>
     <string name="about">Über</string>
     <string name="pin_set">PIN gesetzt</string>
+    <string name="pin_required">PIN erforderlich</string>
+    <string name="pin_set_not_required">PIN gesetzt, nicht erforderlich</string>
+    <string name="profile_pin_on">PIN an</string>
+    <string name="profile_pin_off">PIN aus</string>
+    <string name="limit_action_break">Pause</string>
+    <string name="show_system_apps">System-Apps anzeigen</string>
     <string name="no_pin">Kein PIN</string>
     <string name="timer">Timer</string>
     <string name="warnings">Warnungen</string>
@@ -194,6 +200,8 @@
     <string name="statistics">Statistiken</string>
     <string name="range_day">Tag</string>
     <string name="range_week">Woche</string>
+    <string name="stats_period_today">Heute</string>
+    <string name="stats_week_range_format">%1$s – %2$s</string>
     <string name="range_month">Monat</string>
     <string name="range_year">Jahr</string>
     <string name="screen_time">Bildschirmzeit</string>

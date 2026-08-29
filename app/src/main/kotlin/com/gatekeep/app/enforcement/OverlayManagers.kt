@@ -20,8 +20,10 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import com.gatekeep.app.R
+import com.gatekeep.app.util.EnforcementLog
 import com.gatekeep.app.util.PasswordHasher
 import com.gatekeep.app.util.formatDurationMs
+import com.gatekeep.app.util.withAppLocale
 import com.gatekeep.domain.FrictionChallenge
 import com.gatekeep.domain.model.FrictionDifficulty
 import com.gatekeep.domain.model.FrictionMethod
@@ -35,7 +37,9 @@ class BlockOverlayManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val coordinator: dagger.Lazy<EnforcementCoordinator>,
     private val screenStateMonitor: ScreenStateMonitor,
+    private val enforcementLog: EnforcementLog,
 ) {
+    private val localizedContext = context.withAppLocale()
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val inputMethodManager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -47,6 +51,12 @@ class BlockOverlayManager @Inject constructor(
     private var currentChallenge: MathChallenge? = null
     private var overlayParams: WindowManager.LayoutParams? = null
     private var currentRequest: BlockOverlayRequest? = null
+    @Volatile
+    private var overlayVisible = false
+
+    fun isVisible(): Boolean = overlayVisible
+
+    fun blockedPackage(): String? = if (overlayVisible) currentRequest?.packageName else null
 
     fun isFrictionInProgress(): Boolean = frictionInProgress
 
@@ -67,15 +77,18 @@ class BlockOverlayManager @Inject constructor(
                     return@post
                 }
                 createBlockOverlay(request)
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                enforcementLog.logError("Block overlay show failed", e)
+            }
         }
     }
 
     fun showDelay(delaySeconds: Int, message: String, onComplete: () -> Unit) {
         mainHandler.post {
             try {
-                hide(skipDismissCallback = true)
-                val view = LayoutInflater.from(context).inflate(R.layout.overlay_block, null)
+                clearOverlayState()
+                removeOverlayOnly()
+                val view = LayoutInflater.from(localizedContext).inflate(R.layout.overlay_block, null)
                 view.findViewById<TextView>(R.id.block_message).text = message
                 view.findViewById<Button>(R.id.block_continue_btn).visibility = View.GONE
                 view.findViewById<Button>(R.id.block_back_btn).visibility = View.GONE
@@ -100,38 +113,62 @@ class BlockOverlayManager @Inject constructor(
                     }
                 }
                 mainHandler.postDelayed(waitRunnable!!, 1000)
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                enforcementLog.logError("Block overlay delay show failed", e)
+            }
         }
     }
 
-    fun hide(skipDismissCallback: Boolean = false) {
+    fun hideTemporarily() {
         mainHandler.post {
-            waitRunnable?.let { mainHandler.removeCallbacks(it) }
-            waitRunnable = null
-            breakRunnable?.let { mainHandler.removeCallbacks(it) }
-            breakRunnable = null
-            waitStopwatch = null
-            frictionInProgress = false
-            currentChallenge = null
-            currentRequest = null
+            clearOverlayTimers()
             removeOverlayOnly()
-            if (!skipDismissCallback) {
-                coordinator.get().onBlockDismissed()
-            }
         }
+    }
+
+    fun dismissByUser() {
+        mainHandler.post {
+            clearOverlayState()
+            removeOverlayOnly()
+            coordinator.get().onBlockDismissed()
+        }
+    }
+
+    fun removeAfterResolution() {
+        mainHandler.post {
+            clearOverlayState()
+            removeOverlayOnly()
+        }
+    }
+
+    private fun clearOverlayTimers() {
+        waitRunnable?.let { mainHandler.removeCallbacks(it) }
+        waitRunnable = null
+        breakRunnable?.let { mainHandler.removeCallbacks(it) }
+        breakRunnable = null
+        waitStopwatch = null
+    }
+
+    private fun clearOverlayState() {
+        clearOverlayTimers()
+        frictionInProgress = false
+        currentChallenge = null
+        currentRequest = null
     }
 
     private fun removeOverlayOnly() {
         overlayView?.let {
             runCatching { windowManager.removeView(it) }
+                .onFailure { e -> enforcementLog.logError("Block overlay remove failed", e) }
             overlayView = null
             overlayParams = null
         }
+        overlayVisible = false
     }
 
     @SuppressLint("InflateParams")
     private fun createBlockOverlay(request: BlockOverlayRequest) {
-        val view = LayoutInflater.from(context).inflate(R.layout.overlay_block, null)
+        val view = LayoutInflater.from(localizedContext).inflate(R.layout.overlay_block, null)
         updateBlockView(view, request.message, request.reason, request.breakUntilMs)
 
         view.findViewById<TextView>(R.id.overlay_title)?.apply {
@@ -141,6 +178,7 @@ class BlockOverlayManager @Inject constructor(
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 context.startActivity(intent)
+                coordinator.get().onOpenGatekeepFromOverlay()
             }
         }
 
@@ -155,7 +193,7 @@ class BlockOverlayManager @Inject constructor(
                 ForegroundMonitorAccessibilityService.instance?.performGlobalAction(
                     android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME,
                 )
-                hide()
+                dismissByUser()
             }
         }
 
@@ -181,7 +219,7 @@ class BlockOverlayManager @Inject constructor(
             val vPadding = (8 * density).toInt()
             request.extensionOptionMinutes.forEach { minutes ->
                 val btn = Button(context).apply {
-                    text = context.getString(R.string.extension_minutes_format, minutes)
+                    text = localizedContext.getString(R.string.extension_minutes_format, minutes)
                     setTextColor(0xFFFFFFFF.toInt())
                     setBackgroundColor(0xFF1976D2.toInt())
                     setPadding((12 * density).toInt(), vPadding, (12 * density).toInt(), vPadding)
@@ -201,7 +239,7 @@ class BlockOverlayManager @Inject constructor(
             }
             if (request.showNoLimitToday) {
                 val noLimitBtn = Button(context).apply {
-                    text = context.getString(R.string.overlay_no_limit_today)
+                    text = localizedContext.getString(R.string.overlay_no_limit_today)
                     setTextColor(0xFFFFFFFF.toInt())
                     setBackgroundColor(0xFFEF6C00.toInt())
                     setPadding((16 * density).toInt(), vPadding, (16 * density).toInt(), vPadding)
@@ -272,7 +310,7 @@ class BlockOverlayManager @Inject constructor(
             }
             FrictionMethod.waitOneMin -> {
                 view.findViewById<TextView>(R.id.friction_prompt).text =
-                    context.getString(R.string.overlay_wait_to_continue)
+                    localizedContext.getString(R.string.overlay_wait_to_continue)
                 val countdown = view.findViewById<TextView>(R.id.wait_countdown)
                 countdown.visibility = View.VISIBLE
                 val totalMs = request.waitDurationSeconds * 1000L
@@ -280,6 +318,9 @@ class BlockOverlayManager @Inject constructor(
                     System.currentTimeMillis() + totalMs
                 } else {
                     null
+                }
+                if (wallClockDeadlineMs != null) {
+                    coordinator.get().onWaitStarted(request.packageName, wallClockDeadlineMs)
                 }
                 val stopwatch = if (wallClockDeadlineMs == null) {
                     screenStateMonitor.createStopwatch().also { waitStopwatch = it }
@@ -297,6 +338,9 @@ class BlockOverlayManager @Inject constructor(
                         if (remainingSec <= 0) {
                             frictionInProgress = false
                             waitStopwatch = null
+                            if (wallClockDeadlineMs != null) {
+                                coordinator.get().onWaitCompleted(request.packageName)
+                            }
                             onFrictionSuccess(request)
                         } else {
                             countdown.text = "${remainingSec}s"
@@ -309,7 +353,7 @@ class BlockOverlayManager @Inject constructor(
             }
             else -> {
                 view.findViewById<TextView>(R.id.friction_prompt).text =
-                    context.getString(R.string.overlay_use_math_or_wait)
+                    localizedContext.getString(R.string.overlay_use_math_or_wait)
             }
         }
     }
@@ -332,7 +376,7 @@ class BlockOverlayManager @Inject constructor(
         container.visibility = View.VISIBLE
         view.findViewById<Button>(R.id.block_continue_btn).visibility = View.GONE
         view.findViewById<TextView>(R.id.friction_prompt).text =
-            context.getString(R.string.overlay_enter_profile_pin)
+            localizedContext.getString(R.string.overlay_enter_profile_pin)
         val input = view.findViewById<EditText>(R.id.friction_input)
         input.visibility = View.VISIBLE
         prepareInputField(input)
@@ -340,7 +384,7 @@ class BlockOverlayManager @Inject constructor(
             android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
         val submit = view.findViewById<Button>(R.id.friction_submit)
         submit.visibility = View.VISIBLE
-        submit.text = context.getString(R.string.unlock)
+        submit.text = localizedContext.getString(R.string.unlock)
         submit.setOnClickListener {
             val pin = input.text.toString()
             if (!request.profilePasswordHash.isNullOrBlank() &&
@@ -351,11 +395,10 @@ class BlockOverlayManager @Inject constructor(
                 if (request.isOpenGate) {
                     coordinator.get().onOpenGatePassed(request.packageName)
                 } else if (request.useExtensionButtons) {
-                    hide()
+                    dismissByUser()
                     coordinator.get().refresh()
                 } else {
-                    coordinator.get().onBlockDismissed()
-                    hide()
+                    dismissByUser()
                     coordinator.get().refresh()
                 }
             }
@@ -442,10 +485,10 @@ class BlockOverlayManager @Inject constructor(
             override fun run() {
                 val remaining = breakUntilMs - System.currentTimeMillis()
                 if (remaining <= 0) {
-                    breakText.text = context.getString(R.string.overlay_break_ended)
+                    breakText.text = localizedContext.getString(R.string.overlay_break_ended)
                     coordinator.get().refresh()
                 } else {
-                    breakText.text = context.getString(
+                    breakText.text = localizedContext.getString(
                         R.string.overlay_break_ends_in,
                         formatDurationMs(context, remaining),
                     )
@@ -459,21 +502,21 @@ class BlockOverlayManager @Inject constructor(
     private fun bindExtensionQuota(view: View, request: BlockOverlayRequest) {
         val headingView = view.findViewById<TextView>(R.id.extension_quota_heading)
         val quotaView = view.findViewById<TextView>(R.id.extension_quota_text)
-        headingView.text = context.getString(R.string.extension_quota_heading)
+        headingView.text = localizedContext.getString(R.string.extension_quota_heading)
         headingView.visibility = View.VISIBLE
         val todayText = request.maxExtensionsPerDay?.let { max ->
-            context.getString(R.string.extension_quota_today, request.extensionsUsedToday, max)
-        } ?: context.getString(
+            localizedContext.getString(R.string.extension_quota_today, request.extensionsUsedToday, max)
+        } ?: localizedContext.getString(
             R.string.extension_quota_today_unlimited,
             request.extensionsUsedToday,
         )
         val consecutiveText = request.maxConsecutiveExtensions?.let { max ->
-            context.getString(
+            localizedContext.getString(
                 R.string.extension_quota_consecutive,
                 request.consecutiveExtensionsUsed,
                 max,
             )
-        } ?: context.getString(
+        } ?: localizedContext.getString(
             R.string.extension_quota_consecutive_unlimited,
             request.consecutiveExtensionsUsed,
         )
@@ -487,7 +530,7 @@ class BlockOverlayManager @Inject constructor(
         val breakText = view.findViewById<TextView>(R.id.block_break_text)
         if (breakUntilMs != null) {
             breakText.visibility = View.VISIBLE
-            breakText.text = context.getString(
+            breakText.text = localizedContext.getString(
                 R.string.overlay_break_ends_in,
                 formatDurationMs(context, breakUntilMs - System.currentTimeMillis()),
             )
@@ -512,6 +555,15 @@ class BlockOverlayManager @Inject constructor(
         )
         overlayView = view
         overlayParams = params
-        windowManager.addView(view, params)
+        try {
+            windowManager.addView(view, params)
+            overlayVisible = true
+        } catch (e: Exception) {
+            overlayView = null
+            overlayParams = null
+            overlayVisible = false
+            enforcementLog.logError("Block overlay add failed", e)
+            throw e
+        }
     }
 }

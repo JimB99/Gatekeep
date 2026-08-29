@@ -137,4 +137,6 @@ data class SessionStateEntity(
     val breakUntilEpochMs: Long? = null,
     val excludedMs: Long = 0,
     val frictionStartedAtEpochMs: Long? = null,
+    val pendingWaitUntilEpochMs: Long? = null,
+    val sessionLimitNotified: Boolean = false,
 )

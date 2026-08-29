@@ -41,6 +41,12 @@
     <string name="enforcement">Aplicación de límites</string>
     <string name="about">Acerca de</string>
     <string name="pin_set">PIN configurado</string>
+    <string name="pin_required">PIN requerido</string>
+    <string name="pin_set_not_required">PIN configurado, no requerido</string>
+    <string name="profile_pin_on">PIN activado</string>
+    <string name="profile_pin_off">PIN desactivado</string>
+    <string name="limit_action_break">Descanso</string>
+    <string name="show_system_apps">Mostrar apps del sistema</string>
     <string name="no_pin">Sin PIN</string>
     <string name="timer">Temporizador</string>
     <string name="warnings">Avisos</string>
@@ -194,6 +200,8 @@
     <string name="statistics">Estadísticas</string>
     <string name="range_day">Día</string>
     <string name="range_week">Semana</string>
+    <string name="stats_period_today">Hoy</string>
+    <string name="stats_week_range_format">%1$s – %2$s</string>
     <string name="range_month">Mes</string>
     <string name="range_year">Año</string>
     <string name="screen_time">Tiempo de pantalla</string>

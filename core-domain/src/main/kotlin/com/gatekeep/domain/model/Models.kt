@@ -22,6 +22,7 @@ enum class OnLimitAction {
     limitWithExtensions,
     deterrentMath,
     deterrentWait,
+    mandatoryBreak,
     hardBlock,
 }
 
@@ -30,6 +31,7 @@ enum class OnSessionLimitAction {
     deterrentMath,
     deterrentWait,
     limitWithExtensions,
+    mandatoryBreak,
     hardBlock,
 }
 
@@ -191,6 +193,8 @@ data class SessionState(
     val breakUntilEpochMs: Long? = null,
     val excludedMs: Long = 0,
     val frictionStartedAtEpochMs: Long? = null,
+    val pendingWaitUntilEpochMs: Long? = null,
+    val sessionLimitNotified: Boolean = false,
 )
 
 data class RuleEvaluationContext(

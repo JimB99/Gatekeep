@@ -133,24 +133,25 @@ object RuleEngine {
             )
             OnLimitAction.limitWithExtensions -> RuleResult.Blocked(
                 reason = reason,
-                breakUntilEpochMs = breakUntil,
                 bypassAllowed = true,
             )
             OnLimitAction.deterrentMath -> RuleResult.Blocked(
                 reason = reason,
-                breakUntilEpochMs = breakUntil,
                 bypassAllowed = true,
                 sessionDeterrent = FrictionMethod.math,
             )
             OnLimitAction.deterrentWait -> RuleResult.Blocked(
                 reason = reason,
-                breakUntilEpochMs = breakUntil,
                 bypassAllowed = true,
                 sessionDeterrent = FrictionMethod.waitOneMin,
             )
-            OnLimitAction.hardBlock -> RuleResult.Blocked(
+            OnLimitAction.mandatoryBreak -> RuleResult.Blocked(
                 reason = reason,
                 breakUntilEpochMs = breakUntil,
+                bypassAllowed = false,
+            )
+            OnLimitAction.hardBlock -> RuleResult.Blocked(
+                reason = reason,
                 bypassAllowed = false,
             )
         }
@@ -192,24 +193,25 @@ object RuleEngine {
         )
         OnSessionLimitAction.deterrentMath -> RuleResult.Blocked(
             reason = reason,
-            breakUntilEpochMs = breakUntilEpochMs,
             bypassAllowed = true,
             sessionDeterrent = FrictionMethod.math,
         )
         OnSessionLimitAction.deterrentWait -> RuleResult.Blocked(
             reason = reason,
-            breakUntilEpochMs = breakUntilEpochMs,
             bypassAllowed = true,
             sessionDeterrent = FrictionMethod.waitOneMin,
         )
         OnSessionLimitAction.limitWithExtensions -> RuleResult.Blocked(
             reason = reason,
-            breakUntilEpochMs = breakUntilEpochMs,
             bypassAllowed = true,
+        )
+        OnSessionLimitAction.mandatoryBreak -> RuleResult.Blocked(
+            reason = reason,
+            breakUntilEpochMs = breakUntilEpochMs,
+            bypassAllowed = false,
         )
         OnSessionLimitAction.hardBlock -> RuleResult.Blocked(
             reason = reason,
-            breakUntilEpochMs = breakUntilEpochMs,
             bypassAllowed = false,
         )
     }
