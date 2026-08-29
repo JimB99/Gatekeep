@@ -134,11 +134,36 @@ class UsageStatsCollector(private val context: Context) {
         val dayStart = dayStartEpochMs(nowMs)
         val hourStart = hourStartEpochMs(nowMs)
         val weekStart = weekStartEpochMs(nowMs)
-        return UsageSnapshot(
-            dailyMs = usageMsForPackage(packageName, dayStart, nowMs),
-            hourlyMs = usageMsForPackage(packageName, hourStart, nowMs),
-            weeklyMs = usageMsForPackage(packageName, weekStart, nowMs),
-        )
+        if (nowMs <= weekStart || isExcludedPackage(packageName)) {
+            return UsageSnapshot(dailyMs = 0L, hourlyMs = 0L, weeklyMs = 0L)
+        }
+
+        val events = queryEvents(weekStart, nowMs)
+        var lastResumed: Long? = null
+        var dailyMs = 0L
+        var hourlyMs = 0L
+        var weeklyMs = 0L
+
+        fun addSegment(resumedAt: Long, pausedAt: Long) {
+            weeklyMs += clipDuration(resumedAt, pausedAt, weekStart, nowMs)
+            dailyMs += clipDuration(resumedAt, pausedAt, dayStart, nowMs)
+            hourlyMs += clipDuration(resumedAt, pausedAt, hourStart, nowMs)
+        }
+
+        for (event in events.sortedBy { it.timestamp }) {
+            if (event.packageName != packageName) continue
+            when (event.type) {
+                ForegroundEventType.RESUMED -> lastResumed = event.timestamp
+                ForegroundEventType.PAUSED -> {
+                    val resumedAt = lastResumed ?: continue
+                    addSegment(resumedAt, event.timestamp)
+                    lastResumed = null
+                }
+            }
+        }
+        lastResumed?.let { addSegment(it, nowMs) }
+
+        return UsageSnapshot(dailyMs = dailyMs, hourlyMs = hourlyMs, weeklyMs = weeklyMs)
     }
 
     fun totalUsageForPackages(packageNames: Set<String>, startMs: Long, endMs: Long): Long =

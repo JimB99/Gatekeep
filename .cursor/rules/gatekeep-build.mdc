@@ -29,10 +29,23 @@ From `Gatekeep/`:
 cd Gatekeep
 export JAVA_HOME="c:/Users/JimBuisman/Desktop/Private/.tools/jdk-17.0.14+7"
 export ANDROID_HOME="c:/Users/JimBuisman/Desktop/Private/.tools/android-sdk"
-./gradlew :core-domain:test :app:assembleDebug
+./gradlew :core-domain:test :core-data:test :app:testDebugUnitTest :app:assembleRelease
 ```
 
-APK output: `app/build/outputs/apk/debug/app-debug.apk` (arm64-v8a only; see `app/build.gradle.kts` `abiFilters`).
+**Prerequisite:** `keystore/debug.keystore` must exist (one-time setup below). Without it, release builds are unsigned.
+
+APK output: `app/build/outputs/apk/release/app-release.apk` (arm64-v8a only; see `app/build.gradle.kts` `abiFilters`).
+
+One-time keystore setup (from `Gatekeep/`):
+
+```bash
+mkdir -p keystore
+"$JAVA_HOME/bin/keytool" -genkeypair -v -keystore keystore/debug.keystore -alias androiddebugkey \
+  -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+  -dname "CN=Gatekeep Debug, OU=Dev, O=Gatekeep, L=Local, ST=Local, C=NL"
+```
+
+Release and debug both sign with `debugShared` (`keystore/debug.keystore`, passwords `android`). The keystore is gitignored — each machine needs its own copy, or copy the file once to keep upgrade compatibility.
 
 ## Requirements
 

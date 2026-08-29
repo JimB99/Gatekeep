@@ -11,6 +11,7 @@ import com.gatekeep.app.util.withAppLocale
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
+import com.gatekeep.domain.EnforcementPollInterval
 import com.gatekeep.domain.ExtensionPolicyEvaluator
 import com.gatekeep.domain.ProfileMergeEngine
 import com.gatekeep.domain.RuleEngine
@@ -981,7 +982,9 @@ class EnforcementCoordinator @Inject constructor(
 
         enforcementLoopRunnable = object : Runnable {
             override fun run() {
-                pollForegroundIfChanged()
+                if (foregroundPollRunnable == null) {
+                    pollForegroundIfChanged()
+                }
                 val nowMs = System.currentTimeMillis()
                 val pkg = countdownPackageName
                 if (pkg != null) {
@@ -1001,7 +1004,7 @@ class EnforcementCoordinator @Inject constructor(
                         }
                     }
                 }
-                val delayMs = computeEnforcementLoopDelayMs(nowMs)
+                val delayMs = enforcementLoopDelayMs(nowMs)
                 if (delayMs == null) {
                     val inForeground = pkg != null && (
                         currentForegroundPackage == pkg ||
@@ -1016,43 +1019,15 @@ class EnforcementCoordinator @Inject constructor(
             }
         }
         countdownRunnable = enforcementLoopRunnable
-        val initialDelay = computeEnforcementLoopDelayMs(now) ?: 1_000L
+        val initialDelay = enforcementLoopDelayMs(now) ?: EnforcementPollInterval.FINE_INTERVAL_MS
         mainHandler.postDelayed(enforcementLoopRunnable!!, initialDelay)
     }
 
-    private fun computeEnforcementLoopDelayMs(nowMs: Long): Long? {
-        val deadlines = listOfNotNull(
-            sessionDeadlineMs,
-            dailyDeadlineMs,
-            hourlyDeadlineMs,
-            weeklyDeadlineMs,
+    private fun enforcementLoopDelayMs(nowMs: Long): Long? =
+        EnforcementPollInterval.enforcementLoopIntervalMs(
+            nowMs,
+            listOf(sessionDeadlineMs, dailyDeadlineMs, hourlyDeadlineMs, weeklyDeadlineMs),
         )
-        if (deadlines.isEmpty()) return null
-
-        fun remaining(deadline: Long?) = deadline?.let { (it - nowMs).coerceAtLeast(0) }
-
-        val sessionRemaining = remaining(sessionDeadlineMs)
-        val hourlyRemaining = remaining(hourlyDeadlineMs)
-        val dailyRemaining = remaining(dailyDeadlineMs)
-        val weeklyRemaining = remaining(weeklyDeadlineMs)
-
-        val hasShortActive = listOfNotNull(sessionRemaining, hourlyRemaining)
-            .any { it in 1 until 10 * 60_000L }
-        if (hasShortActive) return 1_000L
-
-        val onlyLongTerm = (sessionRemaining == null || sessionRemaining == 0L) &&
-            (hourlyRemaining == null || hourlyRemaining == 0L) &&
-            ((dailyRemaining ?: 0L) > 0L || (weeklyRemaining ?: 0L) > 0L)
-        if (onlyLongTerm) return 30_000L
-
-        if (listOfNotNull(sessionRemaining, hourlyRemaining, dailyRemaining, weeklyRemaining)
-                .all { it == 0L }
-        ) {
-            return 1_000L
-        }
-
-        return 1_000L
-    }
 
     private fun pollForegroundIfChanged() {
         if (isBlockingActive) return
@@ -1094,18 +1069,21 @@ class EnforcementCoordinator @Inject constructor(
 
     private fun refreshCountdownNotification() {
         val label = countdownAppLabel ?: return
-        val pkg = countdownPackageName ?: return
+        if (countdownPackageName == null) return
         val title = countdownNotificationTitle
             ?: localizedContext.getString(com.gatekeep.app.R.string.hud_usage_title, label).also {
                 countdownNotificationTitle = it
             }
         val now = System.currentTimeMillis()
-        val usage = usageStatsCollector.getUsageSnapshot(pkg, now)
-        countdownUsedTodayMs = usage.dailyMs
         val sessionRemaining = sessionDeadlineMs
             ?.let { (it - now).coerceAtLeast(0) }
             ?.takeIf { it > 0 }
         val dailyRemaining = dailyDeadlineMs?.let { (it - now).coerceAtLeast(0) }
+        countdownUsedTodayMs = if (countdownDailyLimitMs != null && dailyRemaining != null) {
+            (countdownDailyLimitMs!! - dailyRemaining).coerceAtLeast(0)
+        } else {
+            countdownUsedTodayMs
+        }
         val hourlyRemaining = hourlyDeadlineMs?.let { (it - now).coerceAtLeast(0) }
         val weeklyRemaining = weeklyDeadlineMs?.let { (it - now).coerceAtLeast(0) }
         val shown = notificationHelper.showCountdown(

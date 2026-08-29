@@ -15,8 +15,8 @@ android {
         applicationId = "com.gatekeep.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 3
-        versionName = "3.2.0"
+        versionCode = 4
+        versionName = "3.2.1"
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -24,7 +24,12 @@ android {
 
     signingConfigs {
         val debugKeystore = file("../keystore/debug.keystore")
-        if (debugKeystore.exists()) {
+        if (!debugKeystore.exists()) {
+            logger.warn(
+                "Gatekeep release signing: keystore/debug.keystore not found. " +
+                    "Release APKs will be unsigned. See README.md for one-time keytool setup.",
+            )
+        } else {
             create("debugShared") {
                 storeFile = debugKeystore
                 storePassword = "android"
@@ -40,6 +45,8 @@ android {
         }
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfigs.findByName("debugShared")?.let { signingConfig = it }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -83,13 +90,11 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore)
     implementation(libs.androidx.work)
-    implementation(libs.androidx.biometric)
     implementation(libs.androidx.security.crypto)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)

@@ -11,11 +11,13 @@ core-data/     Room database, repositories, DataStore
 1. `ForegroundMonitorAccessibilityService` detects foreground app changes
 2. `EnforcementCoordinator` loads profile, limits, usage, pauses
 3. `RuleEngine` (core-domain) evaluates allow/block
-4. `SessionHudOverlayManager` or `BlockOverlayManager` shows UI
+4. `BlockOverlayManager` shows block UI; session timer uses an ongoing notification
 
 ## Battery
 
-- Event-driven via accessibility (no polling loop)
+- Foreground app changes are event-driven via accessibility
+- A 2s UsageEvents poll runs while accessibility is connected to catch same-app resumes and keyboard/system-UI noise (`shouldReevaluateForeground`)
+- Notification/enforcement loop: **1s** when any active limit deadline is within 5 minutes, **30s** otherwise
+- Usage is recorded on app switch, resume detection, and break expiry — not on notification ticks
 - Usage sync every 30 min via WorkManager
-- HUD updates throttled to 10s per app
-- Foreground service only when enforcement enabled
+- Foreground service only when enforcement is enabled and accessibility is unavailable
