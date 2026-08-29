@@ -70,7 +70,12 @@
     <string name="end">Ende</string>
     <string name="save_quiet_hours">Ruhezeiten speichern</string>
     <string name="enforcement_enabled">Durchsetzung aktiviert</string>
-    <string name="enforcement_enabled_help">Alle Blockierungen und Timer ausschalten, ohne Gatekeep zu deinstallieren.</string>
+    <string name="enforcement_enabled_help">Wenn aktiv, überwacht Gatekeep Apps, setzt Limits durch und zeigt Sitzungstimer. Ausschalten pausiert alle Blockierungen und Timer ohne Deinstallation — nützlich zum Testen oder für Pausen.</string>
+    <string name="enforcement_disabled_title">Durchsetzung ist aus</string>
+    <string name="enforcement_disabled_body">Keine App-Blockierung, Limits oder Sitzungstimer aktiv. Schalte die Durchsetzung wieder ein, um den Schutz fortzusetzen.</string>
+    <string name="enforcement_settings_off_warning">Durchsetzung ist derzeit aus. Gatekeep blockiert keine Apps und zeigt keine Timer, bis du sie wieder einschaltest.</string>
+    <string name="enforcement_hub_subtitle_off">Aus — Blockierung und Timer deaktiviert</string>
+    <string name="turn_on_enforcement">Durchsetzung einschalten</string>
     <string name="last_error_format">Letzter Fehler: %1$s</string>
     <string name="no_recent_enforcement_errors">Keine aktuellen Durchsetzungsfehler</string>
 
@@ -105,6 +110,12 @@
     <string name="hourly_limit_off">Stundenlimit (0 = aus)</string>
     <string name="weekly_limit_off">Wochenlimit (0 = aus)</string>
     <string name="save_limits">Limits speichern</string>
+    <string name="save_changes">Änderungen speichern</string>
+    <string name="unsaved_changes_title">Ungespeicherte Änderungen</string>
+    <string name="unsaved_changes_message">Du hast ungespeicherte Änderungen. Vor dem Verlassen speichern?</string>
+    <string name="discard">Verwerfen</string>
+    <string name="inactive">Inaktiv</string>
+    <string name="profile_usage_in_period">Nutzung: %1$s</string>
     <string name="when_opening_app">Beim Öffnen einer App</string>
     <string name="when_limit_reached">Wenn ein Zeitlimit erreicht ist</string>
     <string name="during_use_session">Während der Nutzung (Sitzungslimit)</string>

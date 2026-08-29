@@ -8,6 +8,7 @@ import com.gatekeep.app.data.AppUsageStat
 import com.gatekeep.app.data.InstalledAppEntry
 import com.gatekeep.app.data.InstalledAppsRepository
 import com.gatekeep.app.data.ProfileUsageSummary
+import com.gatekeep.app.data.ProfileStatsOverview
 import com.gatekeep.app.data.StatsOverview
 import com.gatekeep.app.data.StatsRangeKind
 import com.gatekeep.app.data.StatsRepository
@@ -50,6 +51,7 @@ import javax.inject.Inject
 class ProfilesHomeViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
     private val statsRepository: StatsRepository,
+    private val settingsRepository: SettingsRepository,
     @ApplicationContext private val context: Context,
     private val enforcementLog: EnforcementLog,
 ) : ViewModel() {
@@ -63,17 +65,35 @@ class ProfilesHomeViewModel @Inject constructor(
     private val _monitoredPackages = MutableStateFlow<Map<Long, List<String>>>(emptyMap())
     val monitoredPackages: StateFlow<Map<Long, List<String>>> = _monitoredPackages.asStateFlow()
 
-    private val _permissionState = MutableStateFlow(buildPermissionState(context, enforcementLog))
+    private val _permissionState = MutableStateFlow(
+        buildPermissionState(context, enforcementLog, enforcementEnabled = true),
+    )
     val permissionState = _permissionState.asStateFlow()
 
     init {
         viewModelScope.launch {
             profiles.collect { loadSummaries(it) }
         }
+        viewModelScope.launch {
+            settingsRepository.settings.collect { settings ->
+                _permissionState.value = buildPermissionState(
+                    context,
+                    enforcementLog,
+                    enforcementEnabled = settings.enforcementEnabled,
+                )
+            }
+        }
     }
 
     fun refreshPermissions() {
-        _permissionState.value = buildPermissionState(context, enforcementLog)
+        viewModelScope.launch {
+            val settings = settingsRepository.settings.first()
+            _permissionState.value = buildPermissionState(
+                context,
+                enforcementLog,
+                enforcementEnabled = settings.enforcementEnabled,
+            )
+        }
     }
 
     fun refreshAll() {
@@ -106,6 +126,12 @@ class ProfilesHomeViewModel @Inject constructor(
 
     fun toggleActive(id: Long, active: Boolean) {
         viewModelScope.launch { profileRepository.toggleProfileActive(id, active) }
+    }
+
+    fun enableEnforcement() {
+        viewModelScope.launch {
+            settingsRepository.updateSettings { it.copy(enforcementEnabled = true) }
+        }
     }
 }
 
@@ -271,8 +297,18 @@ class ScheduleViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
 ) : ViewModel() {
 
-    fun windows(profileId: Long) = profileRepository.observeScheduleWindows(profileId)
+    private val profileIdFlow = MutableStateFlow<Long?>(null)
+
+    val windows = profileIdFlow
+        .flatMapLatest { id ->
+            if (id == null) flowOf(emptyList())
+            else profileRepository.observeScheduleWindows(id)
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun bindProfile(profileId: Long) {
+        profileIdFlow.value = profileId
+    }
 
     fun addWindow(window: ScheduleWindow) {
         viewModelScope.launch { profileRepository.addScheduleWindow(window) }
@@ -390,9 +426,6 @@ class StatsViewModel @Inject constructor(
     val profiles = profileRepository.observeProfiles()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _selectedProfileIds = MutableStateFlow<Set<Long>>(emptySet())
-    val selectedProfileIds = _selectedProfileIds.asStateFlow()
-
     private val _rangeKind = MutableStateFlow(StatsRangeKind.day)
     val rangeKind = _rangeKind.asStateFlow()
 
@@ -401,6 +434,9 @@ class StatsViewModel @Inject constructor(
 
     private val _overview = MutableStateFlow(StatsOverview(0L, emptyList(), "", 1L))
     val overview = _overview.asStateFlow()
+
+    private val _profileOverviews = MutableStateFlow<List<ProfileStatsOverview>>(emptyList())
+    val profileOverviews = _profileOverviews.asStateFlow()
 
     private val _allTopApps = MutableStateFlow<List<TopAppUsage>>(emptyList())
     private val _visibleTopAppCount = MutableStateFlow(10)
@@ -415,45 +451,21 @@ class StatsViewModel @Inject constructor(
     private val _trackedApps = MutableStateFlow<List<AppUsageStat>>(emptyList())
     val trackedApps = _trackedApps.asStateFlow()
 
-    private val _streak = MutableStateFlow(com.gatekeep.domain.model.StreakInfo(0, 0, null))
-    val streak = _streak.asStateFlow()
-
-    private val _overrideCount = MutableStateFlow(0)
-    val overrideCount = _overrideCount.asStateFlow()
-
     private val _canGoForward = MutableStateFlow(false)
     val canGoForward = _canGoForward.asStateFlow()
 
     init {
         viewModelScope.launch {
-            profiles.collect { list ->
-                if (_selectedProfileIds.value.isEmpty() && list.isNotEmpty()) {
-                    val activeIds = list.filter { it.isActive }.map { it.id }.toSet()
-                    _selectedProfileIds.value = activeIds.ifEmpty { setOf(list.first().id) }
-                }
-            }
-        }
-        viewModelScope.launch {
-            combine(_rangeKind, _anchorMs, _selectedProfileIds) { kind, anchor, profileIds ->
-                Triple(kind, anchor, profileIds)
-            }.collect { (kind, anchor, profileIds) ->
+            combine(_rangeKind, _anchorMs, profiles) { kind, anchor, profileList ->
+                Triple(kind, anchor, profileList)
+            }.collect { (kind, anchor, profileList) ->
                 _canGoForward.value = StatsPeriodLogic.canShiftForward(
                     kind.toPeriodKind(),
                     anchor,
                     System.currentTimeMillis(),
                 )
-                loadStats(kind, anchor, profileIds)
+                loadStats(kind, anchor, profileList)
             }
-        }
-    }
-
-    fun toggleProfileId(id: Long) {
-        val current = _selectedProfileIds.value
-        if (id in current && current.size <= 1) return
-        _selectedProfileIds.value = if (id in current) {
-            current - id
-        } else {
-            current + id
         }
     }
 
@@ -480,22 +492,34 @@ class StatsViewModel @Inject constructor(
         )
     }
 
-    private suspend fun loadStats(kind: StatsRangeKind, anchorMs: Long, profileIds: Set<Long>) {
+    private suspend fun loadStats(
+        kind: StatsRangeKind,
+        anchorMs: Long,
+        profileList: List<com.gatekeep.domain.model.Profile>,
+    ) {
         val range = buildRange(kind, anchorMs)
         _overview.value = statsRepository.overviewForRange(range)
         _visibleTopAppCount.value = 10
         _allTopApps.value = statsRepository.topAppsForRange(range, limit = 50)
-        if (profileIds.isNotEmpty()) {
-            _trackedApps.value = statsRepository.trackedAppsForProfiles(profileIds.toList(), range)
-            val primaryId = profiles.value.firstOrNull { it.id in profileIds }?.id
-                ?: profileIds.first()
-            _streak.value = statsRepository.streakForProfile(primaryId)
-            _overrideCount.value = statsRepository.overrideCount(primaryId)
+        val profileIds = profileList.map { it.id }
+        _trackedApps.value = if (profileIds.isEmpty()) {
+            emptyList()
         } else {
-            _trackedApps.value = emptyList()
-            _streak.value = com.gatekeep.domain.model.StreakInfo(0, 0, null)
-            _overrideCount.value = 0
+            statsRepository.trackedAppsForProfiles(profileIds, range)
         }
+        _profileOverviews.value = profileList
+            .sortedWith(compareByDescending<com.gatekeep.domain.model.Profile> { it.isActive }.thenBy { it.name })
+            .map { profile ->
+                val tracked = statsRepository.trackedAppsForRange(profile.id, range)
+                ProfileStatsOverview(
+                    profileId = profile.id,
+                    name = profile.name,
+                    isActive = profile.isActive,
+                    totalUsageMs = tracked.sumOf { it.usageMs },
+                    streak = statsRepository.streakForProfile(profile.id),
+                    overrideCount = statsRepository.overrideCount(profile.id),
+                )
+            }
     }
 
     private fun buildRange(kind: StatsRangeKind, anchorMs: Long): StatsTimeRange {

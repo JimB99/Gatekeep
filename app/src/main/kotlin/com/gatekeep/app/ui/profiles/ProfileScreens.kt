@@ -46,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.ui.components.AppIcon
 import com.gatekeep.app.ui.components.DurationPicker
+import com.gatekeep.app.ui.components.SaveChangesButton
+import com.gatekeep.app.ui.components.rememberUnsavedChangesGuard
 import com.gatekeep.app.ui.components.PinGateDialog
 import com.gatekeep.app.R
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
@@ -294,6 +296,21 @@ fun ProfileLimitsScreen(
         }
     }
 
+    fun discardChanges() {
+        dailyMs = savedDailyMs
+        sessionMs = savedSessionMs
+        breakMs = savedBreakMs
+        hourlyMs = savedHourlyMs
+        weeklyMs = savedWeeklyMs
+    }
+
+    val backGuard = rememberUnsavedChangesGuard(
+        isDirty = isDirty,
+        onNavigateBack = onBack,
+        onSave = ::saveLimits,
+        onDiscardChanges = ::discardChanges,
+    )
+
     LaunchedEffect(saveMessage) {
         saveMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -307,7 +324,7 @@ fun ProfileLimitsScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.time_limits)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = backGuard::navigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
                     }
                 },
@@ -323,17 +340,16 @@ fun ProfileLimitsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(stringResource(R.string.limits_apply_all_apps), style = MaterialTheme.typography.bodySmall)
-            DurationPicker(stringResource(R.string.daily_limit), dailyMs, minuteStep = 15, onDurationChange = { dailyMs = it })
-            DurationPicker(stringResource(R.string.session_limit), sessionMs, minuteStep = 5, onDurationChange = { sessionMs = it })
-            DurationPicker(stringResource(R.string.break_duration), breakMs, minuteStep = 5, onDurationChange = { breakMs = it })
-            DurationPicker(stringResource(R.string.hourly_limit_off), hourlyMs, minuteStep = 5, onDurationChange = { hourlyMs = it })
-            DurationPicker(stringResource(R.string.weekly_limit_off), weeklyMs, minuteStep = 60, onDurationChange = { weeklyMs = it })
-            if (isDirty) {
-                Button(
-                    onClick = { saveLimits() },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(stringResource(R.string.save_limits)) }
-            }
+            DurationPicker(stringResource(R.string.daily_limit), dailyMs, coarseStepMinutes = 60, fineStepMinutes = 15, onDurationChange = { dailyMs = it })
+            DurationPicker(stringResource(R.string.session_limit), sessionMs, coarseStepMinutes = 15, fineStepMinutes = 5, onDurationChange = { sessionMs = it })
+            DurationPicker(stringResource(R.string.break_duration), breakMs, coarseStepMinutes = 15, fineStepMinutes = 5, onDurationChange = { breakMs = it })
+            DurationPicker(stringResource(R.string.hourly_limit_off), hourlyMs, coarseStepMinutes = 15, fineStepMinutes = 5, minutesOnly = true, onDurationChange = { hourlyMs = it })
+            DurationPicker(stringResource(R.string.weekly_limit_off), weeklyMs, coarseStepMinutes = 60, fineStepMinutes = 15, onDurationChange = { weeklyMs = it })
+            SaveChangesButton(
+                visible = isDirty,
+                onClick = ::saveLimits,
+                label = stringResource(R.string.save_limits),
+            )
         }
     }
 }

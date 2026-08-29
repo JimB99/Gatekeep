@@ -102,7 +102,10 @@ fun ProfilesHomeScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                PermissionBanner(state = permissionState)
+                PermissionBanner(
+                    state = permissionState,
+                    onEnableEnforcement = { viewModel.enableEnforcement() },
+                )
             }
             if (profiles.isEmpty()) {
                 item {
@@ -177,6 +180,7 @@ fun ProfilesHomeScreen(
                                     )
                                     LinearProgressIndicator(
                                         progress = { progress },
+                                        drawStopIndicator = {},
                                         modifier = Modifier.fillMaxWidth(),
                                     )
                                 }

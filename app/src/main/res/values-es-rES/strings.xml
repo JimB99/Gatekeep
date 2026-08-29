@@ -70,7 +70,12 @@
     <string name="end">Fin</string>
     <string name="save_quiet_hours">Guardar horas de silencio</string>
     <string name="enforcement_enabled">Aplicación de límites activada</string>
-    <string name="enforcement_enabled_help">Desactiva todos los bloqueos y temporizadores sin desinstalar Gatekeep.</string>
+    <string name="enforcement_enabled_help">Cuando está activo, Gatekeep supervisa apps, aplica límites y muestra temporizadores de sesión. Desactívalo para pausar bloqueos y temporizadores sin desinstalar — útil para pruebas o descansos.</string>
+    <string name="enforcement_disabled_title">La aplicación está desactivada</string>
+    <string name="enforcement_disabled_body">No hay bloqueo de apps, límites ni temporizadores de sesión. Vuelve a activar la aplicación para reanudar la protección.</string>
+    <string name="enforcement_settings_off_warning">La aplicación está desactivada. Gatekeep no bloqueará apps ni mostrará temporizadores hasta que la actives de nuevo.</string>
+    <string name="enforcement_hub_subtitle_off">Desactivado — bloqueo y temporizadores deshabilitados</string>
+    <string name="turn_on_enforcement">Activar aplicación</string>
     <string name="last_error_format">Último error: %1$s</string>
     <string name="no_recent_enforcement_errors">Sin errores recientes de aplicación de límites</string>
 
@@ -105,6 +110,12 @@
     <string name="hourly_limit_off">Límite por hora (0 = desactivado)</string>
     <string name="weekly_limit_off">Límite semanal (0 = desactivado)</string>
     <string name="save_limits">Guardar límites</string>
+    <string name="save_changes">Guardar cambios</string>
+    <string name="unsaved_changes_title">Cambios sin guardar</string>
+    <string name="unsaved_changes_message">Tienes cambios sin guardar. ¿Guardar antes de salir?</string>
+    <string name="discard">Descartar</string>
+    <string name="inactive">Inactivo</string>
+    <string name="profile_usage_in_period">Uso: %1$s</string>
     <string name="when_opening_app">Al abrir una app</string>
     <string name="when_limit_reached">Cuando se alcanza un límite de tiempo</string>
     <string name="during_use_session">Durante el uso (límite de sesión)</string>

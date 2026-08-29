@@ -37,6 +37,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.R
 import com.gatekeep.app.ui.components.DurationPickerWithSeconds
 import com.gatekeep.app.ui.components.GatekeepFilterChip
+import com.gatekeep.app.ui.components.SaveChangesButton
+import com.gatekeep.app.ui.components.rememberUnsavedChangesGuard
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
 import com.gatekeep.domain.model.FrictionDifficulty
 import com.gatekeep.domain.model.OnLimitAction
@@ -58,17 +60,38 @@ fun ProfileRulesScreen(
     val profile = profiles.find { it.id == profileId }
     val saveMessage by viewModel.saveMessage.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    var extensionDraft by remember(profile?.extensionPolicy) {
+    var savedExtensionDraft by remember(profile?.id) {
         mutableStateOf(
             ExtensionPolicyDraft.fromPolicy(
                 profile?.extensionPolicy ?: com.gatekeep.domain.model.ExtensionPolicy(),
             ),
         )
     }
+    var extensionDraft by remember(profile?.id) { mutableStateOf(savedExtensionDraft) }
 
     LaunchedEffect(profile?.extensionPolicy) {
-        profile?.extensionPolicy?.let { extensionDraft = ExtensionPolicyDraft.fromPolicy(it) }
+        profile?.extensionPolicy?.let {
+            val loaded = ExtensionPolicyDraft.fromPolicy(it)
+            savedExtensionDraft = loaded
+            extensionDraft = loaded
+        }
     }
+
+    val extensionDirty = extensionDraft != savedExtensionDraft
+
+    fun saveExtension() {
+        profile?.let { p ->
+            viewModel.saveProfile(p.copy(extensionPolicy = extensionDraft.toPolicy()))
+            savedExtensionDraft = extensionDraft
+        }
+    }
+
+    val backGuard = rememberUnsavedChangesGuard(
+        isDirty = extensionDirty,
+        onNavigateBack = onBack,
+        onSave = ::saveExtension,
+        onDiscardChanges = { extensionDraft = savedExtensionDraft },
+    )
 
     val showExtensionSection = profile?.onLimitAction == OnLimitAction.limitWithExtensions ||
         profile?.onSessionLimitAction == OnSessionLimitAction.limitWithExtensions
@@ -86,7 +109,7 @@ fun ProfileRulesScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.rules)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = backGuard::navigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
                     }
                 },
@@ -122,12 +145,11 @@ fun ProfileRulesScreen(
                     Text(stringResource(R.string.extension_options), fontWeight = FontWeight.SemiBold)
                     ExtensionPolicyEditor(
                         draft = extensionDraft,
-                        onDraftChange = { draft ->
-                            extensionDraft = draft
-                            profile?.let { p ->
-                                viewModel.saveProfile(p.copy(extensionPolicy = draft.toPolicy()))
-                            }
-                        },
+                        onDraftChange = { extensionDraft = it },
+                    )
+                    SaveChangesButton(
+                        visible = extensionDirty,
+                        onClick = ::saveExtension,
                     )
                 }
             }
@@ -159,15 +181,28 @@ fun RuleOpenActionScreen(
 ) {
     val profiles by viewModel.profiles.collectAsState()
     val profile = profiles.find { it.id == profileId }
-    var onOpen by remember(profile?.onOpenAction) { mutableStateOf(profile?.onOpenAction ?: OnOpenAction.none) }
-    var difficulty by remember(profile?.defaultFrictionDifficulty) {
+    var savedOnOpen by remember(profile?.id) { mutableStateOf(profile?.onOpenAction ?: OnOpenAction.none) }
+    var onOpen by remember(profile?.id) { mutableStateOf(savedOnOpen) }
+    var savedDifficulty by remember(profile?.id) {
         mutableStateOf(profile?.defaultFrictionDifficulty ?: FrictionDifficulty.medium)
     }
-    var openWaitSeconds by remember(profile?.openWaitDurationSeconds) {
+    var difficulty by remember(profile?.id) { mutableStateOf(savedDifficulty) }
+    var savedOpenWaitSeconds by remember(profile?.id) {
         mutableIntStateOf(profile?.openWaitDurationSeconds ?: 60)
     }
+    var openWaitSeconds by remember(profile?.id) { mutableIntStateOf(savedOpenWaitSeconds) }
     var profilePin by remember { mutableStateOf("") }
     var savedPin by remember { mutableStateOf("") }
+
+    LaunchedEffect(profile?.onOpenAction, profile?.defaultFrictionDifficulty, profile?.openWaitDurationSeconds) {
+        if (profile == null) return@LaunchedEffect
+        savedOnOpen = profile.onOpenAction
+        onOpen = savedOnOpen
+        savedDifficulty = profile.defaultFrictionDifficulty
+        difficulty = savedDifficulty
+        savedOpenWaitSeconds = profile.openWaitDurationSeconds
+        openWaitSeconds = savedOpenWaitSeconds
+    }
 
     LaunchedEffect(profileId, profile?.passwordHash) {
         val loaded = if (!profile?.passwordHash.isNullOrBlank()) {
@@ -179,7 +214,11 @@ fun RuleOpenActionScreen(
         savedPin = loaded
     }
 
-    fun persistRules() {
+    val isDirty = onOpen != savedOnOpen ||
+        difficulty != savedDifficulty ||
+        openWaitSeconds != savedOpenWaitSeconds
+
+    fun saveRules() {
         val p = profile ?: return
         viewModel.saveProfile(
             p.copy(
@@ -189,9 +228,30 @@ fun RuleOpenActionScreen(
                 lockEnabled = onOpen == OnOpenAction.pinGate && !p.passwordHash.isNullOrBlank(),
             ),
         )
+        savedOnOpen = onOpen
+        savedDifficulty = difficulty
+        savedOpenWaitSeconds = openWaitSeconds
     }
 
-    RuleDetailScaffold(title = stringResource(R.string.when_opening_app), onBack = onBack) {
+    fun discardChanges() {
+        onOpen = savedOnOpen
+        difficulty = savedDifficulty
+        openWaitSeconds = savedOpenWaitSeconds
+    }
+
+    val backGuard = rememberUnsavedChangesGuard(
+        isDirty = isDirty,
+        onNavigateBack = onBack,
+        onSave = ::saveRules,
+        onDiscardChanges = ::discardChanges,
+    )
+
+    RuleDetailScaffold(
+        title = stringResource(R.string.when_opening_app),
+        onBack = backGuard::navigateBack,
+        isDirty = isDirty,
+        onSave = ::saveRules,
+    ) {
         OpenActionRuleEditor(
             onOpen = onOpen,
             difficulty = difficulty,
@@ -200,9 +260,9 @@ fun RuleOpenActionScreen(
             savedPin = savedPin,
             profile = profile,
             viewModel = viewModel,
-            onOpenChange = { onOpen = it; persistRules() },
-            onDifficultyChange = { difficulty = it; persistRules() },
-            onOpenWaitChange = { openWaitSeconds = it.coerceIn(1, 3600); persistRules() },
+            onOpenChange = { onOpen = it },
+            onDifficultyChange = { difficulty = it },
+            onOpenWaitChange = { openWaitSeconds = it.coerceIn(1, 3600) },
             onPinChange = { profilePin = it },
             onPinSaved = { savedPin = it },
         )
@@ -218,16 +278,41 @@ fun RuleLimitActionScreen(
 ) {
     val profiles by viewModel.profiles.collectAsState()
     val profile = profiles.find { it.id == profileId }
-    var onLimit by remember(profile?.onLimitAction) {
+    var savedOnLimit by remember(profile?.id) {
         mutableStateOf(profile?.onLimitAction ?: OnLimitAction.limitWithExtensions)
     }
+    var onLimit by remember(profile?.id) { mutableStateOf(savedOnLimit) }
 
-    fun persistRules() {
-        profile?.let { p -> viewModel.saveProfile(p.copy(onLimitAction = onLimit)) }
+    LaunchedEffect(profile?.onLimitAction) {
+        profile?.onLimitAction?.let {
+            savedOnLimit = it
+            onLimit = it
+        }
     }
 
-    RuleDetailScaffold(title = stringResource(R.string.when_limit_reached), onBack = onBack) {
-        LimitActionRuleEditor(onLimit = onLimit, onLimitChange = { onLimit = it; persistRules() })
+    val isDirty = onLimit != savedOnLimit
+
+    fun saveRules() {
+        profile?.let { p ->
+            viewModel.saveProfile(p.copy(onLimitAction = onLimit))
+            savedOnLimit = onLimit
+        }
+    }
+
+    val backGuard = rememberUnsavedChangesGuard(
+        isDirty = isDirty,
+        onNavigateBack = onBack,
+        onSave = ::saveRules,
+        onDiscardChanges = { onLimit = savedOnLimit },
+    )
+
+    RuleDetailScaffold(
+        title = stringResource(R.string.when_limit_reached),
+        onBack = backGuard::navigateBack,
+        isDirty = isDirty,
+        onSave = ::saveRules,
+    ) {
+        LimitActionRuleEditor(onLimit = onLimit, onLimitChange = { onLimit = it })
     }
 }
 
@@ -240,17 +325,34 @@ fun RuleSessionActionScreen(
 ) {
     val profiles by viewModel.profiles.collectAsState()
     val profile = profiles.find { it.id == profileId }
-    var onSession by remember(profile?.onSessionLimitAction) {
+    var savedOnSession by remember(profile?.id) {
         mutableStateOf(profile?.onSessionLimitAction ?: OnSessionLimitAction.limitWithExtensions)
     }
-    var difficulty by remember(profile?.defaultFrictionDifficulty) {
+    var onSession by remember(profile?.id) { mutableStateOf(savedOnSession) }
+    var savedDifficulty by remember(profile?.id) {
         mutableStateOf(profile?.defaultFrictionDifficulty ?: FrictionDifficulty.medium)
     }
-    var sessionWaitSeconds by remember(profile?.sessionWaitDurationSeconds) {
+    var difficulty by remember(profile?.id) { mutableStateOf(savedDifficulty) }
+    var savedSessionWaitSeconds by remember(profile?.id) {
         mutableIntStateOf(profile?.sessionWaitDurationSeconds ?: 60)
     }
+    var sessionWaitSeconds by remember(profile?.id) { mutableIntStateOf(savedSessionWaitSeconds) }
 
-    fun persistRules() {
+    LaunchedEffect(profile?.onSessionLimitAction, profile?.defaultFrictionDifficulty, profile?.sessionWaitDurationSeconds) {
+        if (profile == null) return@LaunchedEffect
+        savedOnSession = profile.onSessionLimitAction
+        onSession = savedOnSession
+        savedDifficulty = profile.defaultFrictionDifficulty
+        difficulty = savedDifficulty
+        savedSessionWaitSeconds = profile.sessionWaitDurationSeconds
+        sessionWaitSeconds = savedSessionWaitSeconds
+    }
+
+    val isDirty = onSession != savedOnSession ||
+        difficulty != savedDifficulty ||
+        sessionWaitSeconds != savedSessionWaitSeconds
+
+    fun saveRules() {
         val p = profile ?: return
         viewModel.saveProfile(
             p.copy(
@@ -259,16 +361,37 @@ fun RuleSessionActionScreen(
                 sessionWaitDurationSeconds = sessionWaitSeconds.coerceIn(1, 3600),
             ),
         )
+        savedOnSession = onSession
+        savedDifficulty = difficulty
+        savedSessionWaitSeconds = sessionWaitSeconds
     }
 
-    RuleDetailScaffold(title = stringResource(R.string.during_use_session), onBack = onBack) {
+    fun discardChanges() {
+        onSession = savedOnSession
+        difficulty = savedDifficulty
+        sessionWaitSeconds = savedSessionWaitSeconds
+    }
+
+    val backGuard = rememberUnsavedChangesGuard(
+        isDirty = isDirty,
+        onNavigateBack = onBack,
+        onSave = ::saveRules,
+        onDiscardChanges = ::discardChanges,
+    )
+
+    RuleDetailScaffold(
+        title = stringResource(R.string.during_use_session),
+        onBack = backGuard::navigateBack,
+        isDirty = isDirty,
+        onSave = ::saveRules,
+    ) {
         SessionActionRuleEditor(
             onSession = onSession,
             difficulty = difficulty,
             sessionWaitSeconds = sessionWaitSeconds,
-            onSessionChange = { onSession = it; persistRules() },
-            onDifficultyChange = { difficulty = it; persistRules() },
-            onSessionWaitChange = { sessionWaitSeconds = it.coerceIn(1, 3600); persistRules() },
+            onSessionChange = { onSession = it },
+            onDifficultyChange = { difficulty = it },
+            onSessionWaitChange = { sessionWaitSeconds = it.coerceIn(1, 3600) },
         )
     }
 }
@@ -278,6 +401,8 @@ fun RuleSessionActionScreen(
 private fun RuleDetailScaffold(
     title: String,
     onBack: () -> Unit,
+    isDirty: Boolean = false,
+    onSave: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     Scaffold(
@@ -301,6 +426,9 @@ private fun RuleDetailScaffold(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             content()
+            if (onSave != null) {
+                SaveChangesButton(visible = isDirty, onClick = onSave)
+            }
         }
     }
 }

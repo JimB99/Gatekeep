@@ -27,3 +27,12 @@ data class TopAppUsage(
     val label: String,
     val usageMs: Long,
 )
+
+data class ProfileStatsOverview(
+    val profileId: Long,
+    val name: String,
+    val isActive: Boolean,
+    val totalUsageMs: Long,
+    val streak: com.gatekeep.domain.model.StreakInfo,
+    val overrideCount: Int,
+)

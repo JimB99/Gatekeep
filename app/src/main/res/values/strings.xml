@@ -73,7 +73,12 @@
     <string name="end">End</string>
     <string name="save_quiet_hours">Save quiet hours</string>
     <string name="enforcement_enabled">Enforcement enabled</string>
-    <string name="enforcement_enabled_help">Turn off all blocking and timers without uninstalling Gatekeep.</string>
+    <string name="enforcement_enabled_help">When on, Gatekeep monitors apps, enforces limits, and shows session timers. Turn off to pause all blocking and timers without uninstalling — useful for troubleshooting or temporary breaks.</string>
+    <string name="enforcement_disabled_title">Enforcement is off</string>
+    <string name="enforcement_disabled_body">No app blocking, limits, or session timers are running. Turn enforcement back on to resume protection.</string>
+    <string name="enforcement_settings_off_warning">Enforcement is currently off. Gatekeep will not block apps or show timers until you turn it back on.</string>
+    <string name="enforcement_hub_subtitle_off">Off — blocking and timers disabled</string>
+    <string name="turn_on_enforcement">Turn on enforcement</string>
     <string name="last_error_format">Last error: %1$s</string>
     <string name="no_recent_enforcement_errors">No recent enforcement errors</string>
 
@@ -110,6 +115,12 @@
     <string name="hourly_limit_off">Hourly limit (0 = off)</string>
     <string name="weekly_limit_off">Weekly limit (0 = off)</string>
     <string name="save_limits">Save limits</string>
+    <string name="save_changes">Save changes</string>
+    <string name="unsaved_changes_title">Unsaved changes</string>
+    <string name="unsaved_changes_message">You have unsaved changes. Save before leaving?</string>
+    <string name="discard">Discard</string>
+    <string name="inactive">Inactive</string>
+    <string name="profile_usage_in_period">Usage: %1$s</string>
     <string name="duration_step_hint">Adjust by %1$d minutes</string>
     <string name="delete_pin_digit">Delete last digit</string>
     <string name="when_opening_app">When opening an app</string>

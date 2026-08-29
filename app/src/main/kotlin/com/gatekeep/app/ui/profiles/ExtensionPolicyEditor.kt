@@ -46,13 +46,14 @@ data class ExtensionPolicyDraft(
             maxPerDay?.let { daily -> minOf(consecutive, daily) } ?: consecutive
         },
         showNoLimitToday = showNoLimitToday,
+        customMinutes = customMinutesText.toIntOrNull()?.takeIf { it in 1..999 },
     )
 
     companion object {
         fun fromPolicy(policy: ExtensionPolicy): ExtensionPolicyDraft {
             val presets = policy.optionMinutes.filter { it in PRESET_MINUTES }.toSet()
-            val customValues = policy.optionMinutes.filter { it !in PRESET_MINUTES }
-            val custom = customValues.firstOrNull()
+            val custom = policy.customMinutes
+                ?: policy.optionMinutes.filter { it !in PRESET_MINUTES }.firstOrNull()
             return ExtensionPolicyDraft(
                 selectedPresets = presets.ifEmpty { setOf(1, 5, 10) },
                 customEnabled = custom != null,

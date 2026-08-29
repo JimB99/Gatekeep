@@ -159,20 +159,20 @@ class StatsRepository @Inject constructor(
         return when (range) {
             is StatsTimeRange.SingleDay -> {
                 val start = usageStatsCollector.dayStartEpochMs(range.dayEpochMs)
-                val end = minOf(start + 86_400_000L, now)
-                val buckets = (0 until 12).mapNotNull { slot ->
-                    val slotStart = start + slot * 7_200_000L
-                    if (slotStart >= end) return@mapNotNull null
-                    val slotEnd = minOf(slotStart + 7_200_000L, end)
-                    val hour = ZonedDateTime.ofInstant(Instant.ofEpochMilli(slotStart), zoneId).hour
+                val end = start + 86_400_000L
+                val now = System.currentTimeMillis()
+                val buckets = (0 until 24).map { hour ->
+                    val slotStart = start + hour * 3_600_000L
+                    val slotEnd = if (hour == 23) end else start + (hour + 1) * 3_600_000L
+                    val effectiveEnd = if (slotStart < now) minOf(slotEnd, now) else slotStart
                     ChartBucket(
                         label = "%02d".format(hour),
                         usageMs = 0L,
                         startMs = slotStart,
-                        endMs = slotEnd,
+                        endMs = effectiveEnd.coerceAtLeast(slotStart),
                     )
                 }
-                RangeBounds(start, end, buckets)
+                RangeBounds(start, minOf(end, now), buckets)
             }
             is StatsTimeRange.Week -> {
                 val weekFields = WeekFields.ISO

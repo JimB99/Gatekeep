@@ -30,6 +30,8 @@ import androidx.compose.material.icons.Icons
 
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 
 import androidx.compose.material3.Icon
@@ -219,7 +221,7 @@ fun SettingsHubScreen(
 
                 } else {
 
-                    stringResource(R.string.off)
+                    stringResource(R.string.enforcement_hub_subtitle_off)
 
                 },
 
@@ -574,6 +576,21 @@ fun EnforcementSettingsScreen(
 
 
     SettingsDetailScaffold(title = stringResource(R.string.enforcement), onBack = onBack) {
+
+        if (!settings.enforcementEnabled) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                ),
+            ) {
+                Text(
+                    stringResource(R.string.enforcement_settings_off_warning),
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
 
         SettingToggleWithHelp(
 

@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -52,8 +53,11 @@ fun ScheduleEditorScreen(
     onBack: () -> Unit,
     viewModel: ScheduleViewModel = hiltViewModel(),
 ) {
-    val windows by viewModel.windows(profileId).collectAsState()
-    var selectedDays by remember { mutableStateOf(emptySet<Int>()) }
+    LaunchedEffect(profileId) {
+        viewModel.bindProfile(profileId)
+    }
+    val windows by viewModel.windows.collectAsState()
+    var selectedDays by remember { mutableStateOf((0..6).toSet()) }
     var startMinute by remember { mutableIntStateOf(9 * 60) }
     var endMinute by remember { mutableIntStateOf(17 * 60) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -156,7 +160,10 @@ fun ScheduleEditorScreen(
                     )
                 }
             }
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 items(groupedWindows, key = { it.windowIds.first() }) { group ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(12.dp)) {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,7 +32,7 @@ fun AppLockScreen(
     var error by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier.fillMaxSize().imePadding().padding(32.dp),
+        modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

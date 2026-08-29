@@ -1,7 +1,6 @@
 package com.gatekeep.app.ui.stats
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +18,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -34,8 +34,8 @@ fun StatsBarChart(
     scaleMs: Long,
     modifier: Modifier = Modifier,
     chartHeightDp: Dp = 120.dp,
-    enableHorizontalScroll: Boolean = false,
-    labelInterval: Int = 5,
+    labelInterval: Int = 1,
+    oneBasedLabelInterval: Boolean = false,
     rotateLabels: Boolean = false,
 ) {
     if (buckets.isEmpty()) return
@@ -43,6 +43,11 @@ fun StatsBarChart(
     val barColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
     val axisLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val labelStyle = if (rotateLabels) {
+        MaterialTheme.typography.labelMedium
+    } else {
+        MaterialTheme.typography.labelSmall
+    }
     val maxUsageMs = buckets.maxOf { it.usageMs }
     val effectiveScaleMs = remember(scaleMs, maxUsageMs) {
         val base = scaleMs.coerceAtLeast(UsageBucketAggregator.snapToTickStep(1))
@@ -55,37 +60,40 @@ fun StatsBarChart(
     val tickLabels = remember(tickValues) { tickValues.map(::formatChartAxisTick) }
     val scale = tickValues.maxOrNull()?.toFloat()?.coerceAtLeast(1f)
         ?: effectiveScaleMs.coerceAtLeast(1L).toFloat()
-    val scrollState = rememberScrollState()
+
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val axisWidth = remember(tickLabels, labelStyle) {
+        val maxLabelWidthPx = tickLabels.maxOfOrNull { label ->
+            textMeasurer.measure(label, style = labelStyle).size.width
+        } ?: 0
+        with(density) { maxLabelWidthPx.toDp() } + 2.dp
+    }
+
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
-    val axisWidth = 40.dp
-    val chartGap = 8.dp
-    val barGap = 4.dp
+    val chartGap = 4.dp
+    val barGap = 2.dp
     val availableChartWidth = screenWidthDp - axisWidth - chartGap - 32.dp
-    val computedBarWidth = if (enableHorizontalScroll) {
-        when {
-            buckets.size <= 12 -> 24.dp
-            buckets.size <= 31 -> 12.dp
-            else -> 24.dp
+    val totalGap = barGap * (buckets.size - 1).coerceAtLeast(0)
+    val computedBarWidth = ((availableChartWidth - totalGap) / buckets.size.coerceAtLeast(1))
+        .coerceIn(2.dp, 32.dp)
+    val chartContentWidth = availableChartWidth
+
+    val hasSubLabels = buckets.any { it.subLabel != null }
+    val labelRowHeight = when {
+        rotateLabels -> 52.dp
+        hasSubLabels -> 44.dp
+        else -> 28.dp
+    }
+    val barSlotWidthDp = chartContentWidth / buckets.size.coerceAtLeast(1)
+
+    fun shouldShowLabel(index: Int): Boolean {
+        if (labelInterval <= 1) return true
+        return if (oneBasedLabelInterval) {
+            (index + 1) % labelInterval == 0
+        } else {
+            index % labelInterval == 0
         }
-    } else {
-        val totalGap = barGap * (buckets.size - 1).coerceAtLeast(0)
-        ((availableChartWidth - totalGap) / buckets.size.coerceAtLeast(1)).coerceIn(3.dp, 32.dp)
-    }
-    val chartContentWidth = if (enableHorizontalScroll) {
-        computedBarWidth * buckets.size + barGap * (buckets.size - 1).coerceAtLeast(0)
-    } else {
-        availableChartWidth
-    }
-    val labelRowHeight = if (rotateLabels) 52.dp else 28.dp
-    val labelStyle = if (rotateLabels) {
-        MaterialTheme.typography.labelMedium
-    } else {
-        MaterialTheme.typography.labelSmall
-    }
-    val barSlotWidthDp = if (enableHorizontalScroll) {
-        computedBarWidth + barGap
-    } else {
-        chartContentWidth / buckets.size.coerceAtLeast(1)
     }
 
     Row(modifier = modifier.fillMaxWidth()) {
@@ -109,11 +117,7 @@ fun StatsBarChart(
 
         Spacer(modifier = Modifier.width(chartGap))
 
-        val chartModifier = Modifier
-            .weight(1f)
-            .then(if (enableHorizontalScroll) Modifier.horizontalScroll(scrollState) else Modifier)
-
-        Column(modifier = chartModifier) {
+        Column(modifier = Modifier.weight(1f)) {
             Canvas(
                 modifier = Modifier
                     .width(chartContentWidth)
@@ -151,19 +155,11 @@ fun StatsBarChart(
                     .padding(top = 4.dp),
             ) {
                 buckets.forEachIndexed { index, bucket ->
-                    val showLabel = when {
-                        !enableHorizontalScroll -> true
-                        index == 0 || index == buckets.lastIndex -> true
-                        labelInterval > 0 && (index + 1) % labelInterval == 0 -> true
-                        else -> false
-                    }
-                    val slotModifier = if (enableHorizontalScroll) {
-                        Modifier.width(barSlotWidthDp)
-                    } else {
-                        Modifier.weight(1f)
-                    }
+                    val showLabel = shouldShowLabel(index)
                     Column(
-                        modifier = slotModifier.padding(horizontal = 1.dp),
+                        modifier = Modifier
+                            .width(barSlotWidthDp)
+                            .padding(horizontal = 1.dp),
                         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
                     ) {
                         if (showLabel) {
