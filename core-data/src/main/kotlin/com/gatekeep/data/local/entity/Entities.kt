@@ -26,6 +26,8 @@ data class ProfileEntity(
     val breakDurationMs: Long? = null,
     val openWaitDurationSeconds: Int = 60,
     val sessionWaitDurationSeconds: Int = 60,
+    val limitWaitDurationSeconds: Int = 60,
+    val limitBreakDurationMs: Long? = null,
     val onOpenAction: String = "none",
     val onLimitAction: String = "limitWithExtensions",
     val onSessionLimitAction: String = "limitWithExtensions",

@@ -89,7 +89,13 @@ object RuleEngine {
         val limitResult = LimitEvaluator.evaluate(context.limit, context.usage)
         when (limitResult) {
             is LimitEvaluator.LimitCheckResult.Blocked -> {
-                return applyLimitAction(config, limitResult.reason)
+                return applyLimitAction(
+                    config = config,
+                    reason = limitResult.reason,
+                    nowEpochMs = context.nowEpochMs,
+                    limit = context.limit,
+                    usage = context.usage,
+                )
             }
             is LimitEvaluator.LimitCheckResult.Allowed -> {
                 val sessionAllowed = sessionResult as SessionTracker.SessionCheckResult.Allowed
@@ -110,23 +116,65 @@ object RuleEngine {
     private fun applyLimitAction(
         config: ProfileEnforcementConfig,
         reason: BlockReason,
-    ): RuleResult = when (config.onLimitAction) {
-        OnLimitAction.notifyOnly -> RuleResult.Allowed(
-            remainingDailyMs = 0L,
-            remainingSessionMs = null,
-            remainingHourlyMs = null,
-            remainingWeeklyMs = null,
-            notifyLimitReached = true,
-            notifyLimitReason = reason,
-        )
-        OnLimitAction.limitWithExtensions -> RuleResult.Blocked(
-            reason = reason,
-            bypassAllowed = true,
-        )
-        OnLimitAction.hardBlock -> RuleResult.Blocked(
-            reason = reason,
-            bypassAllowed = false,
-        )
+        nowEpochMs: Long,
+        limit: com.gatekeep.domain.model.AppLimit,
+        usage: com.gatekeep.domain.model.UsageSnapshot,
+    ): RuleResult {
+        val limitCrossedAt = limitCrossedAtFor(reason, limit, usage, nowEpochMs)
+        val breakUntil = SessionTracker.breakUntilFromCrossed(limitCrossedAt, config.limitBreakDurationMs)
+        return when (config.onLimitAction) {
+            OnLimitAction.notifyOnly -> RuleResult.Allowed(
+                remainingDailyMs = 0L,
+                remainingSessionMs = null,
+                remainingHourlyMs = null,
+                remainingWeeklyMs = null,
+                notifyLimitReached = true,
+                notifyLimitReason = reason,
+            )
+            OnLimitAction.limitWithExtensions -> RuleResult.Blocked(
+                reason = reason,
+                breakUntilEpochMs = breakUntil,
+                bypassAllowed = true,
+            )
+            OnLimitAction.deterrentMath -> RuleResult.Blocked(
+                reason = reason,
+                breakUntilEpochMs = breakUntil,
+                bypassAllowed = true,
+                sessionDeterrent = FrictionMethod.math,
+            )
+            OnLimitAction.deterrentWait -> RuleResult.Blocked(
+                reason = reason,
+                breakUntilEpochMs = breakUntil,
+                bypassAllowed = true,
+                sessionDeterrent = FrictionMethod.waitOneMin,
+            )
+            OnLimitAction.hardBlock -> RuleResult.Blocked(
+                reason = reason,
+                breakUntilEpochMs = breakUntil,
+                bypassAllowed = false,
+            )
+        }
+    }
+
+    private fun limitCrossedAtFor(
+        reason: BlockReason,
+        limit: com.gatekeep.domain.model.AppLimit,
+        usage: com.gatekeep.domain.model.UsageSnapshot,
+        nowEpochMs: Long,
+    ): Long = when (reason) {
+        BlockReason.dailyLimit -> {
+            val cap = limit.dailyLimitMs ?: return nowEpochMs
+            nowEpochMs - (usage.dailyMs - cap).coerceAtLeast(0)
+        }
+        BlockReason.hourlyLimit -> {
+            val cap = limit.hourlyLimitMs ?: return nowEpochMs
+            nowEpochMs - (usage.hourlyMs - cap).coerceAtLeast(0)
+        }
+        BlockReason.weeklyLimit -> {
+            val cap = limit.weeklyLimitMs ?: return nowEpochMs
+            nowEpochMs - (usage.weeklyMs - cap).coerceAtLeast(0)
+        }
+        else -> nowEpochMs
     }
 
     private fun applySessionLimitAction(

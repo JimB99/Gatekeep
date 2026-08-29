@@ -24,6 +24,11 @@ object SessionTracker {
         return (session!!.breakUntilEpochMs!! - nowEpochMs).coerceAtLeast(0)
     }
 
+    fun breakUntilFromCrossed(limitCrossedAtMs: Long, breakDurationMs: Long?): Long? {
+        if (breakDurationMs == null || breakDurationMs <= 0) return null
+        return limitCrossedAtMs + breakDurationMs
+    }
+
     fun evaluateSession(
         limit: com.gatekeep.domain.model.AppLimit?,
         session: SessionState?,
@@ -53,9 +58,14 @@ object SessionTracker {
         val remaining = sessionLimit - elapsed + excludedMs + activeFrictionMs
 
         return if (remaining <= 0) {
-            val breakDuration = limit.breakDurationMs ?: 0L
-            val breakUntil = if (breakDuration > 0) nowEpochMs + breakDuration else null
-            SessionCheckResult.SessionExceeded(breakUntilEpochMs = breakUntil)
+            val limitCrossedAt = session?.let {
+                it.sessionStartEpochMs + sessionLimit - excludedMs + activeFrictionMs
+            } ?: nowEpochMs
+            val breakUntil = breakUntilFromCrossed(limitCrossedAt, limit.breakDurationMs)
+            SessionCheckResult.SessionExceeded(
+                breakUntilEpochMs = breakUntil,
+                limitCrossedAtEpochMs = limitCrossedAt,
+            )
         } else {
             SessionCheckResult.Allowed(remainingSessionMs = remaining)
         }
@@ -88,6 +98,9 @@ object SessionTracker {
     sealed class SessionCheckResult {
         data class Allowed(val remainingSessionMs: Long?) : SessionCheckResult()
         data class OnBreak(val breakUntilEpochMs: Long, val remainingMs: Long) : SessionCheckResult()
-        data class SessionExceeded(val breakUntilEpochMs: Long?) : SessionCheckResult()
+        data class SessionExceeded(
+            val breakUntilEpochMs: Long?,
+            val limitCrossedAtEpochMs: Long = 0L,
+        ) : SessionCheckResult()
     }
 }

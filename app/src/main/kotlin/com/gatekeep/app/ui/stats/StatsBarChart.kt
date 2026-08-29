@@ -1,18 +1,21 @@
 package com.gatekeep.app.ui.stats
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
@@ -59,23 +62,25 @@ fun StatsBarChart(
         UsageBucketAggregator.computeChartAxisTicks(effectiveScaleMs, maxUsageMs)
     }
     val showZeroLabel = maxUsageMs > 0
-    val tickLabels = remember(tickValues, showZeroLabel) {
-        if (showZeroLabel) {
-            tickValues.map(::formatChartAxisTick) + listOf("0")
-        } else {
-            tickValues.map(::formatChartAxisTick)
-        }
-    }
     val scale = tickValues.maxOrNull()?.toFloat()?.coerceAtLeast(1f)
         ?: effectiveScaleMs.coerceAtLeast(1L).toFloat()
+    val tickFractions = remember(tickValues, scale) {
+        tickValues.map { tick -> (tick.toFloat() / scale).coerceIn(0f, 1f) }
+    }
+    val axisLabels = remember(tickValues, showZeroLabel) {
+        tickValues.map(::formatChartAxisTick) + if (showZeroLabel) listOf("0") else emptyList()
+    }
+    val axisFractions = remember(tickFractions, showZeroLabel) {
+        tickFractions + if (showZeroLabel) listOf(0f) else emptyList()
+    }
 
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    val axisWidth = remember(tickLabels, labelStyle) {
-        val maxLabelWidthPx = tickLabels.maxOfOrNull { label ->
+    val axisWidth = remember(axisLabels, labelStyle) {
+        val maxLabelWidthPx = axisLabels.maxOfOrNull { label ->
             textMeasurer.measure(label, style = labelStyle).size.width
         } ?: 0
-        with(density) { maxLabelWidthPx.toDp() } + 2.dp
+        with(density) { maxLabelWidthPx.toDp() } + 4.dp
     }
 
     val chartGap = 4.dp
@@ -100,20 +105,24 @@ fun StatsBarChart(
         val barSlotWidthDp = chartContentWidth / buckets.size.coerceAtLeast(1)
 
         Row(modifier = Modifier.fillMaxWidth()) {
-            Column(
+            Box(
                 modifier = Modifier
                     .width(axisWidth)
                     .height(chartHeightDp),
-                verticalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
             ) {
-                tickLabels.forEachIndexed { index, label ->
+                axisLabels.forEachIndexed { index, label ->
+                    val fraction = axisFractions.getOrElse(index) { 0f }
+                    val yOffset = chartHeightDp * (1f - fraction)
                     Text(
                         text = label,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (showZeroLabel && index == tickLabels.lastIndex) zeroLabelColor else axisLabelColor,
+                        style = labelStyle,
+                        color = if (showZeroLabel && index == axisLabels.lastIndex) zeroLabelColor else axisLabelColor,
                         maxLines = 1,
                         textAlign = TextAlign.End,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .offset(y = yOffset - 8.dp)
+                            .width(axisWidth),
                     )
                 }
             }
@@ -129,8 +138,7 @@ fun StatsBarChart(
                 ) {
                     val chartHeight = size.height
                     val barSlotWidth = size.width / buckets.size.coerceAtLeast(1)
-                    val tickFractions = tickValues.map { tick -> (tick.toFloat() / scale).coerceIn(0f, 1f) }
-                    tickFractions.forEach { fraction ->
+                    axisFractions.forEach { fraction ->
                         val y = chartHeight * (1f - fraction)
                         drawLine(
                             color = gridColor,
@@ -163,7 +171,7 @@ fun StatsBarChart(
                             modifier = Modifier
                                 .width(barSlotWidthDp)
                                 .padding(horizontal = if (index == 0 || index == buckets.lastIndex) 0.dp else 1.dp),
-                            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             if (showLabel) {
                                 Text(

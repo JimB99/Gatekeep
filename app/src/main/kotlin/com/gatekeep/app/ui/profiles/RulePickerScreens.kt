@@ -26,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,11 +36,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.R
+import com.gatekeep.app.ui.components.DurationPicker
 import com.gatekeep.app.ui.components.DurationPickerWithSeconds
 import com.gatekeep.app.ui.components.GatekeepFilterChip
 import com.gatekeep.app.ui.components.SaveChangesButton
 import com.gatekeep.app.ui.components.rememberUnsavedChangesGuard
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
+import com.gatekeep.app.util.PasswordHasher
 import com.gatekeep.domain.model.FrictionDifficulty
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
@@ -129,11 +132,12 @@ fun ProfileRulesScreen(
             )
             RuleNavRow(
                 title = stringResource(R.string.when_limit_reached),
-                subtitle = limitActionLabel(profile?.onLimitAction ?: OnLimitAction.limitWithExtensions),
+                subtitle = stringResource(R.string.when_limit_reached_subtitle),
+                detail = limitActionLabel(profile?.onLimitAction ?: OnLimitAction.limitWithExtensions),
                 onClick = onNavigateLimitRule,
             )
             RuleNavRow(
-                title = stringResource(R.string.during_use_session),
+                title = stringResource(R.string.when_session_limit_reached),
                 subtitle = sessionActionLabel(profile?.onSessionLimitAction ?: OnSessionLimitAction.limitWithExtensions),
                 onClick = onNavigateSessionRule,
             )
@@ -158,7 +162,12 @@ fun ProfileRulesScreen(
 }
 
 @Composable
-private fun RuleNavRow(title: String, subtitle: String, onClick: () -> Unit) {
+private fun RuleNavRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    detail: String? = null,
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -167,7 +176,12 @@ private fun RuleNavRow(title: String, subtitle: String, onClick: () -> Unit) {
     ) {
         ListItem(
             headlineContent = { Text(title, fontWeight = FontWeight.Medium) },
-            supportingContent = { Text(subtitle) },
+            supportingContent = {
+                Column {
+                    Text(subtitle)
+                    detail?.let { Text(it) }
+                }
+            },
         )
     }
 }
@@ -216,27 +230,43 @@ fun RuleOpenActionScreen(
 
     val isDirty = onOpen != savedOnOpen ||
         difficulty != savedDifficulty ||
-        openWaitSeconds != savedOpenWaitSeconds
+        openWaitSeconds != savedOpenWaitSeconds ||
+        profilePin != savedPin
 
     fun saveRules() {
         val p = profile ?: return
+        val trimmedPin = profilePin.trim()
+        val passwordHash = when {
+            onOpen == OnOpenAction.pinGate && trimmedPin.isNotBlank() -> PasswordHasher.hash(trimmedPin)
+            trimmedPin.isNotBlank() && trimmedPin != savedPin.trim() -> PasswordHasher.hash(trimmedPin)
+            onOpen != OnOpenAction.pinGate && trimmedPin.isBlank() -> null
+            else -> p.passwordHash
+        }
+        if (trimmedPin.isNotBlank() && trimmedPin != savedPin.trim()) {
+            viewModel.saveProfilePin(p.id, trimmedPin)
+        } else if (trimmedPin.isBlank() && savedPin.isNotBlank()) {
+            viewModel.clearProfilePin(p.id)
+        }
         viewModel.saveProfile(
             p.copy(
                 onOpenAction = onOpen,
                 defaultFrictionDifficulty = difficulty,
                 openWaitDurationSeconds = openWaitSeconds.coerceIn(1, 3600),
-                lockEnabled = onOpen == OnOpenAction.pinGate && !p.passwordHash.isNullOrBlank(),
+                passwordHash = passwordHash,
+                lockEnabled = onOpen == OnOpenAction.pinGate && !passwordHash.isNullOrBlank(),
             ),
         )
         savedOnOpen = onOpen
         savedDifficulty = difficulty
         savedOpenWaitSeconds = openWaitSeconds
+        savedPin = trimmedPin
     }
 
     fun discardChanges() {
         onOpen = savedOnOpen
         difficulty = savedDifficulty
         openWaitSeconds = savedOpenWaitSeconds
+        profilePin = savedPin
     }
 
     val backGuard = rememberUnsavedChangesGuard(
@@ -282,28 +312,69 @@ fun RuleLimitActionScreen(
         mutableStateOf(profile?.onLimitAction ?: OnLimitAction.limitWithExtensions)
     }
     var onLimit by remember(profile?.id) { mutableStateOf(savedOnLimit) }
+    var savedDifficulty by remember(profile?.id) {
+        mutableStateOf(profile?.defaultFrictionDifficulty ?: FrictionDifficulty.medium)
+    }
+    var difficulty by remember(profile?.id) { mutableStateOf(savedDifficulty) }
+    var savedLimitWaitSeconds by remember(profile?.id) {
+        mutableIntStateOf(profile?.limitWaitDurationSeconds ?: 60)
+    }
+    var limitWaitSeconds by remember(profile?.id) { mutableIntStateOf(savedLimitWaitSeconds) }
+    var savedLimitBreakMs by remember(profile?.id) {
+        mutableLongStateOf(profile?.limitBreakDurationMs ?: 0L)
+    }
+    var limitBreakMs by remember(profile?.id) { mutableLongStateOf(savedLimitBreakMs) }
 
-    LaunchedEffect(profile?.onLimitAction) {
-        profile?.onLimitAction?.let {
-            savedOnLimit = it
-            onLimit = it
-        }
+    LaunchedEffect(
+        profile?.onLimitAction,
+        profile?.defaultFrictionDifficulty,
+        profile?.limitWaitDurationSeconds,
+        profile?.limitBreakDurationMs,
+    ) {
+        if (profile == null) return@LaunchedEffect
+        savedOnLimit = profile.onLimitAction
+        onLimit = savedOnLimit
+        savedDifficulty = profile.defaultFrictionDifficulty
+        difficulty = savedDifficulty
+        savedLimitWaitSeconds = profile.limitWaitDurationSeconds
+        limitWaitSeconds = savedLimitWaitSeconds
+        savedLimitBreakMs = profile.limitBreakDurationMs ?: 0L
+        limitBreakMs = savedLimitBreakMs
     }
 
-    val isDirty = onLimit != savedOnLimit
+    val isDirty = onLimit != savedOnLimit ||
+        difficulty != savedDifficulty ||
+        limitWaitSeconds != savedLimitWaitSeconds ||
+        limitBreakMs != savedLimitBreakMs
 
     fun saveRules() {
-        profile?.let { p ->
-            viewModel.saveProfile(p.copy(onLimitAction = onLimit))
-            savedOnLimit = onLimit
-        }
+        val p = profile ?: return
+        viewModel.saveProfile(
+            p.copy(
+                onLimitAction = onLimit,
+                defaultFrictionDifficulty = difficulty,
+                limitWaitDurationSeconds = limitWaitSeconds.coerceIn(1, 3600),
+                limitBreakDurationMs = limitBreakMs.takeIf { it > 0 },
+            ),
+        )
+        savedOnLimit = onLimit
+        savedDifficulty = difficulty
+        savedLimitWaitSeconds = limitWaitSeconds
+        savedLimitBreakMs = limitBreakMs
+    }
+
+    fun discardChanges() {
+        onLimit = savedOnLimit
+        difficulty = savedDifficulty
+        limitWaitSeconds = savedLimitWaitSeconds
+        limitBreakMs = savedLimitBreakMs
     }
 
     val backGuard = rememberUnsavedChangesGuard(
         isDirty = isDirty,
         onNavigateBack = onBack,
         onSave = ::saveRules,
-        onDiscardChanges = { onLimit = savedOnLimit },
+        onDiscardChanges = ::discardChanges,
     )
 
     RuleDetailScaffold(
@@ -312,7 +383,16 @@ fun RuleLimitActionScreen(
         isDirty = isDirty,
         onSave = ::saveRules,
     ) {
-        LimitActionRuleEditor(onLimit = onLimit, onLimitChange = { onLimit = it })
+        LimitActionRuleEditor(
+            onLimit = onLimit,
+            difficulty = difficulty,
+            limitWaitSeconds = limitWaitSeconds,
+            limitBreakMs = limitBreakMs,
+            onLimitChange = { onLimit = it },
+            onDifficultyChange = { difficulty = it },
+            onLimitWaitChange = { limitWaitSeconds = it.coerceIn(1, 3600) },
+            onLimitBreakChange = { limitBreakMs = it },
+        )
     }
 }
 
@@ -337,8 +417,17 @@ fun RuleSessionActionScreen(
         mutableIntStateOf(profile?.sessionWaitDurationSeconds ?: 60)
     }
     var sessionWaitSeconds by remember(profile?.id) { mutableIntStateOf(savedSessionWaitSeconds) }
+    var savedSessionBreakMs by remember(profile?.id) {
+        mutableLongStateOf(profile?.breakDurationMs ?: 0L)
+    }
+    var sessionBreakMs by remember(profile?.id) { mutableLongStateOf(savedSessionBreakMs) }
 
-    LaunchedEffect(profile?.onSessionLimitAction, profile?.defaultFrictionDifficulty, profile?.sessionWaitDurationSeconds) {
+    LaunchedEffect(
+        profile?.onSessionLimitAction,
+        profile?.defaultFrictionDifficulty,
+        profile?.sessionWaitDurationSeconds,
+        profile?.breakDurationMs,
+    ) {
         if (profile == null) return@LaunchedEffect
         savedOnSession = profile.onSessionLimitAction
         onSession = savedOnSession
@@ -346,11 +435,14 @@ fun RuleSessionActionScreen(
         difficulty = savedDifficulty
         savedSessionWaitSeconds = profile.sessionWaitDurationSeconds
         sessionWaitSeconds = savedSessionWaitSeconds
+        savedSessionBreakMs = profile.breakDurationMs ?: 0L
+        sessionBreakMs = savedSessionBreakMs
     }
 
     val isDirty = onSession != savedOnSession ||
         difficulty != savedDifficulty ||
-        sessionWaitSeconds != savedSessionWaitSeconds
+        sessionWaitSeconds != savedSessionWaitSeconds ||
+        sessionBreakMs != savedSessionBreakMs
 
     fun saveRules() {
         val p = profile ?: return
@@ -359,17 +451,20 @@ fun RuleSessionActionScreen(
                 onSessionLimitAction = onSession,
                 defaultFrictionDifficulty = difficulty,
                 sessionWaitDurationSeconds = sessionWaitSeconds.coerceIn(1, 3600),
+                breakDurationMs = sessionBreakMs.takeIf { it > 0 },
             ),
         )
         savedOnSession = onSession
         savedDifficulty = difficulty
         savedSessionWaitSeconds = sessionWaitSeconds
+        savedSessionBreakMs = sessionBreakMs
     }
 
     fun discardChanges() {
         onSession = savedOnSession
         difficulty = savedDifficulty
         sessionWaitSeconds = savedSessionWaitSeconds
+        sessionBreakMs = savedSessionBreakMs
     }
 
     val backGuard = rememberUnsavedChangesGuard(
@@ -380,7 +475,7 @@ fun RuleSessionActionScreen(
     )
 
     RuleDetailScaffold(
-        title = stringResource(R.string.during_use_session),
+        title = stringResource(R.string.when_session_limit_reached),
         onBack = backGuard::navigateBack,
         isDirty = isDirty,
         onSave = ::saveRules,
@@ -389,9 +484,11 @@ fun RuleSessionActionScreen(
             onSession = onSession,
             difficulty = difficulty,
             sessionWaitSeconds = sessionWaitSeconds,
+            sessionBreakMs = sessionBreakMs,
             onSessionChange = { onSession = it },
             onDifficultyChange = { difficulty = it },
             onSessionWaitChange = { sessionWaitSeconds = it.coerceIn(1, 3600) },
+            onSessionBreakChange = { sessionBreakMs = it },
         )
     }
 }
@@ -523,7 +620,13 @@ internal fun OpenActionRuleEditor(
 @Composable
 internal fun LimitActionRuleEditor(
     onLimit: OnLimitAction,
+    difficulty: FrictionDifficulty,
+    limitWaitSeconds: Int,
+    limitBreakMs: Long,
     onLimitChange: (OnLimitAction) -> Unit,
+    onDifficultyChange: (FrictionDifficulty) -> Unit,
+    onLimitWaitChange: (Int) -> Unit,
+    onLimitBreakChange: (Long) -> Unit,
 ) {
     RuleSection(title = stringResource(R.string.when_limit_reached)) {
         RuleChipRow {
@@ -531,6 +634,20 @@ internal fun LimitActionRuleEditor(
                 selected = onLimit == OnLimitAction.notifyOnly,
                 onClick = { onLimitChange(OnLimitAction.notifyOnly) },
                 label = { Text(limitActionLabel(OnLimitAction.notifyOnly)) },
+            )
+        }
+        RuleDivider()
+        RuleGroupLabel(stringResource(R.string.rules_group_deterrent))
+        RuleChipRow {
+            GatekeepFilterChip(
+                selected = onLimit == OnLimitAction.deterrentWait,
+                onClick = { onLimitChange(OnLimitAction.deterrentWait) },
+                label = { Text(limitActionLabel(OnLimitAction.deterrentWait)) },
+            )
+            GatekeepFilterChip(
+                selected = onLimit == OnLimitAction.deterrentMath,
+                onClick = { onLimitChange(OnLimitAction.deterrentMath) },
+                label = { Text(limitActionLabel(OnLimitAction.deterrentMath)) },
             )
         }
         RuleDivider()
@@ -551,6 +668,40 @@ internal fun LimitActionRuleEditor(
                 label = { Text(limitActionLabel(OnLimitAction.hardBlock)) },
             )
         }
+        if (onLimit == OnLimitAction.deterrentMath) {
+            Text(
+                stringResource(R.string.math_difficulty),
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FrictionDifficulty.entries.forEach { d ->
+                    GatekeepFilterChip(
+                        selected = difficulty == d,
+                        onClick = { onDifficultyChange(d) },
+                        label = { Text(frictionDifficultyLabel(d)) },
+                    )
+                }
+            }
+        }
+        if (onLimit == OnLimitAction.deterrentWait) {
+            DurationPickerWithSeconds(
+                label = stringResource(R.string.limit_wait_duration),
+                totalSeconds = limitWaitSeconds,
+                onDurationChange = onLimitWaitChange,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        if (onLimit != OnLimitAction.notifyOnly) {
+            DurationPicker(
+                label = stringResource(R.string.limit_break_duration),
+                totalMs = limitBreakMs,
+                coarseStepMinutes = 15,
+                fineStepMinutes = 1,
+                onDurationChange = onLimitBreakChange,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
     }
 }
 
@@ -559,11 +710,13 @@ internal fun SessionActionRuleEditor(
     onSession: OnSessionLimitAction,
     difficulty: FrictionDifficulty,
     sessionWaitSeconds: Int,
+    sessionBreakMs: Long,
     onSessionChange: (OnSessionLimitAction) -> Unit,
     onDifficultyChange: (FrictionDifficulty) -> Unit,
     onSessionWaitChange: (Int) -> Unit,
+    onSessionBreakChange: (Long) -> Unit,
 ) {
-    RuleSection(title = stringResource(R.string.during_use_session)) {
+    RuleSection(title = stringResource(R.string.when_session_limit_reached)) {
         RuleChipRow {
             GatekeepFilterChip(
                 selected = onSession == OnSessionLimitAction.notifyOnly,
@@ -624,6 +777,16 @@ internal fun SessionActionRuleEditor(
                 label = stringResource(R.string.wait_during_use),
                 totalSeconds = sessionWaitSeconds,
                 onDurationChange = onSessionWaitChange,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        if (onSession != OnSessionLimitAction.notifyOnly) {
+            DurationPicker(
+                label = stringResource(R.string.break_duration_session),
+                totalMs = sessionBreakMs,
+                coarseStepMinutes = 15,
+                fineStepMinutes = 1,
+                onDurationChange = onSessionBreakChange,
                 modifier = Modifier.padding(top = 8.dp),
             )
         }

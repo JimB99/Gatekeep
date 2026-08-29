@@ -2,6 +2,8 @@ package com.gatekeep.app.enforcement
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
+import com.gatekeep.app.MainActivity
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
@@ -131,6 +133,16 @@ class BlockOverlayManager @Inject constructor(
     private fun createBlockOverlay(request: BlockOverlayRequest) {
         val view = LayoutInflater.from(context).inflate(R.layout.overlay_block, null)
         updateBlockView(view, request.message, request.reason, request.breakUntilMs)
+
+        view.findViewById<TextView>(R.id.overlay_title)?.apply {
+            isClickable = true
+            setOnClickListener {
+                val intent = Intent(context, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            }
+        }
 
         val challenge = if (request.frictionMethod == FrictionMethod.math) {
             FrictionChallenge.generate(request.difficulty).also { currentChallenge = it }
@@ -264,10 +276,23 @@ class BlockOverlayManager @Inject constructor(
                 val countdown = view.findViewById<TextView>(R.id.wait_countdown)
                 countdown.visibility = View.VISIBLE
                 val totalMs = request.waitDurationSeconds * 1000L
-                val stopwatch = screenStateMonitor.createStopwatch().also { waitStopwatch = it }
+                val wallClockDeadlineMs = if (request.waitWallClock) {
+                    System.currentTimeMillis() + totalMs
+                } else {
+                    null
+                }
+                val stopwatch = if (wallClockDeadlineMs == null) {
+                    screenStateMonitor.createStopwatch().also { waitStopwatch = it }
+                } else {
+                    null
+                }
                 waitRunnable = object : Runnable {
                     override fun run() {
-                        val remainingMs = stopwatch.remainingMs(totalMs)
+                        val remainingMs = if (wallClockDeadlineMs != null) {
+                            wallClockDeadlineMs - System.currentTimeMillis()
+                        } else {
+                            stopwatch!!.remainingMs(totalMs)
+                        }
                         val remainingSec = ((remainingMs + 999) / 1000).toInt()
                         if (remainingSec <= 0) {
                             frictionInProgress = false

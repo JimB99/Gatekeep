@@ -118,7 +118,8 @@
     <string name="profile_usage_in_period">Uso: %1$s</string>
     <string name="when_opening_app">Al abrir una app</string>
     <string name="when_limit_reached">Cuando se alcanza un límite de tiempo</string>
-    <string name="during_use_session">Durante el uso (límite de sesión)</string>
+    <string name="when_limit_reached_subtitle">(semanal, diario, por hora)</string>
+    <string name="when_session_limit_reached">Cuando se alcanza el límite de sesión</string>
     <string name="math_difficulty">Dificultad de matemáticas</string>
     <string name="wait_before_opening_label">Esperar antes de abrir</string>
     <string name="wait_during_use">Esperar durante el uso (sesión/límite)</string>

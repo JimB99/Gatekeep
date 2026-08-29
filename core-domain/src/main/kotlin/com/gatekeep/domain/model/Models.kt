@@ -20,6 +20,8 @@ enum class OnOpenAction {
 enum class OnLimitAction {
     notifyOnly,
     limitWithExtensions,
+    deterrentMath,
+    deterrentWait,
     hardBlock,
 }
 
@@ -47,6 +49,9 @@ data class ProfileEnforcementConfig(
     val deterrentDifficulty: FrictionDifficulty = FrictionDifficulty.medium,
     val openWaitDurationSeconds: Int = 60,
     val sessionWaitDurationSeconds: Int = 60,
+    val limitWaitDurationSeconds: Int = 60,
+    val sessionBreakDurationMs: Long? = null,
+    val limitBreakDurationMs: Long? = null,
     val extensionPolicy: ExtensionPolicy = ExtensionPolicy(),
 )
 
@@ -100,6 +105,8 @@ data class Profile(
     val breakDurationMs: Long? = null,
     val openWaitDurationSeconds: Int = 60,
     val sessionWaitDurationSeconds: Int = 60,
+    val limitWaitDurationSeconds: Int = 60,
+    val limitBreakDurationMs: Long? = null,
     val onOpenAction: OnOpenAction = OnOpenAction.none,
     val onLimitAction: OnLimitAction = OnLimitAction.limitWithExtensions,
     val onSessionLimitAction: OnSessionLimitAction = OnSessionLimitAction.limitWithExtensions,
@@ -112,6 +119,9 @@ data class Profile(
         deterrentDifficulty = defaultFrictionDifficulty,
         openWaitDurationSeconds = openWaitDurationSeconds,
         sessionWaitDurationSeconds = sessionWaitDurationSeconds,
+        limitWaitDurationSeconds = limitWaitDurationSeconds,
+        sessionBreakDurationMs = breakDurationMs,
+        limitBreakDurationMs = limitBreakDurationMs,
         extensionPolicy = extensionPolicy,
     )
 

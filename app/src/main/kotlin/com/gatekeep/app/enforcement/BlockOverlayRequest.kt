@@ -12,6 +12,7 @@ data class BlockOverlayRequest(
     val frictionMethod: FrictionMethod = FrictionMethod.math,
     val difficulty: FrictionDifficulty = FrictionDifficulty.medium,
     val waitDurationSeconds: Int = 60,
+    val waitWallClock: Boolean = false,
     val extensionOptionMinutes: List<Int> = emptyList(),
     val showNoLimitToday: Boolean = false,
     val useExtensionButtons: Boolean = false,

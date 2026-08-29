@@ -5,7 +5,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -58,32 +62,41 @@ fun AppIcon(
     modifier: Modifier = Modifier.size(40.dp),
 ) {
     val context = LocalContext.current
-    AndroidView(
-        modifier = modifier,
-        factory = { ctx ->
-            ImageView(ctx).apply {
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                runCatching { setImageDrawable(ctx.packageManager.getApplicationIcon(packageName)) }
-            }
-        },
-        update = { view ->
-            view.scaleType = ImageView.ScaleType.FIT_CENTER
-            runCatching { view.setImageDrawable(context.packageManager.getApplicationIcon(packageName)) }
-        },
-    )
+    Box(
+        modifier = modifier.clip(RoundedCornerShape(8.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { ctx ->
+                ImageView(ctx).apply {
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    adjustViewBounds = false
+                    runCatching { setImageDrawable(ctx.packageManager.getApplicationIcon(packageName)) }
+                }
+            },
+            update = { view ->
+                view.scaleType = ImageView.ScaleType.FIT_CENTER
+                view.adjustViewBounds = false
+                runCatching { view.setImageDrawable(context.packageManager.getApplicationIcon(packageName)) }
+            },
+        )
+    }
 }
 
+private val dayDisplayOrder = listOf(1, 2, 3, 4, 5, 6, 0)
 
 @Composable
-private fun dayLetters(): List<String> = listOf(
-    stringResource(R.string.day_letter_sun),
-    stringResource(R.string.day_letter_mon),
-    stringResource(R.string.day_letter_tue),
-    stringResource(R.string.day_letter_wed),
-    stringResource(R.string.day_letter_thu),
-    stringResource(R.string.day_letter_fri),
-    stringResource(R.string.day_letter_sat),
-)
+private fun dayLetterFor(dayOfWeek: Int): String = when (dayOfWeek) {
+    0 -> stringResource(R.string.day_letter_sun)
+    1 -> stringResource(R.string.day_letter_mon)
+    2 -> stringResource(R.string.day_letter_tue)
+    3 -> stringResource(R.string.day_letter_wed)
+    4 -> stringResource(R.string.day_letter_thu)
+    5 -> stringResource(R.string.day_letter_fri)
+    6 -> stringResource(R.string.day_letter_sat)
+    else -> stringResource(R.string.day_letter_sun)
+}
 
 fun loadAppLabel(context: android.content.Context, packageName: String): String =
     runCatching {
@@ -101,12 +114,13 @@ fun DayOfWeekSelector(
     modifier: Modifier = Modifier,
 ) {
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        dayLetters().forEachIndexed { index, label ->
+        dayDisplayOrder.forEach { dayIndex ->
+            val label = dayLetterFor(dayIndex)
             GatekeepFilterChip(
-                selected = index in selectedDays,
+                selected = dayIndex in selectedDays,
                 onClick = {
                     val updated = selectedDays.toMutableSet()
-                    if (index in updated) updated.remove(index) else updated.add(index)
+                    if (dayIndex in updated) updated.remove(dayIndex) else updated.add(dayIndex)
                     onSelectionChange(updated)
                 },
                 modifier = Modifier.weight(1f),
@@ -129,10 +143,11 @@ fun SingleDayOfWeekSelector(
     modifier: Modifier = Modifier,
 ) {
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        dayLetters().forEachIndexed { index, label ->
+        dayDisplayOrder.forEach { dayIndex ->
+            val label = dayLetterFor(dayIndex)
             GatekeepFilterChip(
-                selected = index == selectedDay,
-                onClick = { onDaySelected(index) },
+                selected = dayIndex == selectedDay,
+                onClick = { onDaySelected(dayIndex) },
                 modifier = Modifier.weight(1f),
                 label = {
                     Text(
@@ -201,8 +216,11 @@ fun DurationPickerWithSeconds(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            HoldRepeatStepperButton("-1s") {
-                onDurationChange((totalSeconds - 1).coerceAtLeast(0))
+            HoldRepeatStepperButton("-5m") {
+                onDurationChange((totalSeconds - 300).coerceAtLeast(0))
+            }
+            HoldRepeatStepperButton("-5s") {
+                onDurationChange((totalSeconds - 5).coerceAtLeast(0))
             }
             Text(
                 when {
@@ -221,8 +239,11 @@ fun DurationPickerWithSeconds(
                         showCustom = true
                     },
             )
-            HoldRepeatStepperButton("+1s") {
-                onDurationChange(totalSeconds + 1)
+            HoldRepeatStepperButton("+5s") {
+                onDurationChange(totalSeconds + 5)
+            }
+            HoldRepeatStepperButton("+5m") {
+                onDurationChange(totalSeconds + 300)
             }
         }
     }
@@ -275,6 +296,7 @@ fun DurationPicker(
     coarseStepMinutes: Int? = null,
     fineStepMinutes: Int = 15,
     minutesOnly: Boolean = false,
+    isSet: Boolean = totalMs > 0,
     modifier: Modifier = Modifier,
 ) {
     val totalMinutes = (totalMs / 60_000).toInt()
@@ -294,9 +316,29 @@ fun DurationPicker(
     }
 
     val displayText = if (minutesOnly) "${totalMinutes}m" else "${hours}h ${minutes}m"
+    val containerColor = if (isSet) {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f)
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+    val border = if (isSet) {
+        BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+    } else {
+        null
+    }
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(label, style = MaterialTheme.typography.labelMedium)
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = containerColor,
+        border = border,
+    ) {
+    Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (isSet) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -313,6 +355,7 @@ fun DurationPicker(
             Text(
                 displayText,
                 textAlign = TextAlign.Center,
+                fontWeight = if (isSet) FontWeight.SemiBold else FontWeight.Normal,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -331,6 +374,7 @@ fun DurationPicker(
                 }
             }
         }
+    }
     }
 
     if (showCustom) {

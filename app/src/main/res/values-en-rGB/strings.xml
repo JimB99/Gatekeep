@@ -123,7 +123,8 @@
     <string name="profile_usage_in_period">Usage: %1$s</string>
     <string name="when_opening_app">When opening an app</string>
     <string name="when_limit_reached">When a time limit is reached</string>
-    <string name="during_use_session">During use (session limit)</string>
+    <string name="when_limit_reached_subtitle">(weekly, daily, hourly)</string>
+    <string name="when_session_limit_reached">When session limit is reached</string>
     <string name="math_difficulty">Math difficulty</string>
     <string name="wait_before_opening_label">Wait before opening</string>
     <string name="wait_during_use">Wait during use (session/limit)</string>

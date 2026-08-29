@@ -24,14 +24,11 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -39,7 +36,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.R
 import com.gatekeep.app.ui.components.DayOfWeekSelector
+import com.gatekeep.app.ui.components.SaveChangesButton
 import com.gatekeep.app.ui.components.TimeOfDayPicker
+import com.gatekeep.app.ui.components.rememberUnsavedChangesGuard
 import com.gatekeep.app.ui.viewmodel.ScheduleViewModel
 import com.gatekeep.domain.ScheduleConflictChecker
 import com.gatekeep.domain.ScheduleWindowGrouper
@@ -56,33 +55,46 @@ fun ScheduleEditorScreen(
     LaunchedEffect(profileId) {
         viewModel.bindProfile(profileId)
     }
-    val windows by viewModel.windows.collectAsState()
-    var selectedDays by remember { mutableStateOf((0..6).toSet()) }
-    var startMinute by remember { mutableIntStateOf(9 * 60) }
-    var endMinute by remember { mutableIntStateOf(17 * 60) }
+    val editorState by viewModel.editorState.collectAsState()
+    val draftForm = editorState.draftForm
+    val draftWindows = editorState.draftWindows.filter { !it.isProfileAutoSwitch }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val userWindows = remember(windows) { windows.filter { !it.isProfileAutoSwitch } }
-    val groupedWindows = remember(userWindows) { ScheduleWindowGrouper.group(userWindows) }
-    val validation = remember(userWindows, selectedDays, startMinute, endMinute) {
-        val invalidRange = startMinute >= endMinute
+    val groupedWindows = remember(draftWindows) { ScheduleWindowGrouper.group(draftWindows) }
+    val validation = remember(draftWindows, draftForm) {
+        val invalidRange = draftForm.startMinute >= draftForm.endMinute
         val conflicts = if (invalidRange) {
             emptySet()
         } else {
             ScheduleConflictChecker.conflictingDays(
-                existing = userWindows,
-                days = selectedDays,
-                startMinute = startMinute,
-                endMinute = endMinute,
+                existing = draftWindows,
+                days = draftForm.selectedDays,
+                startMinute = draftForm.startMinute,
+                endMinute = draftForm.endMinute,
             )
         }
         ScheduleEditorValidation(
             invalidRange = invalidRange,
-            selectedDays = selectedDays,
+            selectedDays = draftForm.selectedDays,
             conflictingDays = conflicts,
         )
     }
+
+    fun saveSchedule() {
+        viewModel.commitSchedule(profileId)
+    }
+
+    fun discardChanges() {
+        viewModel.discardChanges()
+    }
+
+    val backGuard = rememberUnsavedChangesGuard(
+        isDirty = editorState.isDirty,
+        onNavigateBack = onBack,
+        onSave = ::saveSchedule,
+        onDiscardChanges = ::discardChanges,
+    )
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -90,7 +102,7 @@ fun ScheduleEditorScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.allowed_hours)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = backGuard::navigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
                     }
                 },
@@ -107,20 +119,29 @@ fun ScheduleEditorScreen(
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Text(stringResource(R.string.allowed_days))
-                DayOfWeekSelector(selectedDays = selectedDays, onSelectionChange = { selectedDays = it })
+                DayOfWeekSelector(
+                    selectedDays = draftForm.selectedDays,
+                    onSelectionChange = { days ->
+                        viewModel.updateForm { it.copy(selectedDays = days) }
+                    },
+                )
                 TimeOfDayPicker(
                     stringResource(R.string.start_time),
-                    startMinute,
+                    draftForm.startMinute,
                     coarseStepMinutes = 60,
                     fineStepMinutes = 15,
-                    onTimeChange = { startMinute = it },
+                    onTimeChange = { minute ->
+                        viewModel.updateForm { it.copy(startMinute = minute) }
+                    },
                 )
                 TimeOfDayPicker(
                     stringResource(R.string.end_time),
-                    endMinute,
+                    draftForm.endMinute,
                     coarseStepMinutes = 60,
                     fineStepMinutes = 15,
-                    onTimeChange = { endMinute = it },
+                    onTimeChange = { minute ->
+                        viewModel.updateForm { it.copy(endMinute = minute) }
+                    },
                 )
                 Button(
                     onClick = {
@@ -147,17 +168,16 @@ fun ScheduleEditorScreen(
                                 }
                             }
                             else -> {
-                                validation.addableDays.forEach { day ->
-                                    viewModel.addWindow(
-                                        ScheduleWindow(
-                                            profileId = profileId,
-                                            packageName = null,
-                                            dayOfWeek = day,
-                                            startMinute = startMinute,
-                                            endMinute = endMinute,
-                                        ),
+                                val newWindows = validation.addableDays.map { day ->
+                                    ScheduleWindow(
+                                        profileId = profileId,
+                                        packageName = null,
+                                        dayOfWeek = day,
+                                        startMinute = draftForm.startMinute,
+                                        endMinute = draftForm.endMinute,
                                     )
                                 }
+                                viewModel.addDraftWindows(newWindows)
                                 if (validation.hasSkippedDays) {
                                     val skippedNames = validation.conflictingDays
                                         .sorted()
@@ -176,12 +196,19 @@ fun ScheduleEditorScreen(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !validation.invalidRange && validation.selectedDays.isNotEmpty(),
                 ) { Text(stringResource(R.string.add_windows)) }
+                SaveChangesButton(
+                    visible = editorState.isDirty,
+                    onClick = ::saveSchedule,
+                    label = stringResource(R.string.save_schedule),
+                )
             }
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(groupedWindows, key = { it.windowIds.first() }) { group ->
+                items(groupedWindows, key = { group ->
+                    group.windowIds.firstOrNull() ?: group.days.hashCode()
+                }) { group ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(formatGroupedDays(group.days))
@@ -189,7 +216,7 @@ fun ScheduleEditorScreen(
                                 "${formatMinute(group.startMinute)} – ${formatMinute(group.endMinute)}",
                                 style = MaterialTheme.typography.bodyMedium,
                             )
-                            Button(onClick = { viewModel.deleteWindows(group.windowIds) }) {
+                            Button(onClick = { viewModel.removeDraftWindows(group.windowIds) }) {
                                 Text(stringResource(R.string.remove))
                             }
                         }
@@ -202,8 +229,8 @@ fun ScheduleEditorScreen(
 
 @Composable
 private fun formatGroupedDays(days: Set<Int>): String {
-    val ordered = days.sorted().map { day -> dayName(day) }
-    return ordered.joinToString(", ")
+    val ordered = days.sortedWith(compareBy { day -> if (day == 0) 7 else day })
+    return ordered.map { day -> stringResource(dayNameRes(day)) }.joinToString(", ")
 }
 
 @Composable

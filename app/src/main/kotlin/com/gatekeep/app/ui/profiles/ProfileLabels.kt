@@ -20,6 +20,8 @@ fun openActionLabel(action: OnOpenAction): String = when (action) {
 fun limitActionLabel(action: OnLimitAction): String = when (action) {
     OnLimitAction.notifyOnly -> stringResource(R.string.limit_action_notify)
     OnLimitAction.limitWithExtensions -> stringResource(R.string.limit_action_extend)
+    OnLimitAction.deterrentMath -> stringResource(R.string.open_action_math)
+    OnLimitAction.deterrentWait -> stringResource(R.string.open_action_wait)
     OnLimitAction.hardBlock -> stringResource(R.string.limit_action_hard_block)
 }
 

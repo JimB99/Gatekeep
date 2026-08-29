@@ -51,7 +51,10 @@ import com.gatekeep.app.ui.components.rememberUnsavedChangesGuard
 import com.gatekeep.app.ui.components.PinGateDialog
 import com.gatekeep.app.R
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
+import com.gatekeep.app.util.PasswordHasher
+import com.gatekeep.app.util.formatDurationMinutes
 import com.gatekeep.domain.model.OnOpenAction
+import com.gatekeep.domain.model.Profile
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +72,7 @@ fun ProfileHubScreen(
     val profile = profiles.find { it.id == profileId }
     val appPasswordHash by viewModel.appPasswordHash.collectAsState()
     val monitoredPackages by viewModel.monitoredPackages.collectAsState()
+    val scheduleWindows by viewModel.scheduleWindows.collectAsState()
     var profileName by remember(profile?.name) { mutableStateOf(profile?.name ?: "") }
     var savedName by remember(profile?.name) { mutableStateOf(profile?.name ?: "") }
     var showDeactivatePinGate by remember { mutableStateOf(false) }
@@ -82,6 +86,20 @@ fun ProfileHubScreen(
     }
 
     val nameDirty = profileName.trim() != savedName.trim()
+
+    fun saveName() {
+        profile?.copy(name = profileName.trim())?.let {
+            viewModel.updateProfile(it)
+            savedName = profileName.trim()
+        }
+    }
+
+    val backGuard = rememberUnsavedChangesGuard(
+        isDirty = nameDirty,
+        onNavigateBack = onBack,
+        onSave = ::saveName,
+        onDiscardChanges = { profileName = savedName },
+    )
 
     LaunchedEffect(profileId) {
         viewModel.bindProfile(profileId)
@@ -121,7 +139,7 @@ fun ProfileHubScreen(
             TopAppBar(
                 title = { Text(profile?.name ?: stringResource(R.string.profile)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = backGuard::navigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
                     }
                 },
@@ -145,12 +163,7 @@ fun ProfileHubScreen(
             )
             if (nameDirty) {
                 Button(
-                    onClick = {
-                        profile?.copy(name = profileName.trim())?.let {
-                            viewModel.updateProfile(it)
-                            savedName = profileName.trim()
-                        }
-                    },
+                    onClick = ::saveName,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = profileName.isNotBlank(),
                 ) { Text(stringResource(R.string.save_name)) }
@@ -180,14 +193,36 @@ fun ProfileHubScreen(
 
             ProfileNavRow(
                 title = stringResource(R.string.apps),
-                subtitle = stringResource(R.string.manage_tracked_apps),
+                subtitle = profileAppsSubtitle(monitoredPackages.size),
                 onClick = onEditApps,
                 iconPackages = monitoredPackages,
             )
-            ProfileNavRow(stringResource(R.string.schedule), stringResource(R.string.allowed_hours), onEditSchedule)
-            ProfileNavRow(stringResource(R.string.time_limits), stringResource(R.string.daily_session_break), onEditLimits)
-            ProfileNavRow(stringResource(R.string.rules), stringResource(R.string.open_limit_extension), onEditRules)
-            ProfileNavRow(stringResource(R.string.profile_pin), stringResource(R.string.pin_to_open_apps), onEditPin)
+            ProfileNavRow(
+                title = stringResource(R.string.schedule),
+                subtitle = profileScheduleSubtitle(scheduleWindows.size),
+                onClick = onEditSchedule,
+            )
+            profile?.let { p ->
+                ProfileNavRow(
+                    title = stringResource(R.string.time_limits),
+                    subtitle = profileLimitsSubtitle(p),
+                    onClick = onEditLimits,
+                )
+                ProfileNavRow(
+                    title = stringResource(R.string.rules),
+                    subtitle = profileRulesSubtitle(p),
+                    onClick = onEditRules,
+                )
+            }
+            ProfileNavRow(
+                title = stringResource(R.string.profile_pin),
+                subtitle = if (!profile?.passwordHash.isNullOrBlank()) {
+                    stringResource(R.string.pin_set)
+                } else {
+                    stringResource(R.string.pin_not_set)
+                },
+                onClick = onEditPin,
+            )
 
             Card(modifier = Modifier.fillMaxWidth().clickable { showDeleteConfirm = true }) {
                 Text(stringResource(R.string.delete_profile), modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Medium)
@@ -249,33 +284,28 @@ fun ProfileLimitsScreen(
 
     var savedDailyMs by remember(profile?.id) { mutableLongStateOf(limitToDraftMs(profile?.dailyLimitMs)) }
     var savedSessionMs by remember(profile?.id) { mutableLongStateOf(limitToDraftMs(profile?.sessionLimitMs)) }
-    var savedBreakMs by remember(profile?.id) { mutableLongStateOf(limitToDraftMs(profile?.breakDurationMs)) }
     var savedHourlyMs by remember(profile?.id) { mutableLongStateOf(limitToDraftMs(profile?.hourlyLimitMs)) }
     var savedWeeklyMs by remember(profile?.id) { mutableLongStateOf(limitToDraftMs(profile?.weeklyLimitMs)) }
 
     var dailyMs by remember(profile?.id) { mutableLongStateOf(savedDailyMs) }
     var sessionMs by remember(profile?.id) { mutableLongStateOf(savedSessionMs) }
-    var breakMs by remember(profile?.id) { mutableLongStateOf(savedBreakMs) }
     var hourlyMs by remember(profile?.id) { mutableLongStateOf(savedHourlyMs) }
     var weeklyMs by remember(profile?.id) { mutableLongStateOf(savedWeeklyMs) }
 
-    LaunchedEffect(profile?.dailyLimitMs, profile?.sessionLimitMs, profile?.breakDurationMs, profile?.hourlyLimitMs, profile?.weeklyLimitMs) {
+    LaunchedEffect(profile?.dailyLimitMs, profile?.sessionLimitMs, profile?.hourlyLimitMs, profile?.weeklyLimitMs) {
         if (profile == null) return@LaunchedEffect
         savedDailyMs = limitToDraftMs(profile.dailyLimitMs)
         savedSessionMs = limitToDraftMs(profile.sessionLimitMs)
-        savedBreakMs = limitToDraftMs(profile.breakDurationMs)
         savedHourlyMs = limitToDraftMs(profile.hourlyLimitMs)
         savedWeeklyMs = limitToDraftMs(profile.weeklyLimitMs)
         dailyMs = savedDailyMs
         sessionMs = savedSessionMs
-        breakMs = savedBreakMs
         hourlyMs = savedHourlyMs
         weeklyMs = savedWeeklyMs
     }
 
     val isDirty = dailyMs != savedDailyMs ||
         sessionMs != savedSessionMs ||
-        breakMs != savedBreakMs ||
         hourlyMs != savedHourlyMs ||
         weeklyMs != savedWeeklyMs
 
@@ -283,14 +313,12 @@ fun ProfileLimitsScreen(
         profile?.copy(
             dailyLimitMs = draftToSavedMs(dailyMs),
             sessionLimitMs = draftToSavedMs(sessionMs),
-            breakDurationMs = breakMs,
             hourlyLimitMs = draftToSavedMs(hourlyMs),
             weeklyLimitMs = draftToSavedMs(weeklyMs),
         )?.let { updated ->
             viewModel.saveProfile(updated)
             savedDailyMs = dailyMs
             savedSessionMs = sessionMs
-            savedBreakMs = breakMs
             savedHourlyMs = hourlyMs
             savedWeeklyMs = weeklyMs
         }
@@ -299,7 +327,6 @@ fun ProfileLimitsScreen(
     fun discardChanges() {
         dailyMs = savedDailyMs
         sessionMs = savedSessionMs
-        breakMs = savedBreakMs
         hourlyMs = savedHourlyMs
         weeklyMs = savedWeeklyMs
     }
@@ -340,11 +367,44 @@ fun ProfileLimitsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(stringResource(R.string.limits_apply_all_apps), style = MaterialTheme.typography.bodySmall)
-            DurationPicker(stringResource(R.string.weekly_limit_off), weeklyMs, coarseStepMinutes = 60, fineStepMinutes = 15, onDurationChange = { weeklyMs = it })
-            DurationPicker(stringResource(R.string.daily_limit), dailyMs, coarseStepMinutes = 60, fineStepMinutes = 15, onDurationChange = { dailyMs = it })
-            DurationPicker(stringResource(R.string.hourly_limit_off), hourlyMs, coarseStepMinutes = 15, fineStepMinutes = 5, minutesOnly = true, onDurationChange = { hourlyMs = it })
-            DurationPicker(stringResource(R.string.session_limit), sessionMs, coarseStepMinutes = 15, fineStepMinutes = 5, onDurationChange = { sessionMs = it })
-            DurationPicker(stringResource(R.string.break_duration), breakMs, coarseStepMinutes = 15, fineStepMinutes = 5, onDurationChange = { breakMs = it })
+            DurationPicker(
+                label = stringResource(R.string.weekly_limit_off),
+                totalMs = weeklyMs,
+                coarseStepMinutes = 60,
+                fineStepMinutes = 15,
+                isSet = weeklyMs > 0,
+                onDurationChange = { weeklyMs = it },
+            )
+            DurationPicker(
+                label = stringResource(R.string.daily_limit),
+                totalMs = dailyMs,
+                coarseStepMinutes = 60,
+                fineStepMinutes = 15,
+                isSet = dailyMs > 0,
+                onDurationChange = { dailyMs = it },
+            )
+            DurationPicker(
+                label = stringResource(R.string.hourly_limit_off),
+                totalMs = hourlyMs,
+                coarseStepMinutes = 15,
+                fineStepMinutes = 5,
+                minutesOnly = true,
+                isSet = hourlyMs > 0,
+                onDurationChange = { hourlyMs = it },
+            )
+            Text(
+                stringResource(R.string.hourly_limit_resets),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            DurationPicker(
+                label = stringResource(R.string.session_limit),
+                totalMs = sessionMs,
+                coarseStepMinutes = 15,
+                fineStepMinutes = 5,
+                isSet = sessionMs > 0,
+                onDurationChange = { sessionMs = it },
+            )
             SaveChangesButton(
                 visible = isDirty,
                 onClick = ::saveLimits,
@@ -386,13 +446,42 @@ fun ProfilePinScreen(
         }
     }
 
+    val pinDirty = pin != savedPin
+
+    fun savePin() {
+        profile?.let { p ->
+            val trimmed = pin.trim()
+            if (trimmed.isNotBlank()) {
+                viewModel.saveProfilePin(p.id, trimmed)
+                viewModel.saveProfile(
+                    p.copy(
+                        passwordHash = PasswordHasher.hash(trimmed),
+                        lockEnabled = pinEnabled,
+                    ),
+                )
+                savedPin = trimmed
+            } else {
+                viewModel.clearProfilePin(p.id)
+                viewModel.saveProfile(p.copy(passwordHash = null, lockEnabled = false))
+                savedPin = ""
+            }
+        }
+    }
+
+    val backGuard = rememberUnsavedChangesGuard(
+        isDirty = pinDirty,
+        onNavigateBack = onBack,
+        onSave = ::savePin,
+        onDiscardChanges = { pin = savedPin },
+    )
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.profile_pin)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = backGuard::navigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
                     }
                 },
@@ -430,5 +519,44 @@ fun ProfilePinScreen(
         }
     }
 }
+
+@Composable
+private fun profileAppsSubtitle(count: Int): String =
+    stringResource(R.string.profile_apps_tracked, count)
+
+@Composable
+private fun profileScheduleSubtitle(windowCount: Int): String =
+    if (windowCount == 0) {
+        stringResource(R.string.profile_schedule_always)
+    } else {
+        stringResource(R.string.profile_schedule_windows, windowCount)
+    }
+
+@Composable
+private fun profileLimitsSubtitle(profile: Profile): String {
+    val parts = buildList {
+        profile.weeklyLimitMs?.let {
+            add(stringResource(R.string.limit_weekly_short, formatDurationMinutes(it)))
+        }
+        profile.dailyLimitMs?.let {
+            add(stringResource(R.string.limit_daily_short, formatDurationMinutes(it)))
+        }
+        profile.hourlyLimitMs?.let {
+            add(stringResource(R.string.limit_hourly_short, formatDurationMinutes(it)))
+        }
+        profile.sessionLimitMs?.let {
+            add(stringResource(R.string.limit_session_short, formatDurationMinutes(it)))
+        }
+    }
+    return if (parts.isEmpty()) {
+        stringResource(R.string.profile_limits_none)
+    } else {
+        parts.joinToString(" · ")
+    }
+}
+
+@Composable
+private fun profileRulesSubtitle(profile: Profile): String =
+    "${openActionLabel(profile.onOpenAction)} · ${limitActionLabel(profile.onLimitAction)} · ${sessionActionLabel(profile.onSessionLimitAction)}"
 
 

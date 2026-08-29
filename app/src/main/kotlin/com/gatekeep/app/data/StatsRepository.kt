@@ -105,7 +105,12 @@ class StatsRepository @Inject constructor(
         val byPackage = linkedMapOf<String, AppUsageStat>()
         for (profileId in profileIds) {
             val apps = profileRepository.observeMonitoredApps(profileId).first()
-            val dailyLimit = allProfiles.find { it.id == profileId }?.dailyLimitMs
+            val profile = allProfiles.find { it.id == profileId }
+            val rangeLimitMs = when (range) {
+                is StatsTimeRange.SingleDay -> profile?.dailyLimitMs
+                is StatsTimeRange.Week -> profile?.weeklyLimitMs
+                else -> null
+            }
             for (app in apps) {
                 val usageMs = usageByPackage[app.packageName] ?: 0L
                 val existing = byPackage[app.packageName]
@@ -114,11 +119,16 @@ class StatsRepository @Inject constructor(
                         packageName = app.packageName,
                         label = app.label,
                         usageMs = usageMs,
-                        limitMs = dailyLimit,
+                        limitMs = rangeLimitMs,
                     )
                 } else {
                     byPackage[app.packageName] = existing.copy(
-                        limitMs = TrackedAppMerge.mergeDailyLimit(existing.limitMs, dailyLimit),
+                        usageMs = maxOf(existing.usageMs, usageMs),
+                        limitMs = when (range) {
+                            is StatsTimeRange.SingleDay -> TrackedAppMerge.mergeDailyLimit(existing.limitMs, rangeLimitMs)
+                            is StatsTimeRange.Week -> TrackedAppMerge.mergeDailyLimit(existing.limitMs, rangeLimitMs)
+                            else -> null
+                        },
                     )
                 }
             }

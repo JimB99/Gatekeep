@@ -44,6 +44,15 @@
     <string name="enforcement">Enforcement</string>
     <string name="about">About</string>
     <string name="pin_set">PIN set</string>
+    <string name="pin_not_set">No PIN set</string>
+    <string name="profile_apps_tracked">%1$d apps tracked</string>
+    <string name="profile_schedule_always">Always allowed</string>
+    <string name="profile_schedule_windows">%1$d allowed windows</string>
+    <string name="profile_limits_none">No limits set</string>
+    <string name="limit_weekly_short">Weekly %1$s</string>
+    <string name="limit_daily_short">Daily %1$s</string>
+    <string name="limit_hourly_short">Hourly %1$s</string>
+    <string name="limit_session_short">Session %1$s</string>
     <string name="no_pin">No PIN</string>
     <string name="timer">Timer</string>
     <string name="warnings">Warnings</string>
@@ -111,6 +120,11 @@
     <string name="session_limit">Session limit</string>
     <string name="break_duration">Break duration (0 = no wait)</string>
     <string name="hourly_limit_off">Hourly limit (0 = off)</string>
+    <string name="hourly_limit_resets">Resets at the start of each hour.</string>
+    <string name="save_schedule">Save schedule</string>
+    <string name="break_duration_session">Break after session limit</string>
+    <string name="limit_break_duration">Break after usage cap</string>
+    <string name="limit_wait_duration">Wait before bypassing usage cap</string>
     <string name="weekly_limit_off">Weekly limit (0 = off)</string>
     <string name="save_limits">Save limits</string>
     <string name="save_changes">Save changes</string>
@@ -123,7 +137,8 @@
     <string name="delete_pin_digit">Delete last digit</string>
     <string name="when_opening_app">When opening an app</string>
     <string name="when_limit_reached">When a time limit is reached</string>
-    <string name="during_use_session">During use (session limit)</string>
+    <string name="when_limit_reached_subtitle">(weekly, daily, hourly)</string>
+    <string name="when_session_limit_reached">When session limit is reached</string>
     <string name="math_difficulty">Math difficulty</string>
     <string name="wait_before_opening_label">Wait before opening</string>
     <string name="wait_during_use">Wait during use (session/limit)</string>

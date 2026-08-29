@@ -44,7 +44,7 @@ fun AppPickerScreen(
     onBack: () -> Unit,
     viewModel: AppPickerViewModel = hiltViewModel(),
 ) {
-    val installedApps by viewModel.installedApps.collectAsState()
+    val visibleApps by viewModel.visibleApps.collectAsState()
     val monitored by viewModel.monitoredApps.collectAsState()
     val scheduleAllowed by viewModel.scheduleAllowedNow.collectAsState()
     var search by remember { mutableStateOf("") }
@@ -54,7 +54,7 @@ fun AppPickerScreen(
     }
 
     val monitoredSet = monitored.map { it.packageName }.toSet()
-    val filtered = installedApps.filter { app ->
+    val filtered = visibleApps.filter { app ->
         search.isBlank() || app.label.contains(search, true) || app.packageName.contains(search, true)
     }
     val selectedApps = filtered.filter { it.packageName in monitoredSet }

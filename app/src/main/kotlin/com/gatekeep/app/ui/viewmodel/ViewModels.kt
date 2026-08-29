@@ -159,6 +159,13 @@ class ProfileViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val scheduleWindows = _profileId
+        .flatMapLatest { id ->
+            if (id == null) flowOf(emptyList())
+            else profileRepository.observeScheduleWindows(id)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun bindProfile(profileId: Long) {
         _profileId.value = profileId
     }
@@ -233,6 +240,13 @@ class AppPickerViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val visibleApps = combine(installedApps, monitoredApps) { installed, monitored ->
+        installedAppsRepository.filterVisibleApps(
+            installed,
+            monitored.map { it.packageName }.toSet(),
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val scheduleAllowedNow = profileIdFlow
         .flatMapLatest { id ->
             if (id == null) flowOf(emptyMap())
@@ -301,7 +315,32 @@ class ScheduleViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
 ) : ViewModel() {
 
+    data class ScheduleFormDraft(
+        val selectedDays: Set<Int> = (0..6).toSet(),
+        val startMinute: Int = 9 * 60,
+        val endMinute: Int = 17 * 60,
+    ) {
+        fun normalizedKey(): String = selectedDays.sorted().joinToString(",") + ":$startMinute:$endMinute"
+    }
+
+    data class ScheduleEditorState(
+        val savedWindows: List<ScheduleWindow> = emptyList(),
+        val draftWindows: List<ScheduleWindow> = emptyList(),
+        val savedForm: ScheduleFormDraft = ScheduleFormDraft(),
+        val draftForm: ScheduleFormDraft = ScheduleFormDraft(),
+    ) {
+        val isDirty: Boolean
+            get() {
+                fun keys(windows: List<ScheduleWindow>) =
+                    windows.map { "${it.dayOfWeek}:${it.startMinute}:${it.endMinute}" }.toSet()
+                return keys(savedWindows) != keys(draftWindows) ||
+                    savedForm.normalizedKey() != draftForm.normalizedKey()
+            }
+    }
+
     private val profileIdFlow = MutableStateFlow<Long?>(null)
+    private val _editorState = MutableStateFlow(ScheduleEditorState())
+    val editorState = _editorState.asStateFlow()
 
     val windows = profileIdFlow
         .flatMapLatest { id ->
@@ -310,23 +349,82 @@ class ScheduleViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    init {
+        viewModelScope.launch {
+            windows.collect { loaded ->
+                val userWindows = loaded.filter { !it.isProfileAutoSwitch }
+                val current = _editorState.value
+                if (windowKeys(current.savedWindows) != windowKeys(userWindows)) {
+                    _editorState.value = current.copy(
+                        savedWindows = userWindows,
+                        draftWindows = userWindows,
+                        savedForm = current.savedForm,
+                        draftForm = current.draftForm,
+                    )
+                }
+            }
+        }
+    }
+
     fun bindProfile(profileId: Long) {
         profileIdFlow.value = profileId
     }
 
-    fun addWindow(window: ScheduleWindow) {
-        viewModelScope.launch { profileRepository.addScheduleWindow(window) }
+    fun updateForm(transform: (ScheduleFormDraft) -> ScheduleFormDraft) {
+        _editorState.value = _editorState.value.copy(
+            draftForm = transform(_editorState.value.draftForm),
+        )
     }
 
-    fun deleteWindow(id: Long) {
-        viewModelScope.launch { profileRepository.deleteScheduleWindow(id) }
+    fun addDraftWindows(windows: List<ScheduleWindow>) {
+        _editorState.value = _editorState.value.copy(
+            draftWindows = _editorState.value.draftWindows + windows,
+        )
     }
 
-    fun deleteWindows(ids: List<Long>) {
+    fun removeDraftWindows(windowIds: List<Long>) {
+        _editorState.value = _editorState.value.copy(
+            draftWindows = _editorState.value.draftWindows.filter { it.id !in windowIds },
+        )
+    }
+
+    fun discardChanges() {
+        val current = _editorState.value
+        _editorState.value = current.copy(
+            draftWindows = current.savedWindows,
+            draftForm = current.savedForm,
+        )
+    }
+
+    fun commitSchedule(profileId: Long) {
         viewModelScope.launch {
-            ids.forEach { profileRepository.deleteScheduleWindow(it) }
+            val state = _editorState.value
+            val savedKeys = state.savedWindows.map { it.contentKey() }.toSet()
+            val draftKeys = state.draftWindows.map { it.contentKey() }.toSet()
+
+            state.savedWindows
+                .filter { it.contentKey() !in draftKeys }
+                .forEach { profileRepository.deleteScheduleWindow(it.id) }
+
+            state.draftWindows
+                .filter { it.contentKey() !in savedKeys }
+                .forEach { window ->
+                    profileRepository.addScheduleWindow(
+                        window.copy(id = 0, profileId = profileId),
+                    )
+                }
+
+            _editorState.value = state.copy(
+                savedForm = state.draftForm,
+            )
         }
     }
+
+    private fun windowKeys(windows: List<ScheduleWindow>): Set<String> =
+        windows.map { it.contentKey() }.toSet()
+
+    private fun ScheduleWindow.contentKey(): String =
+        "$dayOfWeek:$startMinute:$endMinute"
 }
 
 @HiltViewModel

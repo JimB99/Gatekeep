@@ -97,6 +97,8 @@ class EnforcementCoordinator @Inject constructor(
     private var openGatePassedPackage: String? = null
     private val warnedPackagesToday = mutableSetOf<String>()
     private var warnedDayStartMs: Long = 0L
+    private var lastNotificationBody: String? = null
+    private var countdownNotificationTitle: String? = null
 
     private val ignoredForegroundPackages = setOf(
         "com.android.systemui",
@@ -383,8 +385,20 @@ class EnforcementCoordinator @Inject constructor(
 
     private suspend fun finalizePreviousSession() {
         val prev = previousForegroundPackage ?: currentForegroundPackage ?: return
+        val now = System.currentTimeMillis()
+        if (countdownPackageName == prev) {
+            val deadlinePassed = listOfNotNull(
+                sessionDeadlineMs,
+                dailyDeadlineMs,
+                hourlyDeadlineMs,
+                weeklyDeadlineMs,
+            ).any { now >= it }
+            if (deadlinePassed) {
+                evaluate(prev)
+                return
+            }
+        }
         if (previousSessionStartMs > 0 && previousProfileId > 0) {
-            val now = System.currentTimeMillis()
             if (now > previousSessionStartMs) {
                 usageRepository.recordSession(prev, previousProfileId, previousSessionStartMs, now)
             }
@@ -459,8 +473,27 @@ class EnforcementCoordinator @Inject constructor(
             return
         }
 
+        val scheduleAllowed = ProfileMergeEngine.isWithinMergedSchedule(
+            windows = allScheduleWindows,
+            packageName = packageName,
+            profileIds = activeProfileIds,
+            nowEpochMs = now,
+        )
+
         val primaryProfile = matchingProfiles.first()
-        val config = primaryProfile.enforcementConfig()
+
+        if (!scheduleAllowed) {
+            val blockMessage = BlockMessageResolver.blockMessage(context, BlockReason.outsideSchedule)
+            showBlocked(
+                packageName, blockMessage, "outsideSchedule", null,
+                primaryProfile, null, RuleResult.Blocked(
+                    reason = BlockReason.outsideSchedule,
+                    bypassAllowed = false,
+                ),
+            )
+            return
+        }
+
         val profileNeedingPin = matchingProfiles.firstOrNull {
             it.onOpenAction == OnOpenAction.pinGate && !it.passwordHash.isNullOrBlank()
         }
@@ -476,6 +509,8 @@ class EnforcementCoordinator @Inject constructor(
             return
         }
 
+        val config = primaryProfile.enforcementConfig()
+
         if (openGatePassedPackage != packageName &&
             config.onOpenAction != OnOpenAction.none &&
             config.onOpenAction != OnOpenAction.pinGate
@@ -488,25 +523,6 @@ class EnforcementCoordinator @Inject constructor(
 
         val sessionState = usageRepository.getSessionState(packageName)
         previousProfileId = primaryProfile.id
-
-        val scheduleAllowed = ProfileMergeEngine.isWithinMergedSchedule(
-            windows = allScheduleWindows,
-            packageName = packageName,
-            profileIds = activeProfileIds,
-            nowEpochMs = now,
-        )
-
-        if (!scheduleAllowed) {
-            val blockMessage = BlockMessageResolver.blockMessage(context, BlockReason.outsideSchedule)
-            showBlocked(
-                packageName, blockMessage, "outsideSchedule", null,
-                primaryProfile, mergedLimit, RuleResult.Blocked(
-                    reason = BlockReason.outsideSchedule,
-                    bypassAllowed = false,
-                ),
-            )
-            return
-        }
 
         if (openGatePassedPackage == packageName) {
             // skip open deterrent re-check
@@ -672,9 +688,13 @@ class EnforcementCoordinator @Inject constructor(
         breakUntilMs: Long?,
         sessionState: com.gatekeep.domain.model.SessionState?,
     ) {
-        if (breakUntilMs == null || sessionState == null) return
+        if (breakUntilMs == null) return
+        val state = sessionState ?: SessionTracker.startSession(packageName, System.currentTimeMillis())
+        val effectiveUntil = state.breakUntilEpochMs?.let { existing ->
+            maxOf(existing, breakUntilMs)
+        } ?: breakUntilMs
         usageRepository.saveSessionState(
-            SessionTracker.applyBreak(sessionState, breakUntilMs),
+            SessionTracker.applyBreak(state, effectiveUntil),
             profileId,
         )
     }
@@ -748,6 +768,8 @@ class EnforcementCoordinator @Inject constructor(
 
         countdownAppLabel = appLabel
         countdownPackageName = packageName
+        countdownNotificationTitle = context.getString(com.gatekeep.app.R.string.hud_usage_title, appLabel)
+        lastNotificationBody = null
         countdownDailyLimitMs = dailyLimitMs
         countdownHourlyLimitMs = hourlyLimitMs
         countdownWeeklyLimitMs = weeklyLimitMs
@@ -764,12 +786,18 @@ class EnforcementCoordinator @Inject constructor(
                 val nowMs = System.currentTimeMillis()
                 val pkg = countdownPackageName
                 if (pkg != null) {
-                    val matchesForeground = currentForegroundPackage == pkg ||
-                        lastMonitoredForegroundPackage == pkg
-                    if (matchesForeground) {
-                        if (sessionDeadlineMs != null && nowMs >= sessionDeadlineMs!!) {
-                            scope.launch { evaluate(pkg) }
-                        } else if (showCountdownNotification) {
+                    val deadlineReached = listOfNotNull(
+                        sessionDeadlineMs,
+                        dailyDeadlineMs,
+                        hourlyDeadlineMs,
+                        weeklyDeadlineMs,
+                    ).any { nowMs >= it }
+                    if (deadlineReached) {
+                        scope.launch { evaluate(pkg) }
+                    } else {
+                        val matchesForeground = currentForegroundPackage == pkg ||
+                            lastMonitoredForegroundPackage == pkg
+                        if (matchesForeground && showCountdownNotification) {
                             refreshCountdownNotification()
                         }
                     }
@@ -793,6 +821,10 @@ class EnforcementCoordinator @Inject constructor(
     private fun refreshCountdownNotification() {
         val label = countdownAppLabel ?: return
         val pkg = countdownPackageName ?: return
+        val title = countdownNotificationTitle
+            ?: context.getString(com.gatekeep.app.R.string.hud_usage_title, label).also {
+                countdownNotificationTitle = it
+            }
         val now = System.currentTimeMillis()
         val usage = usageStatsCollector.getUsageSnapshot(pkg, now)
         countdownUsedTodayMs = usage.dailyMs
@@ -801,7 +833,7 @@ class EnforcementCoordinator @Inject constructor(
         val hourlyRemaining = hourlyDeadlineMs?.let { (it - now).coerceAtLeast(0) }
         val weeklyRemaining = weeklyDeadlineMs?.let { (it - now).coerceAtLeast(0) }
         notificationHelper.showCountdown(
-            appLabel = label,
+            title = title,
             hud = UsageHudInfo(
                 sessionRemainingMs = sessionRemaining,
                 dailyRemainingMs = dailyRemaining,
@@ -812,6 +844,8 @@ class EnforcementCoordinator @Inject constructor(
                 weeklyRemainingMs = weeklyRemaining,
                 weeklyLimitMs = countdownWeeklyLimitMs,
             ),
+            lastBody = lastNotificationBody,
+            onBodyPosted = { lastNotificationBody = it },
         )
     }
 
@@ -897,10 +931,17 @@ class EnforcementCoordinator @Inject constructor(
         val friction = blocked.sessionDeterrent ?: profile.defaultFrictionMethod
         val policy = profile.extensionPolicy
         val waitSeconds = when {
+            blocked.sessionDeterrent == FrictionMethod.waitOneMin &&
+                blocked.reason in setOf(
+                    BlockReason.dailyLimit,
+                    BlockReason.hourlyLimit,
+                    BlockReason.weeklyLimit,
+                ) -> profile.limitWaitDurationSeconds
             blocked.sessionDeterrent == FrictionMethod.waitOneMin -> profile.sessionWaitDurationSeconds
             reason == "openGate" -> profile.openWaitDurationSeconds
             else -> profile.sessionWaitDurationSeconds
         }
+        val waitWallClock = blocked.sessionDeterrent == FrictionMethod.waitOneMin && reason != "openGate"
         val dayStart = usageStatsCollector.dayStartEpochMs()
         val usedToday = usageRepository.countOverridesForPackageToday(
             profile.id, packageName, dayStart,
@@ -915,6 +956,7 @@ class EnforcementCoordinator @Inject constructor(
             frictionMethod = friction,
             difficulty = profile.defaultFrictionDifficulty,
             waitDurationSeconds = waitSeconds,
+            waitWallClock = waitWallClock,
             extensionOptionMinutes = if (useExtensions) policy.optionMinutes else emptyList(),
             showNoLimitToday = useExtensions && policy.showNoLimitToday,
             useExtensionButtons = useExtensions && policy.optionMinutes.isNotEmpty(),

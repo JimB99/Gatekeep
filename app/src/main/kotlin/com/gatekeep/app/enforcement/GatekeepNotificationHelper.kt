@@ -78,8 +78,10 @@ class GatekeepNotificationHelper @Inject constructor(
     }
 
     fun showCountdown(
-        appLabel: String,
+        title: String,
         hud: UsageHudInfo,
+        lastBody: String? = null,
+        onBodyPosted: (String) -> Unit = {},
     ) {
         val intent = Intent(context, MainActivity::class.java)
         val pending = PendingIntent.getActivity(context, 1, intent, PendingIntent.FLAG_IMMUTABLE)
@@ -123,15 +125,20 @@ class GatekeepNotificationHelper @Inject constructor(
         }
         if (parts.isEmpty()) return
 
+        val body = parts.joinToString(" · ")
+        if (body == lastBody) return
+
         val builder = NotificationCompat.Builder(context, CHANNEL_SESSION_TIMER)
-            .setContentTitle(context.getString(R.string.hud_usage_title, appLabel))
-            .setContentText(parts.joinToString(" · "))
+            .setContentTitle(title)
+            .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(parts.joinToString("\n")))
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentIntent(pending)
             .setOngoing(true)
             .setSilent(true)
+            .setOnlyAlertOnce(true)
         notificationManager.notify(COUNTDOWN_NOTIFICATION_ID, builder.build())
+        onBodyPosted(body)
     }
 
     fun hideCountdown() {
