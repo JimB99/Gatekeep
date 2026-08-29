@@ -53,6 +53,15 @@ class UsageStatsCollector(private val context: Context) {
             ?.packageName
     }
 
+    fun getLastResumeTimeMs(
+        packageName: String,
+        nowMs: Long = System.currentTimeMillis(),
+        lookbackMs: Long = 120_000L,
+    ): Long? = queryEvents(nowMs - lookbackMs, nowMs)
+        .asSequence()
+        .filter { it.packageName == packageName && it.type == ForegroundEventType.RESUMED }
+        .maxOfOrNull { it.timestamp }
+
     fun foregroundMsInRange(
         startMs: Long,
         endMs: Long,

@@ -53,10 +53,18 @@ object BlockPresentationReducer {
         )
     }
 
+    fun isGatekeepActivityWindow(className: String?): Boolean =
+        className?.startsWith("com.gatekeep.app.") == true && className.endsWith("Activity")
+
     fun shouldIgnoreGatekeepForegroundEvent(
         state: BlockPresentationState,
         overlayVisible: Boolean,
-    ): Boolean = overlayVisible && isBlockingActive(state)
+        windowClassName: String?,
+    ): Boolean {
+        if (!overlayVisible || !isBlockingActive(state)) return false
+        if (isGatekeepActivityWindow(windowClassName)) return false
+        return true
+    }
 
     fun shouldApplyAllowedClear(
         state: BlockPresentationState,

@@ -385,6 +385,46 @@ class SessionTrackerTest {
     }
 
     @Test
+    fun `completeExpiredBreak starts fresh session after mandatory break ends`() {
+        val now = 1_000_000L
+        val session = SessionTracker.startSession("com.test", now - 20 * 60_000L)
+            .copy(breakUntilEpochMs = now - 1_000L)
+
+        val completed = SessionTracker.completeExpiredBreak(session, now)
+
+        assertEquals(now, completed.sessionStartEpochMs)
+        assertNull(completed.breakUntilEpochMs)
+        assertFalse(SessionTracker.isOnBreak(completed, now))
+    }
+
+    @Test
+    fun `completeExpiredBreak leaves active break unchanged`() {
+        val now = 1_000_000L
+        val session = SessionTracker.startSession("com.test", now - 20 * 60_000L)
+            .copy(breakUntilEpochMs = now + 60_000L)
+
+        assertEquals(session, SessionTracker.completeExpiredBreak(session, now))
+    }
+
+    @Test
+    fun `expired break completion allows new session usage`() {
+        val now = 1_000_000L
+        val sessionLimit = 15 * 60_000L
+        val expiredBreak = SessionTracker.startSession("com.test", now - 20 * 60_000L)
+            .copy(breakUntilEpochMs = now - 1_000L)
+        val completed = SessionTracker.completeExpiredBreak(expiredBreak, now)
+
+        val result = SessionTracker.evaluateSession(
+            AppLimit(1, "com.test", sessionLimitMs = sessionLimit, breakDurationMs = 5 * 60_000L),
+            completed,
+            now,
+        )
+
+        assertTrue(result is SessionTracker.SessionCheckResult.Allowed)
+        assertEquals(sessionLimit, (result as SessionTracker.SessionCheckResult.Allowed).remainingSessionMs)
+    }
+
+    @Test
     fun `excluded and friction time reduce session duration`() {
         val now = 1_000_000L
         var session = SessionTracker.startSession("com.test", now - 10 * 60_000L)

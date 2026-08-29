@@ -26,8 +26,23 @@ class BlockPresentationReducerTest {
             BlockPresentationReducer.shouldIgnoreGatekeepForegroundEvent(
                 state = state,
                 overlayVisible = true,
+                windowClassName = "android.widget.FrameLayout",
             ),
         )
+    }
+
+    @Test
+    fun `gatekeep main activity foreground dismisses even while overlay visible`() {
+        val state = BlockPresentationReducer.onBlockEntered(BlockPresentationState(), "com.blocked")
+
+        assertFalse(
+            BlockPresentationReducer.shouldIgnoreGatekeepForegroundEvent(
+                state = state,
+                overlayVisible = true,
+                windowClassName = "com.gatekeep.app.MainActivity",
+            ),
+        )
+        assertTrue(BlockPresentationReducer.isGatekeepActivityWindow("com.gatekeep.app.MainActivity"))
     }
 
     @Test
@@ -38,6 +53,7 @@ class BlockPresentationReducerTest {
             BlockPresentationReducer.shouldIgnoreGatekeepForegroundEvent(
                 state = state,
                 overlayVisible = false,
+                windowClassName = "com.gatekeep.app.MainActivity",
             ),
         )
     }

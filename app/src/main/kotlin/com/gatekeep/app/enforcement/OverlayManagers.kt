@@ -479,14 +479,23 @@ class BlockOverlayManager @Inject constructor(
         breakRunnable?.let { mainHandler.removeCallbacks(it) }
         breakRunnable = null
         if (breakUntilMs == null) return
+        val now = System.currentTimeMillis()
+        if (breakUntilMs <= now) {
+            currentRequest?.packageName?.let { coordinator.get().onBreakExpired(it) }
+            return
+        }
         val breakText = overlayView?.findViewById<TextView>(R.id.block_break_text) ?: return
         breakText.visibility = View.VISIBLE
+        var breakExpiredHandled = false
         breakRunnable = object : Runnable {
             override fun run() {
                 val remaining = breakUntilMs - System.currentTimeMillis()
                 if (remaining <= 0) {
                     breakText.text = localizedContext.getString(R.string.overlay_break_ended)
-                    coordinator.get().refresh()
+                    if (!breakExpiredHandled) {
+                        breakExpiredHandled = true
+                        currentRequest?.packageName?.let { coordinator.get().onBreakExpired(it) }
+                    }
                 } else {
                     breakText.text = localizedContext.getString(
                         R.string.overlay_break_ends_in,

@@ -104,6 +104,8 @@ class EnforcementCoordinator @Inject constructor(
     private val notifiedLimitKeys = mutableSetOf<String>()
     private val evaluateMutex = Mutex()
     private var blockEnteredAtMs: Long = 0L
+    private val lastForegroundEvaluationAtMs = mutableMapOf<String, Long>()
+    private var foregroundPollRunnable: Runnable? = null
 
     private val isBlockingActive: Boolean
         get() = BlockPresentationReducer.isBlockingActive(blockPresentationState)
@@ -124,17 +126,19 @@ class EnforcementCoordinator @Inject constructor(
         "com.touchtype.swiftkey",
     )
 
-    fun onForegroundAppChanged(packageName: String) {
-        if (packageName == currentForegroundPackage) return
+    fun onForegroundAppChanged(packageName: String, windowClassName: String? = null) {
+        if (packageName == currentForegroundPackage && !shouldReevaluateForeground(packageName)) return
 
         if (packageName == context.packageName) {
             if (BlockPresentationReducer.shouldIgnoreGatekeepForegroundEvent(
                     blockPresentationState,
                     blockOverlay.isVisible(),
+                    windowClassName,
                 )
             ) {
                 return
             }
+            currentForegroundPackage = packageName
             onGatekeepActivityForegrounded()
             return
         }
@@ -143,9 +147,11 @@ class EnforcementCoordinator @Inject constructor(
             if (lastMonitoredForegroundPackage != null &&
                 System.currentTimeMillis() - lastMonitoredForegroundAtMs < 3_000
             ) {
+                reconcileForegroundFromUsageStats()
                 return
             }
             if (isBlockingActive) return
+            reconcileForegroundFromUsageStats()
             return
         }
 
@@ -153,6 +159,10 @@ class EnforcementCoordinator @Inject constructor(
             if (System.currentTimeMillis() - blockEnteredAtMs < BLOCK_STABILIZATION_MS) {
                 return
             }
+        }
+
+        if (shouldReevaluateForeground(packageName) && packageName == currentForegroundPackage) {
+            sessionStartedForPackage = null
         }
 
         val prevPackage = currentForegroundPackage
@@ -239,6 +249,28 @@ class EnforcementCoordinator @Inject constructor(
         stopCountdownTicker()
         blockOverlay.clearFrictionState()
         mainHandler.post { blockOverlay.removeAfterResolution() }
+    }
+
+    fun onBreakExpired(packageName: String) {
+        scope.launch {
+            try {
+                val profiles = profileRepository.observeActiveProfiles().first()
+                val profileId = profiles.firstOrNull()?.id ?: return@launch
+                val state = usageRepository.getSessionState(packageName) ?: return@launch
+                val now = System.currentTimeMillis()
+                val completed = SessionTracker.completeExpiredBreak(state, now)
+                if (completed != state) {
+                    usageRepository.saveSessionState(completed, profileId)
+                    sessionStartedForPackage = packageName
+                    recordFrictionEnd(packageName, profileId)
+                }
+                if (currentForegroundPackage == packageName) {
+                    evaluate(packageName)
+                }
+            } catch (e: Exception) {
+                enforcementLog.logError("Break expired handling failed", e)
+            }
+        }
     }
 
     fun refresh() {
@@ -413,9 +445,11 @@ class EnforcementCoordinator @Inject constructor(
 
     fun onAccessibilityConnected() {
         stopEnforcementService()
+        startForegroundPolling()
     }
 
     fun onAccessibilityDisconnected() {
+        stopForegroundPolling()
         scope.launch {
             val settings = settingsRepository.settings.first()
             if (settings.enforcementEnabled) {
@@ -538,6 +572,7 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private suspend fun evaluateInternal(packageName: String) {
+        lastForegroundEvaluationAtMs[packageName] = System.currentTimeMillis()
         val evaluationToken = EvaluationToken(packageName, blockGeneration)
         val settings = settingsRepository.settings.first()
         if (!settings.enforcementEnabled) {
@@ -654,16 +689,22 @@ class EnforcementCoordinator @Inject constructor(
             now = now,
             existingState = sessionStateRaw,
         )
+        val sessionForEval = resolveSessionAfterBreak(
+            packageName = packageName,
+            profileId = primaryProfile.id,
+            sessionState = sessionState,
+            now = now,
+        )
 
-        if (SessionTracker.hasPendingWait(sessionState, now)) {
-            val remainingSec = ((SessionTracker.pendingWaitRemainingMs(sessionState, now) + 999) / 1000)
+        if (SessionTracker.hasPendingWait(sessionForEval, now)) {
+            val remainingSec = ((SessionTracker.pendingWaitRemainingMs(sessionForEval, now) + 999) / 1000)
                 .toInt().coerceAtLeast(1)
             showPendingWait(
                 packageName = packageName,
                 appLabel = appLabel,
                 profile = primaryProfile,
                 waitSeconds = remainingSec,
-                sessionState = sessionState,
+                sessionState = sessionForEval,
             )
             return
         }
@@ -679,7 +720,7 @@ class EnforcementCoordinator @Inject constructor(
             limit = mergedLimit,
             isMonitored = true,
             usage = usage,
-            sessionState = sessionState,
+            sessionState = sessionForEval,
             pauses = pauses,
             scheduleWindows = emptyList(),
             focusModeUntilMs = settings.focusModeUntilMs,
@@ -713,9 +754,9 @@ class EnforcementCoordinator @Inject constructor(
 
         when (result) {
             is RuleResult.Allowed -> {
-                previousSessionStartMs = sessionState.sessionStartEpochMs
+                previousSessionStartMs = sessionForEval.sessionStartEpochMs
                 val remainingSessionMs = mergedLimit?.let { limit ->
-                    when (val sessionCheck = SessionTracker.evaluateSession(limit, sessionState, now)) {
+                    when (val sessionCheck = SessionTracker.evaluateSession(limit, sessionForEval, now)) {
                         is SessionTracker.SessionCheckResult.Allowed -> sessionCheck.remainingSessionMs
                         else -> result.remainingSessionMs
                     }
@@ -729,22 +770,22 @@ class EnforcementCoordinator @Inject constructor(
                         BlockReason.onBreak,
                     )
                     val shouldNotify = if (isSessionNotify) {
-                        !sessionState.sessionLimitNotified
+                        !sessionForEval.sessionLimitNotified
                     } else {
                         val notifyKey = notifyLimitKey(
-                            profileId, packageName, notifyReason, now, sessionState.sessionStartEpochMs,
+                            profileId, packageName, notifyReason, now, sessionForEval.sessionStartEpochMs,
                         )
                         notifyKey !in notifiedLimitKeys
                     }
                     if (shouldNotify) {
                         if (isSessionNotify) {
                             usageRepository.saveSessionState(
-                                SessionTracker.markSessionLimitNotified(sessionState),
+                                SessionTracker.markSessionLimitNotified(sessionForEval),
                                 profileId,
                             )
                         } else {
                             val notifyKey = notifyLimitKey(
-                                profileId, packageName, notifyReason, now, sessionState.sessionStartEpochMs,
+                                profileId, packageName, notifyReason, now, sessionForEval.sessionStartEpochMs,
                             )
                             notifiedLimitKeys.add(notifyKey)
                         }
@@ -809,7 +850,7 @@ class EnforcementCoordinator @Inject constructor(
             }
             is RuleResult.Blocked -> {
                 stopCountdownTicker()
-                persistBreakIfNeeded(packageName, primaryProfile.id, result.breakUntilEpochMs, sessionState)
+                persistBreakIfNeeded(packageName, primaryProfile.id, result.breakUntilEpochMs, sessionForEval)
                 val blockMessage = BlockMessageResolver.blockMessage(localizedContext, result.reason, appLabel)
                 showBlocked(
                     packageName, blockMessage, result.reason.name,
@@ -1018,9 +1059,37 @@ class EnforcementCoordinator @Inject constructor(
         val pkg = usageStatsCollector.getForegroundPackageFallback()
         if (pkg == null || pkg == context.packageName) return
         if (pkg in ignoredForegroundPackages) return
-        if (pkg != currentForegroundPackage) {
-            onForegroundAppChanged(pkg)
+        if (pkg != currentForegroundPackage || shouldReevaluateForeground(pkg)) {
+            onForegroundAppChanged(pkg, windowClassName = null)
         }
+    }
+
+    private fun reconcileForegroundFromUsageStats() {
+        if (isBlockingActive) return
+        pollForegroundIfChanged()
+    }
+
+    private fun shouldReevaluateForeground(packageName: String): Boolean {
+        if (sessionStartedForPackage != packageName) return true
+        val lastResume = usageStatsCollector.getLastResumeTimeMs(packageName) ?: return false
+        val lastEvaluated = lastForegroundEvaluationAtMs[packageName] ?: 0L
+        return lastResume > lastEvaluated
+    }
+
+    private fun startForegroundPolling() {
+        stopForegroundPolling()
+        foregroundPollRunnable = object : Runnable {
+            override fun run() {
+                pollForegroundIfChanged()
+                mainHandler.postDelayed(this, FOREGROUND_POLL_MS)
+            }
+        }
+        mainHandler.postDelayed(foregroundPollRunnable!!, FOREGROUND_POLL_MS)
+    }
+
+    private fun stopForegroundPolling() {
+        foregroundPollRunnable?.let { mainHandler.removeCallbacks(it) }
+        foregroundPollRunnable = null
     }
 
     private fun refreshCountdownNotification() {
@@ -1244,6 +1313,20 @@ class EnforcementCoordinator @Inject constructor(
         scope.launch { recordFrictionStart(packageName, profile.id) }
     }
 
+    private suspend fun resolveSessionAfterBreak(
+        packageName: String,
+        profileId: Long,
+        sessionState: SessionState,
+        now: Long,
+    ): SessionState {
+        val resolved = SessionTracker.completeExpiredBreak(sessionState, now)
+        if (resolved == sessionState) return sessionState
+        usageRepository.saveSessionState(resolved, profileId)
+        sessionStartedForPackage = packageName
+        recordFrictionEnd(packageName, profileId)
+        return resolved
+    }
+
     private suspend fun ensureSessionStarted(
         packageName: String,
         profileId: Long,
@@ -1291,5 +1374,6 @@ class EnforcementCoordinator @Inject constructor(
 
     companion object {
         private const val BLOCK_STABILIZATION_MS = 400L
+        private const val FOREGROUND_POLL_MS = 2_000L
     }
 }

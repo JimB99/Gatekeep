@@ -80,6 +80,16 @@ object SessionTracker {
     fun clearBreak(session: SessionState): SessionState =
         session.copy(breakUntilEpochMs = null)
 
+    /**
+     * When a mandatory break has ended, start a fresh session so the user can continue
+     * without leaving the app. Returns [session] unchanged if still on break or no break set.
+     */
+    fun completeExpiredBreak(session: SessionState, nowEpochMs: Long): SessionState {
+        val breakUntil = session.breakUntilEpochMs ?: return session
+        if (nowEpochMs < breakUntil) return session
+        return startSession(session.packageName, nowEpochMs)
+    }
+
     fun startFriction(session: SessionState, nowEpochMs: Long): SessionState =
         session.copy(frictionStartedAtEpochMs = nowEpochMs)
 
