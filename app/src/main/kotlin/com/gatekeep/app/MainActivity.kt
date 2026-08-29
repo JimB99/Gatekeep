@@ -51,7 +51,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         UsageSyncWorker.schedule(this)
-        WeeklyReportWorker.schedule(this)
+        lifecycleScope.launch {
+            val settings = settingsRepository.settings.first()
+            WeeklyReportWorker.schedule(this@MainActivity, settings)
+        }
 
         setContent {
             val settings by settingsRepository.settings.collectAsState(

@@ -250,7 +250,6 @@ class EnforcementCoordinator @Inject constructor(
 
     fun onOpenGatePassed(packageName: String) {
         openGatePassedPackage = packageName
-        sessionStartedForPackage = null
         isBlockingActive = false
         blockedPackage = null
         blockOverlay.clearFrictionState()
@@ -571,6 +570,12 @@ class EnforcementCoordinator @Inject constructor(
                     existingState = sessionState,
                 )
                 previousSessionStartMs = activeSession.sessionStartEpochMs
+                val remainingSessionMs = mergedLimit?.let { limit ->
+                    when (val sessionCheck = SessionTracker.evaluateSession(limit, activeSession, now)) {
+                        is SessionTracker.SessionCheckResult.Allowed -> sessionCheck.remainingSessionMs
+                        else -> result.remainingSessionMs
+                    }
+                } ?: result.remainingSessionMs
                 maybeShowWarning(packageName, appLabel, result.warningLevel, settings.warningAlertsEnabled, now)
                 if (result.notifyLimitReached) {
                     val notifyReason = result.notifyLimitReason ?: BlockReason.dailyLimit
@@ -594,7 +599,7 @@ class EnforcementCoordinator @Inject constructor(
                         appLabel = appLabel,
                         packageName = packageName,
                         remainingDailyMs = result.remainingDailyMs,
-                        remainingSessionMs = result.remainingSessionMs,
+                        remainingSessionMs = remainingSessionMs,
                         remainingHourlyMs = result.remainingHourlyMs,
                         remainingWeeklyMs = result.remainingWeeklyMs,
                         dailyLimitMs = dailyLimit,
@@ -608,7 +613,7 @@ class EnforcementCoordinator @Inject constructor(
                         appLabel = appLabel,
                         packageName = packageName,
                         remainingDailyMs = result.remainingDailyMs,
-                        remainingSessionMs = result.remainingSessionMs,
+                        remainingSessionMs = remainingSessionMs,
                         remainingHourlyMs = result.remainingHourlyMs,
                         remainingWeeklyMs = result.remainingWeeklyMs,
                         dailyLimitMs = mergedLimit?.dailyLimitMs,
@@ -621,7 +626,7 @@ class EnforcementCoordinator @Inject constructor(
                 _state.value = EnforcementState(
                     foregroundPackage = packageName,
                     lastResult = result,
-                    remainingSessionMs = result.remainingSessionMs,
+                    remainingSessionMs = remainingSessionMs,
                     remainingDailyMs = result.remainingDailyMs,
                     appLabel = appLabel,
                 )
@@ -694,19 +699,22 @@ class EnforcementCoordinator @Inject constructor(
         stopCountdownTicker()
         isBlockingActive = true
         blockedPackage = packageName
-        mainHandler.post {
-            blockOverlay.show(
-                BlockOverlayRequest(
-                    packageName = packageName,
-                    message = BlockMessageResolver.openDeterrentMessage(context, deterrent.method),
-                    reason = "openGate",
-                    bypassAllowed = true,
-                    frictionMethod = deterrent.method,
-                    difficulty = profile.defaultFrictionDifficulty,
-                    waitDurationSeconds = profile.openWaitDurationSeconds,
-                    isOpenGate = true,
-                ),
-            )
+        scope.launch {
+            recordFrictionStart(packageName, profile.id)
+            mainHandler.post {
+                blockOverlay.show(
+                    BlockOverlayRequest(
+                        packageName = packageName,
+                        message = BlockMessageResolver.openDeterrentMessage(context, deterrent.method),
+                        reason = "openGate",
+                        bypassAllowed = true,
+                        frictionMethod = deterrent.method,
+                        difficulty = profile.defaultFrictionDifficulty,
+                        waitDurationSeconds = profile.openWaitDurationSeconds,
+                        isOpenGate = true,
+                    ),
+                )
+            }
         }
     }
 

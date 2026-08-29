@@ -19,14 +19,21 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.gatekeep.app.R
 import com.gatekeep.app.ui.viewmodel.SettingsViewModel
 import com.gatekeep.app.util.PermissionHelper
@@ -38,10 +45,37 @@ fun OnboardingScreen(
 ) {
     val context = LocalContext.current
     viewModel.settings.collectAsState()
+    var permissionRefreshKey by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                permissionRefreshKey++
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val notificationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { }
+    ) { permissionRefreshKey++ }
+
+    val usageGranted = remember(permissionRefreshKey) {
+        PermissionHelper.hasUsageStatsPermission(context)
+    }
+    val accessibilityGranted = remember(permissionRefreshKey) {
+        PermissionHelper.isAccessibilityEnabled(context)
+    }
+    val overlayGranted = remember(permissionRefreshKey) {
+        PermissionHelper.hasOverlayPermission(context)
+    }
+    val batteryGranted = remember(permissionRefreshKey) {
+        PermissionHelper.isIgnoringBatteryOptimizations(context)
+    }
+    val notificationsGranted = remember(permissionRefreshKey) {
+        PermissionHelper.hasNotificationPermission(context)
+    }
 
     Column(
         modifier = Modifier
@@ -62,35 +96,38 @@ fun OnboardingScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Text(
+            stringResource(R.string.onboarding_return_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         PermissionCard(
             title = stringResource(R.string.perm_usage_title),
             description = stringResource(R.string.perm_usage_desc),
-            granted = PermissionHelper.hasUsageStatsPermission(context),
+            granted = usageGranted,
             onGrant = { context.startActivity(PermissionHelper.usageStatsIntent()) },
         )
         PermissionCard(
             title = stringResource(R.string.perm_accessibility_title),
             description = stringResource(R.string.perm_accessibility_desc),
-            granted = PermissionHelper.isAccessibilityEnabled(context),
-            onGrant = { context.startActivity(PermissionHelper.accessibilityIntent()) },
+            granted = accessibilityGranted,
+            onGrant = { context.startActivity(PermissionHelper.accessibilityIntent(context)) },
         )
         PermissionCard(
             title = stringResource(R.string.perm_overlay_title),
             description = stringResource(R.string.perm_overlay_desc),
-            granted = PermissionHelper.hasOverlayPermission(context),
+            granted = overlayGranted,
             onGrant = { context.startActivity(PermissionHelper.overlayIntent(context)) },
         )
         PermissionCard(
             title = stringResource(R.string.perm_battery_title),
             description = stringResource(R.string.perm_battery_desc),
-            granted = PermissionHelper.isIgnoringBatteryOptimizations(context),
+            granted = batteryGranted,
             onGrant = { context.startActivity(PermissionHelper.batteryOptimizationIntent(context)) },
         )
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            !PermissionHelper.hasNotificationPermission(context)
-        ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notificationsGranted) {
             Button(
                 onClick = { notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
                 modifier = Modifier.fillMaxWidth(),
@@ -104,9 +141,7 @@ fun OnboardingScreen(
                 onComplete()
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = PermissionHelper.hasUsageStatsPermission(context) &&
-                PermissionHelper.isAccessibilityEnabled(context) &&
-                PermissionHelper.hasOverlayPermission(context),
+            enabled = usageGranted && accessibilityGranted && overlayGranted,
         ) { Text(stringResource(R.string.get_started)) }
 
         Button(

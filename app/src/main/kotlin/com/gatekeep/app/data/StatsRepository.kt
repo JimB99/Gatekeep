@@ -1,6 +1,7 @@
 package com.gatekeep.app.data
 
 import android.content.Context
+import androidx.appcompat.app.AppCompatDelegate
 import com.gatekeep.app.R
 import com.gatekeep.app.util.UsageStatsCollector
 import com.gatekeep.data.repository.ProfileRepository
@@ -53,7 +54,13 @@ class StatsRepository @Inject constructor(
     private val zoneId: ZoneId = ZoneId.systemDefault()
 
     private val appLocale: Locale
-        get() = context.resources.configuration.locales[0]
+        get() {
+            val tag = AppCompatDelegate.getApplicationLocales().toLanguageTags()
+                .split(",")
+                .firstOrNull()
+                ?.takeIf { it.isNotBlank() }
+            return if (tag != null) Locale.forLanguageTag(tag) else Locale.getDefault()
+        }
 
     suspend fun overviewForRange(range: StatsTimeRange): StatsOverview {
         val bounds = buildRangeBounds(range)

@@ -340,11 +340,11 @@ fun ProfileLimitsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(stringResource(R.string.limits_apply_all_apps), style = MaterialTheme.typography.bodySmall)
+            DurationPicker(stringResource(R.string.weekly_limit_off), weeklyMs, coarseStepMinutes = 60, fineStepMinutes = 15, onDurationChange = { weeklyMs = it })
             DurationPicker(stringResource(R.string.daily_limit), dailyMs, coarseStepMinutes = 60, fineStepMinutes = 15, onDurationChange = { dailyMs = it })
+            DurationPicker(stringResource(R.string.hourly_limit_off), hourlyMs, coarseStepMinutes = 15, fineStepMinutes = 5, minutesOnly = true, onDurationChange = { hourlyMs = it })
             DurationPicker(stringResource(R.string.session_limit), sessionMs, coarseStepMinutes = 15, fineStepMinutes = 5, onDurationChange = { sessionMs = it })
             DurationPicker(stringResource(R.string.break_duration), breakMs, coarseStepMinutes = 15, fineStepMinutes = 5, onDurationChange = { breakMs = it })
-            DurationPicker(stringResource(R.string.hourly_limit_off), hourlyMs, coarseStepMinutes = 15, fineStepMinutes = 5, minutesOnly = true, onDurationChange = { hourlyMs = it })
-            DurationPicker(stringResource(R.string.weekly_limit_off), weeklyMs, coarseStepMinutes = 60, fineStepMinutes = 15, onDurationChange = { weeklyMs = it })
             SaveChangesButton(
                 visible = isDirty,
                 onClick = ::saveLimits,

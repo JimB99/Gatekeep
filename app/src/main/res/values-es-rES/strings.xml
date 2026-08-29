@@ -64,11 +64,11 @@
     <string name="limit_warnings">Avisos de límite</string>
     <string name="limit_warnings_help">Alerta al acercarse a los límites diarios o de sesión.</string>
     <string name="weekly_report">Informe semanal</string>
-    <string name="weekly_report_help">Notificación resumen (respeta las horas de silencio).</string>
-    <string name="quiet_hours">Horas de silencio</string>
-    <string name="start">Inicio</string>
-    <string name="end">Fin</string>
-    <string name="save_quiet_hours">Guardar horas de silencio</string>
+    <string name="weekly_report_help">Notificación resumen en el día y la hora que elijas.</string>
+    <string name="weekly_report_schedule">Horario del informe</string>
+    <string name="save_weekly_report_schedule">Guardar horario del informe</string>
+    <string name="onboarding_return_hint">Después de conceder cada permiso en Ajustes, vuelve aquí; el estado se actualiza automáticamente.</string>
+    <string name="schedule_already_exists">Esta ventana ya existe para los días seleccionados.</string>
     <string name="enforcement_enabled">Aplicación de límites activada</string>
     <string name="enforcement_enabled_help">Cuando está activo, Gatekeep supervisa apps, aplica límites y muestra temporizadores de sesión. Desactívalo para pausar bloqueos y temporizadores sin desinstalar — útil para pruebas o descansos.</string>
     <string name="enforcement_disabled_title">La aplicación está desactivada</string>

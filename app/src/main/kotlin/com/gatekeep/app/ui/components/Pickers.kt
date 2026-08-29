@@ -123,6 +123,30 @@ fun DayOfWeekSelector(
 }
 
 @Composable
+fun SingleDayOfWeekSelector(
+    selectedDay: Int,
+    onDaySelected: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        dayLetters().forEachIndexed { index, label ->
+            GatekeepFilterChip(
+                selected = index == selectedDay,
+                onClick = { onDaySelected(index) },
+                modifier = Modifier.weight(1f),
+                label = {
+                    Text(
+                        text = label,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                    )
+                },
+            )
+        }
+    }
+}
+
+@Composable
 fun IntStepper(
     label: String,
     value: Int?,
@@ -355,12 +379,18 @@ fun TimeOfDayPicker(
     minuteOfDay: Int,
     onTimeChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    coarseStepMinutes: Int? = null,
+    fineStepMinutes: Int = 5,
 ) {
     val hours = minuteOfDay / 60
     val minutes = minuteOfDay % 60
     var showCustom by remember { mutableStateOf(false) }
     var customHoursText by remember { mutableStateOf(hours.toString()) }
     var customMinutesText by remember { mutableStateOf(minutes.toString()) }
+
+    fun applyDelta(delta: Int) {
+        onTimeChange((minuteOfDay + delta).coerceIn(0, 24 * 60 - 1))
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(label, style = MaterialTheme.typography.labelMedium)
@@ -369,8 +399,13 @@ fun TimeOfDayPicker(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            HoldRepeatStepperButton(stringResource(R.string.step_minus_5m)) {
-                onTimeChange((minuteOfDay - 5).coerceAtLeast(0))
+            if (coarseStepMinutes != null) {
+                HoldRepeatStepperButton(formatMinuteStepLabel(coarseStepMinutes, positive = false)) {
+                    applyDelta(-coarseStepMinutes)
+                }
+            }
+            HoldRepeatStepperButton(formatMinuteStepLabel(fineStepMinutes, positive = false)) {
+                applyDelta(-fineStepMinutes)
             }
             Text(
                 "%02d:%02d".format(hours, minutes),
@@ -384,8 +419,13 @@ fun TimeOfDayPicker(
                         showCustom = true
                     },
             )
-            HoldRepeatStepperButton(stringResource(R.string.step_plus_5m)) {
-                onTimeChange((minuteOfDay + 5).coerceAtMost(24 * 60 - 1))
+            HoldRepeatStepperButton(formatMinuteStepLabel(fineStepMinutes, positive = true)) {
+                applyDelta(fineStepMinutes)
+            }
+            if (coarseStepMinutes != null) {
+                HoldRepeatStepperButton(formatMinuteStepLabel(coarseStepMinutes, positive = true)) {
+                    applyDelta(coarseStepMinutes)
+                }
             }
         }
     }

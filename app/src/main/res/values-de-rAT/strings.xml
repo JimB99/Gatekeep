@@ -64,11 +64,11 @@
     <string name="limit_warnings">Limit-Warnungen</string>
     <string name="limit_warnings_help">Warnung bei Annäherung an Tages- oder Sitzungslimits.</string>
     <string name="weekly_report">Wochenbericht</string>
-    <string name="weekly_report_help">Zusammenfassungsbenachrichtigung (beachtet Ruhezeiten).</string>
-    <string name="quiet_hours">Ruhezeiten</string>
-    <string name="start">Start</string>
-    <string name="end">Ende</string>
-    <string name="save_quiet_hours">Ruhezeiten speichern</string>
+    <string name="weekly_report_help">Zusammenfassungsbenachrichtigung am gewählten Tag und zur gewählten Uhrzeit.</string>
+    <string name="weekly_report_schedule">Berichtszeitplan</string>
+    <string name="save_weekly_report_schedule">Berichtszeitplan speichern</string>
+    <string name="onboarding_return_hint">Nach dem Erteilen jeder Berechtigung in den Einstellungen hierher zurückkehren — der Status wird automatisch aktualisiert.</string>
+    <string name="schedule_already_exists">Dieses Zeitfenster existiert bereits für die ausgewählten Tage.</string>
     <string name="enforcement_enabled">Durchsetzung aktiviert</string>
     <string name="enforcement_enabled_help">Wenn aktiv, überwacht Gatekeep Apps, setzt Limits durch und zeigt Sitzungstimer. Ausschalten pausiert alle Blockierungen und Timer ohne Deinstallation — nützlich zum Testen oder für Pausen.</string>
     <string name="enforcement_disabled_title">Durchsetzung ist aus</string>

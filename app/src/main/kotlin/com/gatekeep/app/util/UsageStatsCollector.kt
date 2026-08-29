@@ -16,8 +16,17 @@ import java.util.Locale
 
 class UsageStatsCollector(private val context: Context) {
 
+    private var cachedRangeStartMs: Long? = null
+    private var cachedRangeEndMs: Long? = null
+    private var cachedPackageTotals: Map<String, Long>? = null
     private val usageStatsManager: UsageStatsManager
         get() = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+
+    private fun invalidateRangeCache() {
+        cachedRangeStartMs = null
+        cachedRangeEndMs = null
+        cachedPackageTotals = null
+    }
 
     fun queryEvents(fromMs: Long, toMs: Long): List<UsageEvent> {
         val events = mutableListOf<UsageEvent>()
@@ -75,6 +84,9 @@ class UsageStatsCollector(private val context: Context) {
 
     fun foregroundMsByPackageInRange(startMs: Long, endMs: Long): Map<String, Long> {
         if (endMs <= startMs) return emptyMap()
+        if (cachedRangeStartMs == startMs && cachedRangeEndMs == endMs && cachedPackageTotals != null) {
+            return cachedPackageTotals!!
+        }
         val events = queryEvents(startMs, endMs)
         val lastResumed = mutableMapOf<String, Long>()
         val totals = mutableMapOf<String, Long>()
@@ -94,6 +106,9 @@ class UsageStatsCollector(private val context: Context) {
             val duration = clipDuration(resumedAt, now, startMs, endMs)
             totals[pkg] = totals.getOrDefault(pkg, 0L) + duration
         }
+        cachedRangeStartMs = startMs
+        cachedRangeEndMs = endMs
+        cachedPackageTotals = totals
         return totals
     }
 

@@ -448,113 +448,70 @@ private fun AppLockSection(
 @Composable
 
 fun NotificationSettingsScreen(
-
     onBack: () -> Unit,
-
     viewModel: SettingsViewModel = hiltViewModel(),
-
 ) {
-
     val settings by viewModel.settings.collectAsState()
 
-    var quietStart by remember(settings.quietHoursStartMinute) {
-
-        mutableIntStateOf(settings.quietHoursStartMinute ?: 22 * 60)
-
+    var reportDay by remember(settings.weeklyReportDayOfWeek) {
+        mutableIntStateOf(settings.weeklyReportDayOfWeek)
+    }
+    var reportMinute by remember(settings.weeklyReportMinuteOfDay) {
+        mutableIntStateOf(settings.weeklyReportMinuteOfDay)
     }
 
-    var quietEnd by remember(settings.quietHoursEndMinute) {
+    val scheduleDirty = reportDay != settings.weeklyReportDayOfWeek ||
+        reportMinute != settings.weeklyReportMinuteOfDay
 
-        mutableIntStateOf(settings.quietHoursEndMinute ?: 7 * 60)
-
+    fun saveSchedule() {
+        viewModel.update { s ->
+            s.copy(
+                weeklyReportDayOfWeek = reportDay,
+                weeklyReportMinuteOfDay = reportMinute,
+            )
+        }
     }
-
-
 
     SettingsDetailScaffold(title = stringResource(R.string.notifications), onBack = onBack) {
-
         SettingToggleWithHelp(
-
             label = stringResource(R.string.usage_hud),
-
             help = stringResource(R.string.usage_hud_help),
-
             checked = settings.showSessionTimerNotification,
-
         ) {
-
             viewModel.update { s -> s.copy(showSessionTimerNotification = it, hudEnabled = it) }
-
         }
-
         SettingToggleWithHelp(
-
             label = stringResource(R.string.limit_warnings),
-
             help = stringResource(R.string.limit_warnings_help),
-
             checked = settings.warningAlertsEnabled,
-
         ) {
-
             viewModel.update { s -> s.copy(warningAlertsEnabled = it) }
-
         }
-
         SettingToggleWithHelp(
-
             label = stringResource(R.string.weekly_report),
-
             help = stringResource(R.string.weekly_report_help),
-
             checked = settings.weeklyReportEnabled,
-
         ) {
-
             viewModel.update { s -> s.copy(weeklyReportEnabled = it) }
-
         }
-
-        Text(stringResource(R.string.quiet_hours), style = MaterialTheme.typography.labelMedium)
-
-        com.gatekeep.app.ui.components.TimeOfDayPicker(
-
-            stringResource(R.string.start),
-
-            quietStart,
-
-            onTimeChange = { quietStart = it },
-
-        )
-
-        com.gatekeep.app.ui.components.TimeOfDayPicker(
-
-            stringResource(R.string.end),
-
-            quietEnd,
-
-            onTimeChange = { quietEnd = it },
-
-        )
-
-        androidx.compose.material3.Button(
-
-            onClick = {
-
-                viewModel.update { s ->
-
-                    s.copy(quietHoursStartMinute = quietStart, quietHoursEndMinute = quietEnd)
-
-                }
-
-            },
-
-            modifier = Modifier.fillMaxWidth(),
-
-        ) { Text(stringResource(R.string.save_quiet_hours)) }
-
+        if (settings.weeklyReportEnabled) {
+            Text(stringResource(R.string.weekly_report_schedule), style = MaterialTheme.typography.labelMedium)
+            com.gatekeep.app.ui.components.SingleDayOfWeekSelector(
+                selectedDay = reportDay,
+                onDaySelected = { reportDay = it },
+            )
+            com.gatekeep.app.ui.components.TimeOfDayPicker(
+                stringResource(R.string.start_time),
+                reportMinute,
+                onTimeChange = { reportMinute = it },
+            )
+            com.gatekeep.app.ui.components.SaveChangesButton(
+                visible = scheduleDirty,
+                onClick = ::saveSchedule,
+                label = stringResource(R.string.save_weekly_report_schedule),
+            )
+        }
     }
-
 }
 
 

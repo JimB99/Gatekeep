@@ -33,8 +33,8 @@ data class AppSettings(
     val showSessionTimerNotification: Boolean = true,
     val warningAlertsEnabled: Boolean = true,
     val weeklyReportEnabled: Boolean = true,
-    val quietHoursStartMinute: Int? = null,
-    val quietHoursEndMinute: Int? = null,
+    val weeklyReportDayOfWeek: Int = 0,
+    val weeklyReportMinuteOfDay: Int = 10 * 60,
     val languageTag: String = "en-GB",
 ) {
     fun hasAppPin(): Boolean = !appPasswordHash.isNullOrBlank()
@@ -58,8 +58,8 @@ class SettingsRepository(private val context: Context) {
         val SESSION_TIMER_NOTIF = booleanPreferencesKey("session_timer_notification")
         val WARNING_ALERTS = booleanPreferencesKey("warning_alerts_enabled")
         val WEEKLY_REPORT = booleanPreferencesKey("weekly_report_enabled")
-        val QUIET_START = intPreferencesKey("quiet_hours_start")
-        val QUIET_END = intPreferencesKey("quiet_hours_end")
+        val WEEKLY_REPORT_DAY = intPreferencesKey("weekly_report_day")
+        val WEEKLY_REPORT_MINUTE = intPreferencesKey("weekly_report_minute")
         val LANGUAGE = stringPreferencesKey("language_tag")
     }
 
@@ -72,16 +72,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun updateSettings(transform: (AppSettings) -> AppSettings) {
         context.dataStore.edit { prefs ->
             writeSettings(prefs, transform(readSettings(prefs)))
-        }
-    }
-
-    fun isQuietHours(nowMinuteOfDay: Int, settings: AppSettings): Boolean {
-        val start = settings.quietHoursStartMinute ?: return false
-        val end = settings.quietHoursEndMinute ?: return false
-        return if (start <= end) {
-            nowMinuteOfDay in start until end
-        } else {
-            nowMinuteOfDay >= start || nowMinuteOfDay < end
         }
     }
 
@@ -103,8 +93,8 @@ class SettingsRepository(private val context: Context) {
             ?: true,
         warningAlertsEnabled = prefs[Keys.WARNING_ALERTS] ?: true,
         weeklyReportEnabled = prefs[Keys.WEEKLY_REPORT] ?: true,
-        quietHoursStartMinute = prefs[Keys.QUIET_START],
-        quietHoursEndMinute = prefs[Keys.QUIET_END],
+        weeklyReportDayOfWeek = prefs[Keys.WEEKLY_REPORT_DAY] ?: 0,
+        weeklyReportMinuteOfDay = prefs[Keys.WEEKLY_REPORT_MINUTE] ?: (10 * 60),
         languageTag = prefs[Keys.LANGUAGE]?.takeIf { it in LocalePreferences.SUPPORTED_TAGS }
             ?: LocalePreferences.read(context),
     )
@@ -129,7 +119,8 @@ class SettingsRepository(private val context: Context) {
         prefs[Keys.SESSION_TIMER_NOTIF] = updated.showSessionTimerNotification
         prefs[Keys.WARNING_ALERTS] = updated.warningAlertsEnabled
         prefs[Keys.WEEKLY_REPORT] = updated.weeklyReportEnabled
-        updated.quietHoursEndMinute?.let { prefs[Keys.QUIET_END] = it }
+        prefs[Keys.WEEKLY_REPORT_DAY] = updated.weeklyReportDayOfWeek.coerceIn(0, 6)
+        prefs[Keys.WEEKLY_REPORT_MINUTE] = updated.weeklyReportMinuteOfDay.coerceIn(0, 24 * 60 - 1)
         val languageTag = LocalePreferences.normalizeTag(updated.languageTag)
         prefs[Keys.LANGUAGE] = languageTag
         LocalePreferences.write(context, languageTag)

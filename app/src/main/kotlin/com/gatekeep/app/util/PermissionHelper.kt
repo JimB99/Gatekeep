@@ -1,6 +1,7 @@
 package com.gatekeep.app.util
 
 import android.app.AppOpsManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -40,8 +41,16 @@ object PermissionHelper {
         return enabled.any { it.id.contains(context.packageName) }
     }
 
-    fun accessibilityIntent(): Intent =
-        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+    fun accessibilityIntent(context: Context): Intent {
+        val component = ComponentName(
+            context,
+            "com.gatekeep.app.enforcement.ForegroundMonitorAccessibilityService",
+        )
+        return Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            putExtra(":settings:fragment_args_key", component.flattenToString())
+            putExtra(":settings:show_fragment_args", component.flattenToString())
+        }
+    }
 
     fun isIgnoringBatteryOptimizations(context: Context): Boolean {
         val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager

@@ -69,7 +69,7 @@ fun PermissionBanner(
                 state.lastError?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 if (!state.accessibilityGranted) {
                     Button(
-                        onClick = { context.startActivity(PermissionHelper.accessibilityIntent()) },
+                        onClick = { context.startActivity(PermissionHelper.accessibilityIntent(context)) },
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     ) { Text(stringResource(R.string.open_accessibility_settings)) }
                 }

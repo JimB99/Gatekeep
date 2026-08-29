@@ -67,11 +67,11 @@
     <string name="limit_warnings">Limit warnings</string>
     <string name="limit_warnings_help">Alert when approaching daily or session limits.</string>
     <string name="weekly_report">Weekly report</string>
-    <string name="weekly_report_help">Summary notification (respects quiet hours).</string>
-    <string name="quiet_hours">Quiet hours</string>
-    <string name="start">Start</string>
-    <string name="end">End</string>
-    <string name="save_quiet_hours">Save quiet hours</string>
+    <string name="weekly_report_help">Summary notification delivered on the day and time you choose below.</string>
+    <string name="weekly_report_schedule">Report schedule</string>
+    <string name="save_weekly_report_schedule">Save report schedule</string>
+    <string name="onboarding_return_hint">After granting each permission in Settings, return here — status updates automatically.</string>
+    <string name="schedule_already_exists">This window already exists for the selected days.</string>
     <string name="enforcement_enabled">Enforcement enabled</string>
     <string name="enforcement_enabled_help">When on, Gatekeep monitors apps, enforces limits, and shows session timers. Turn off to pause all blocking and timers without uninstalling — useful for troubleshooting or temporary breaks.</string>
     <string name="enforcement_disabled_title">Enforcement is off</string>

@@ -10,6 +10,7 @@ import androidx.work.WorkerParameters
 import com.gatekeep.app.R
 import com.gatekeep.app.enforcement.GatekeepNotificationHelper
 import com.gatekeep.app.util.UsageStatsCollector
+import com.gatekeep.data.repository.AppSettings
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
@@ -17,7 +18,9 @@ import com.gatekeep.domain.UsageSessionRecord
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
-import java.util.Calendar
+import java.time.Duration
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit
 
 @HiltWorker
@@ -83,9 +86,6 @@ class WeeklyReportWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         val settings = settingsRepository.settings.first()
         if (!settings.weeklyReportEnabled) return Result.success()
-        val minuteOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY) * 60 +
-            Calendar.getInstance().get(Calendar.MINUTE)
-        if (settingsRepository.isQuietHours(minuteOfDay, settings)) return Result.success()
 
         notificationHelper.showWarning(
             applicationContext.getString(R.string.weekly_report_title),
@@ -97,13 +97,45 @@ class WeeklyReportWorker @AssistedInject constructor(
     companion object {
         const val WORK_NAME = "weekly_report"
 
-        fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<WeeklyReportWorker>(7, TimeUnit.DAYS).build()
+        fun schedule(context: Context, settings: AppSettings = AppSettings()) {
+            if (!settings.weeklyReportEnabled) {
+                WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+                return
+            }
+            val delayMs = delayUntilNextWeeklyReport(
+                dayOfWeek = settings.weeklyReportDayOfWeek,
+                minuteOfDay = settings.weeklyReportMinuteOfDay,
+            )
+            val request = PeriodicWorkRequestBuilder<WeeklyReportWorker>(7, TimeUnit.DAYS)
+                .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
+                .build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.UPDATE,
                 request,
             )
+        }
+
+        fun delayUntilNextWeeklyReport(
+            dayOfWeek: Int,
+            minuteOfDay: Int,
+            zoneId: ZoneId = ZoneId.systemDefault(),
+        ): Long {
+            val now = ZonedDateTime.now(zoneId)
+            val hour = minuteOfDay / 60
+            val minute = minuteOfDay % 60
+            val currentDow = now.dayOfWeek.value % 7
+            val targetDow = dayOfWeek.coerceIn(0, 6)
+            var daysToAdd = (targetDow - currentDow + 7) % 7
+            var candidate = now.plusDays(daysToAdd.toLong())
+                .withHour(hour)
+                .withMinute(minute)
+                .withSecond(0)
+                .withNano(0)
+            if (!candidate.isAfter(now)) {
+                candidate = candidate.plusWeeks(1)
+            }
+            return Duration.between(now, candidate).toMillis().coerceAtLeast(0L)
         }
     }
 }

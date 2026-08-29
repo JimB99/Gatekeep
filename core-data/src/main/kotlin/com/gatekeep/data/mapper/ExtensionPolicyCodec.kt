@@ -12,6 +12,7 @@ private data class ExtensionPolicyDto(
     val maxConsecutiveExtensions: Int? = null,
     val showNoLimitToday: Boolean = true,
     val customMinutes: Int? = null,
+    val customEnabled: Boolean? = null,
 )
 
 private val extensionPolicyJson = Json { ignoreUnknownKeys = true }
@@ -24,6 +25,7 @@ fun encodeExtensionPolicy(policy: ExtensionPolicy): String =
             maxConsecutiveExtensions = policy.maxConsecutiveExtensions,
             showNoLimitToday = policy.showNoLimitToday,
             customMinutes = policy.customMinutes,
+            customEnabled = policy.customEnabled,
         ),
     )
 
@@ -31,12 +33,16 @@ fun decodeExtensionPolicy(json: String?): ExtensionPolicy {
     if (json.isNullOrBlank()) return ExtensionPolicy()
     return runCatching {
         val dto = extensionPolicyJson.decodeFromString<ExtensionPolicyDto>(json)
+        val optionMinutes = dto.optionMinutes.ifEmpty { listOf(1, 5, 10) }
+        val customEnabled = dto.customEnabled
+            ?: (dto.customMinutes != null && dto.customMinutes in optionMinutes)
         ExtensionPolicy(
-            optionMinutes = dto.optionMinutes.ifEmpty { listOf(1, 5, 10) },
+            optionMinutes = optionMinutes,
             maxExtensionsPerDay = dto.maxExtensionsPerDay,
             maxConsecutiveExtensions = dto.maxConsecutiveExtensions,
             showNoLimitToday = dto.showNoLimitToday,
             customMinutes = dto.customMinutes,
+            customEnabled = customEnabled,
         )
     }.getOrDefault(ExtensionPolicy())
 }

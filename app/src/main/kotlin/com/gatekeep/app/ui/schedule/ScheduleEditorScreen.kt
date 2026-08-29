@@ -108,57 +108,74 @@ fun ScheduleEditorScreen(
                 )
                 Text(stringResource(R.string.allowed_days))
                 DayOfWeekSelector(selectedDays = selectedDays, onSelectionChange = { selectedDays = it })
-                TimeOfDayPicker(stringResource(R.string.start_time), startMinute, onTimeChange = { startMinute = it })
-                TimeOfDayPicker(stringResource(R.string.end_time), endMinute, onTimeChange = { endMinute = it })
+                TimeOfDayPicker(
+                    stringResource(R.string.start_time),
+                    startMinute,
+                    coarseStepMinutes = 60,
+                    fineStepMinutes = 15,
+                    onTimeChange = { startMinute = it },
+                )
+                TimeOfDayPicker(
+                    stringResource(R.string.end_time),
+                    endMinute,
+                    coarseStepMinutes = 60,
+                    fineStepMinutes = 15,
+                    onTimeChange = { endMinute = it },
+                )
                 Button(
                     onClick = {
-                        if (!validation.canAdd) return@Button
-                        validation.addableDays.forEach { day ->
-                            viewModel.addWindow(
-                                ScheduleWindow(
-                                    profileId = profileId,
-                                    packageName = null,
-                                    dayOfWeek = day,
-                                    startMinute = startMinute,
-                                    endMinute = endMinute,
-                                ),
-                            )
-                        }
-                        if (validation.hasSkippedDays) {
-                            val skippedNames = validation.conflictingDays
-                                .sorted()
-                                .joinToString(", ") { day -> dayName(context, day) }
-                            val skippedMessage = context.getString(
-                                R.string.schedule_days_skipped,
-                                skippedNames,
-                            )
-                            scope.launch {
-                                snackbarHostState.showSnackbar(message = skippedMessage)
+                        when {
+                            validation.invalidRange -> {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        context.getString(R.string.schedule_invalid_time_range),
+                                    )
+                                }
+                            }
+                            validation.selectedDays.isEmpty() -> {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        context.getString(R.string.schedule_select_days),
+                                    )
+                                }
+                            }
+                            validation.allConflict -> {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        context.getString(R.string.schedule_already_exists),
+                                    )
+                                }
+                            }
+                            else -> {
+                                validation.addableDays.forEach { day ->
+                                    viewModel.addWindow(
+                                        ScheduleWindow(
+                                            profileId = profileId,
+                                            packageName = null,
+                                            dayOfWeek = day,
+                                            startMinute = startMinute,
+                                            endMinute = endMinute,
+                                        ),
+                                    )
+                                }
+                                if (validation.hasSkippedDays) {
+                                    val skippedNames = validation.conflictingDays
+                                        .sorted()
+                                        .joinToString(", ") { day -> dayName(context, day) }
+                                    val skippedMessage = context.getString(
+                                        R.string.schedule_days_skipped,
+                                        skippedNames,
+                                    )
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(message = skippedMessage)
+                                    }
+                                }
                             }
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = validation.canAdd,
+                    enabled = !validation.invalidRange && validation.selectedDays.isNotEmpty(),
                 ) { Text(stringResource(R.string.add_windows)) }
-                if (validation.invalidRange) {
-                    Text(
-                        stringResource(R.string.schedule_invalid_time_range),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                } else if (validation.allConflict) {
-                    Text(
-                        stringResource(R.string.schedule_conflict),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                } else if (validation.selectedDays.isEmpty()) {
-                    Text(
-                        stringResource(R.string.schedule_select_days),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
             LazyColumn(
                 modifier = Modifier.weight(1f),

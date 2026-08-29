@@ -37,6 +37,7 @@ data class ExtensionPolicy(
     val maxConsecutiveExtensions: Int? = null,
     val showNoLimitToday: Boolean = true,
     val customMinutes: Int? = null,
+    val customEnabled: Boolean = false,
 )
 
 data class ProfileEnforcementConfig(

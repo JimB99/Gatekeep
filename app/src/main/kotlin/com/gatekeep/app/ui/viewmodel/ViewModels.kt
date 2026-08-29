@@ -16,8 +16,9 @@ import com.gatekeep.app.data.StatsTimeRange
 import com.gatekeep.app.data.TopAppUsage
 import com.gatekeep.app.ui.components.buildPermissionState
 import com.gatekeep.app.util.EnforcementLog
-import com.gatekeep.app.util.PinStorage
 import com.gatekeep.app.util.LocaleController
+import com.gatekeep.app.util.PinStorage
+import com.gatekeep.app.worker.WeeklyReportWorker
 import com.gatekeep.data.locale.LocalePreferences
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
@@ -39,9 +40,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -401,7 +405,11 @@ class SettingsViewModel @Inject constructor(
     fun clearAppPin() = pinStorage.clearAppPin()
 
     fun update(transform: (com.gatekeep.data.repository.AppSettings) -> com.gatekeep.data.repository.AppSettings) {
-        viewModelScope.launch { settingsRepository.updateSettings(transform) }
+        viewModelScope.launch {
+            settingsRepository.updateSettings(transform)
+            val updated = settingsRepository.settings.first()
+            WeeklyReportWorker.schedule(context, updated)
+        }
     }
 
     fun completeOnboarding() {
@@ -469,10 +477,6 @@ class StatsViewModel @Inject constructor(
         }
     }
 
-    fun loadMoreTopApps() {
-        _visibleTopAppCount.value += 10
-    }
-
     fun setRangeKind(kind: StatsRangeKind) {
         _rangeKind.value = kind
     }
@@ -498,28 +502,50 @@ class StatsViewModel @Inject constructor(
         profileList: List<com.gatekeep.domain.model.Profile>,
     ) {
         val range = buildRange(kind, anchorMs)
-        _overview.value = statsRepository.overviewForRange(range)
-        _visibleTopAppCount.value = 10
-        _allTopApps.value = statsRepository.topAppsForRange(range, limit = 50)
-        val profileIds = profileList.map { it.id }
-        _trackedApps.value = if (profileIds.isEmpty()) {
-            emptyList()
-        } else {
-            statsRepository.trackedAppsForProfiles(profileIds, range)
-        }
-        _profileOverviews.value = profileList
-            .sortedWith(compareByDescending<com.gatekeep.domain.model.Profile> { it.isActive }.thenBy { it.name })
-            .map { profile ->
-                val tracked = statsRepository.trackedAppsForRange(profile.id, range)
-                ProfileStatsOverview(
-                    profileId = profile.id,
-                    name = profile.name,
-                    isActive = profile.isActive,
-                    totalUsageMs = tracked.sumOf { it.usageMs },
-                    streak = statsRepository.streakForProfile(profile.id),
-                    overrideCount = statsRepository.overrideCount(profile.id),
-                )
+        coroutineScope {
+            val overviewDeferred = async { statsRepository.overviewForRange(range) }
+            val topAppsDeferred = async { statsRepository.topAppsForRange(range, limit = 10) }
+            val profileIds = profileList.map { it.id }
+            val trackedDeferred = async {
+                if (profileIds.isEmpty()) emptyList()
+                else statsRepository.trackedAppsForProfiles(profileIds, range)
             }
+            val profileOverviewsDeferred = async {
+                profileList
+                    .sortedWith(compareByDescending<com.gatekeep.domain.model.Profile> { it.isActive }.thenBy { it.name })
+                    .map { profile ->
+                        async {
+                            val tracked = statsRepository.trackedAppsForRange(profile.id, range)
+                            ProfileStatsOverview(
+                                profileId = profile.id,
+                                name = profile.name,
+                                isActive = profile.isActive,
+                                totalUsageMs = tracked.sumOf { it.usageMs },
+                                streak = statsRepository.streakForProfile(profile.id),
+                                overrideCount = statsRepository.overrideCount(profile.id),
+                            )
+                        }
+                    }.awaitAll()
+            }
+            _overview.value = overviewDeferred.await()
+            _visibleTopAppCount.value = 10
+            _allTopApps.value = topAppsDeferred.await()
+            _trackedApps.value = trackedDeferred.await()
+            _profileOverviews.value = profileOverviewsDeferred.await()
+        }
+    }
+
+    fun loadMoreTopApps() {
+        val current = _allTopApps.value.size
+        if (current >= 50) {
+            _visibleTopAppCount.value += 10
+            return
+        }
+        viewModelScope.launch {
+            val range = buildRange(_rangeKind.value, _anchorMs.value)
+            _allTopApps.value = statsRepository.topAppsForRange(range, limit = 50)
+            _visibleTopAppCount.value += 10
+        }
     }
 
     private fun buildRange(kind: StatsRangeKind, anchorMs: Long): StatsTimeRange {
