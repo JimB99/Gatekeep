@@ -137,6 +137,7 @@
     <string name="customize_rules_subtitle">Override default rules</string>
     <string name="customize_rules_inherit">Using default rules</string>
     <string name="customize_limits_inherit_hint">Leave at 0 to inherit from the Default tab.</string>
+    <string name="customize_limits_off_hint">0 = off for this schedule. Limits are copied from Default when you first open Customize.</string>
     <string name="schedule_next_day_suffix">(+1D)</string>
     <string name="dismiss_error">Dismiss</string>
     <string name="clear_error_log">Clear error log</string>

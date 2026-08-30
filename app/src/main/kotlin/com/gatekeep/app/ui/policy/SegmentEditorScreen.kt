@@ -51,6 +51,7 @@ import com.gatekeep.app.ui.profiles.overrideRulesSubtitle
 import com.gatekeep.app.ui.profiles.schedulePolicyModeLabel
 import com.gatekeep.app.ui.schedule.formatScheduleTimeRange
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
+import com.gatekeep.domain.CustomizeOverrides
 import com.gatekeep.domain.model.SchedulePolicyMode
 import com.gatekeep.domain.model.SchedulePolicyOverrides
 import com.gatekeep.domain.model.ScheduleSegment
@@ -74,6 +75,8 @@ fun SegmentEditorScreen(
     }
 
     val segments by viewModel.scheduleSegments.collectAsState()
+    val profiles by viewModel.profiles.collectAsState()
+    val profile = profiles.find { it.id == profileId }
     val windows by viewModel.scheduleWindows.collectAsState()
     var activeSegmentId by remember(segmentId) { mutableStateOf(segmentId) }
     val existing = activeSegmentId?.let { id -> segments.find { it.id == id } }
@@ -140,8 +143,14 @@ fun SegmentEditorScreen(
     val isDirty = label != savedLabel || mode != savedMode || selectedDays != savedDays ||
         startMinute != savedStart || endMinute != savedEnd
 
-    fun buildOverrides(): SchedulePolicyOverrides =
-        existing?.overrides ?: SchedulePolicyOverrides()
+    fun buildOverrides(): SchedulePolicyOverrides {
+        val current = existing?.overrides ?: SchedulePolicyOverrides()
+        return if (profile != null && !CustomizeOverrides.hasAnyLimitValue(current)) {
+            CustomizeOverrides.resolveForEditor(profile, current)
+        } else {
+            current
+        }
+    }
 
     suspend fun persistSegment(showSavedMessage: Boolean = true): Boolean {
         if (startMinute == endMinute) {

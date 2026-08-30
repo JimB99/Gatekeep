@@ -584,16 +584,16 @@ internal fun profileLimitsSubtitle(profile: Profile): String {
 @Composable
 internal fun overrideLimitsSubtitle(overrides: com.gatekeep.domain.model.SchedulePolicyOverrides): String {
     val parts = buildList {
-        overrides.weeklyLimitMs?.let {
+        overrides.weeklyLimitMs?.takeIf { it > 0 }?.let {
             add(stringResource(R.string.limit_weekly_short, formatDurationMinutes(it)))
         }
-        overrides.dailyLimitMs?.let {
+        overrides.dailyLimitMs?.takeIf { it > 0 }?.let {
             add(stringResource(R.string.limit_daily_short, formatDurationMinutes(it)))
         }
-        overrides.hourlyLimitMs?.let {
+        overrides.hourlyLimitMs?.takeIf { it > 0 }?.let {
             add(stringResource(R.string.limit_hourly_short, formatDurationMinutes(it)))
         }
-        overrides.sessionLimitMs?.let {
+        overrides.sessionLimitMs?.takeIf { it > 0 }?.let {
             add(stringResource(R.string.limit_session_short, formatDurationMinutes(it)))
         }
     }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -44,7 +45,9 @@ import com.gatekeep.app.ui.components.GatekeepFilterChip
 import com.gatekeep.app.ui.viewmodel.PauseViewModel
 import com.gatekeep.domain.model.PauseType
 import kotlinx.coroutines.launch
+import java.text.DateFormat
 import java.util.Calendar
+import java.util.Date
 
 private enum class PickerTarget { Pause, Focus }
 
@@ -97,6 +100,8 @@ fun PauseScreen(
     val activeAllowChoice = resolveActiveDurationChoice(activeAllowPause, now)
     val activeFocusChoice = resolveActiveDurationChoice(activeFocusPause, now)
         ?: legacyFocusUntil?.let { DurationChoice.UntilDateTime(it) }
+    val activeAllowUntil = activeAllowPause?.untilEpochMs
+    val activeFocusUntil = activeFocusPause?.untilEpochMs ?: legacyFocusUntil
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -187,6 +192,16 @@ fun PauseScreen(
                 title = stringResource(R.string.pause_enforcement_section),
                 help = stringResource(R.string.pause_enforcement_help),
             )
+            if (activeAllowUntil != null) {
+                ActiveUntilBanner(
+                    label = stringResource(
+                        R.string.pause_active_until,
+                        formatUntil(activeAllowUntil),
+                    ),
+                    onEndEarly = {},
+                    showEndEarly = false,
+                )
+            }
             DurationActionGrid(
                 enabled = canAct,
                 activeChoice = activeAllowChoice,
@@ -212,6 +227,18 @@ fun PauseScreen(
                 title = stringResource(R.string.focus_mode_section),
                 help = stringResource(R.string.focus_mode_help),
             )
+            if (activeFocusUntil != null) {
+                ActiveUntilBanner(
+                    label = stringResource(
+                        R.string.focus_block_active_until,
+                        formatUntil(activeFocusUntil),
+                    ),
+                    onEndEarly = {
+                        viewModel.endFocusBlock(profileIdsForScope())
+                    },
+                    showEndEarly = true,
+                )
+            }
             DurationActionGrid(
                 enabled = canAct,
                 activeChoice = activeFocusChoice,
@@ -278,3 +305,6 @@ fun PauseScreen(
         )
     }
 }
+
+private fun formatUntil(untilMs: Long): String =
+    DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(untilMs))

@@ -116,25 +116,18 @@ object SchedulePolicyResolver {
             source = source,
         )
         SchedulePolicyMode.customize -> {
-            val merged = mergeOverrides(profile, overrides)
+            val applied = CustomizeOverrides.apply(profile, overrides)
             ResolvedSchedulePolicy(
                 mode = mode,
-                limits = merged.toAppLimit(packageName),
-                enforcementConfig = merged.enforcementConfig(),
+                limits = applied.toAppLimit(packageName),
+                enforcementConfig = applied.enforcementConfig(),
                 activeSegmentId = activeSegmentId,
                 source = source,
             )
         }
     }
 
+    /** @deprecated Customize mode no longer inherits unset limit fields from the profile. */
     fun mergeOverrides(profile: Profile, overrides: SchedulePolicyOverrides): Profile =
-        profile.copy(
-            dailyLimitMs = overrides.dailyLimitMs ?: profile.dailyLimitMs,
-            hourlyLimitMs = overrides.hourlyLimitMs ?: profile.hourlyLimitMs,
-            weeklyLimitMs = overrides.weeklyLimitMs ?: profile.weeklyLimitMs,
-            sessionLimitMs = overrides.sessionLimitMs ?: profile.sessionLimitMs,
-            onOpenAction = overrides.onOpenAction ?: profile.onOpenAction,
-            onLimitAction = overrides.onLimitAction ?: profile.onLimitAction,
-            onSessionLimitAction = overrides.onSessionLimitAction ?: profile.onSessionLimitAction,
-        )
+        CustomizeOverrides.apply(profile, overrides)
 }

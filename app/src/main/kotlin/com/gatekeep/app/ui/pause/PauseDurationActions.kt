@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -151,23 +151,32 @@ private fun DurationChoiceButton(
     enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    if (isActive) {
-        Button(onClick = onClick, enabled = enabled, modifier = modifier) {
-            Text(label)
-        }
-    } else {
-        OutlinedButton(
-            onClick = onClick,
-            enabled = enabled,
-            modifier = modifier,
-            border = if (isDraft) {
-                BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-            } else {
-                null
+    val colors = when {
+        isActive -> ButtonDefaults.outlinedButtonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+        )
+        isDraft -> ButtonDefaults.outlinedButtonColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+        else -> ButtonDefaults.outlinedButtonColors()
+    }
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        colors = colors,
+        border = BorderStroke(
+            1.dp,
+            when {
+                isActive -> MaterialTheme.colorScheme.primary
+                isDraft -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.outline
             },
-        ) {
-            Text(label)
-        }
+        ),
+    ) {
+        Text(label)
     }
 }
 
@@ -202,5 +211,22 @@ fun PauseSectionHeader(title: String, help: String, modifier: Modifier = Modifie
     Column(modifier = modifier.padding(bottom = 8.dp)) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+fun ActiveUntilBanner(
+    label: String,
+    onEndEarly: () -> Unit,
+    showEndEarly: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+        Text(label, style = MaterialTheme.typography.bodySmall)
+        if (showEndEarly) {
+            androidx.compose.material3.TextButton(onClick = onEndEarly) {
+                Text(stringResource(R.string.end_early))
+            }
+        }
     }
 }

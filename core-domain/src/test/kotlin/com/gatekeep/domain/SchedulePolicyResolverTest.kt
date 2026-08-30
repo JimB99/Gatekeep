@@ -8,6 +8,7 @@ import com.gatekeep.domain.model.ScheduleSegment
 import com.gatekeep.domain.model.ScheduleWindow
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.ZoneId
@@ -95,6 +96,33 @@ class SchedulePolicyResolverTest {
             nowEpochMs = mondayAt(10, ZoneId.of("UTC")),
         )
         assertEquals(SchedulePolicyMode.block, policy.mode)
+    }
+
+    @Test
+    fun `customize segment does not inherit unset limits from profile`() {
+        val segment = ScheduleSegment(
+            id = 1,
+            profileId = 1,
+            mode = SchedulePolicyMode.customize,
+            overrides = com.gatekeep.domain.model.SchedulePolicyOverrides(dailyLimitMs = 30 * 60_000L),
+        )
+        val windows = listOf(
+            ScheduleWindow(profileId = 1, segmentId = 1, dayOfWeek = 1, startMinute = 9 * 60, endMinute = 17 * 60),
+        )
+        val policy = SchedulePolicyResolver.resolveForProfile(
+            profile = profile.copy(
+                weeklyLimitMs = 7 * 60 * 60_000L,
+                dailyLimitMs = 60 * 60_000L,
+                hourlyLimitMs = 30 * 60_000L,
+            ),
+            segments = listOf(segment),
+            windows = windows,
+            packageName = "com.test",
+            nowEpochMs = mondayAt(10, ZoneId.of("UTC")),
+        )
+        assertEquals(30 * 60_000L, policy.limits?.dailyLimitMs)
+        assertNull(policy.limits?.weeklyLimitMs)
+        assertNull(policy.limits?.hourlyLimitMs)
     }
 
     @Test

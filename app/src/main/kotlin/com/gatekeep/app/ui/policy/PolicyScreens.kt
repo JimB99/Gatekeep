@@ -54,6 +54,7 @@ import com.gatekeep.app.ui.profiles.sessionActionLabel
 import com.gatekeep.app.ui.schedule.formatGroupedDays
 import com.gatekeep.app.ui.schedule.formatScheduleTimeRange
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
+import com.gatekeep.domain.CustomizeOverrides
 import com.gatekeep.domain.ScheduleWindowGrouper
 import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.SchedulePolicyMode
@@ -198,7 +199,19 @@ private fun PolicyDefaultTab(
 
     fun saveNoMatch() {
         profile?.let { p ->
-            onSaveProfile(p.copy(noScheduleMatchMode = noMatchMode))
+            val overrides = if (noMatchMode == SchedulePolicyMode.customize &&
+                !CustomizeOverrides.hasAnyLimitValue(p.noScheduleMatchOverrides)
+            ) {
+                CustomizeOverrides.fullFromProfile(p)
+            } else {
+                p.noScheduleMatchOverrides
+            }
+            onSaveProfile(
+                p.copy(
+                    noScheduleMatchMode = noMatchMode,
+                    noScheduleMatchOverrides = overrides,
+                ),
+            )
             savedNoMatchMode = noMatchMode
         }
     }

@@ -36,6 +36,7 @@ import com.gatekeep.app.ui.profiles.limitActionLabel
 import com.gatekeep.app.ui.profiles.openActionLabel
 import com.gatekeep.app.ui.profiles.sessionActionLabel
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
+import com.gatekeep.domain.CustomizeOverrides
 import com.gatekeep.domain.LimitField
 import com.gatekeep.domain.LimitHierarchy
 import com.gatekeep.domain.model.OnLimitAction
@@ -122,7 +123,10 @@ fun PolicyOverrideLimitsScreen(
     val profiles by viewModel.profiles.collectAsState()
     val profile = profiles.find { it.id == profileId }
     val segments by viewModel.scheduleSegments.collectAsState()
-    val base = remember(profile, segments, scope) { resolveOverrides(profile, segments, scope) }
+    val rawBase = remember(profile, segments, scope) { resolveOverrides(profile, segments, scope) }
+    val base = remember(profile, rawBase) {
+        profile?.let { CustomizeOverrides.resolveForEditor(it, rawBase) } ?: rawBase
+    }
 
     var weeklyMs by remember(scope) { mutableLongStateOf(base.weeklyLimitMs ?: 0L) }
     var dailyMs by remember(scope) { mutableLongStateOf(base.dailyLimitMs ?: 0L) }
@@ -133,7 +137,7 @@ fun PolicyOverrideLimitsScreen(
     var savedHourly by remember(scope) { mutableLongStateOf(hourlyMs) }
     var savedSession by remember(scope) { mutableLongStateOf(sessionMs) }
 
-    LaunchedEffect(base) {
+    LaunchedEffect(profile?.id, scope, base) {
         weeklyMs = base.weeklyLimitMs ?: 0L
         dailyMs = base.dailyLimitMs ?: 0L
         hourlyMs = base.hourlyLimitMs ?: 0L
@@ -151,10 +155,10 @@ fun PolicyOverrideLimitsScreen(
     val hierarchyHint = stringResource(R.string.limits_hierarchy_hint)
 
     fun currentOverrides() = SchedulePolicyOverrides(
-        dailyLimitMs = dailyMs.takeIf { it > 0 },
-        hourlyLimitMs = hourlyMs.takeIf { it > 0 },
-        weeklyLimitMs = weeklyMs.takeIf { it > 0 },
-        sessionLimitMs = sessionMs.takeIf { it > 0 },
+        dailyLimitMs = dailyMs,
+        hourlyLimitMs = hourlyMs,
+        weeklyLimitMs = weeklyMs,
+        sessionLimitMs = sessionMs,
         onOpenAction = base.onOpenAction,
         onLimitAction = base.onLimitAction,
         onSessionLimitAction = base.onSessionLimitAction,
@@ -175,10 +179,10 @@ fun PolicyOverrideLimitsScreen(
             is PolicyOverrideScope.Segment -> {
                 viewModel.updateSegmentOverrides(scope.segmentId) { overrides ->
                     overrides.copy(
-                        dailyLimitMs = dailyMs.takeIf { it > 0 },
-                        hourlyLimitMs = hourlyMs.takeIf { it > 0 },
-                        weeklyLimitMs = weeklyMs.takeIf { it > 0 },
-                        sessionLimitMs = sessionMs.takeIf { it > 0 },
+                        dailyLimitMs = dailyMs,
+                        hourlyLimitMs = hourlyMs,
+                        weeklyLimitMs = weeklyMs,
+                        sessionLimitMs = sessionMs,
                     )
                 }
             }
@@ -217,7 +221,7 @@ fun PolicyOverrideLimitsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                stringResource(R.string.customize_limits_inherit_hint),
+                stringResource(R.string.customize_limits_off_hint),
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
             )
             Text(
