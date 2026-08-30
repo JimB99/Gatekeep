@@ -28,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -42,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.R
 import com.gatekeep.app.ui.components.GatekeepFilterChip
+import com.gatekeep.app.ui.components.SaveChangesButton
+import com.gatekeep.app.ui.components.rememberUnsavedChangesGuard
 import com.gatekeep.app.ui.profiles.RuleNavRow
 import com.gatekeep.app.ui.profiles.limitActionLabel
 import com.gatekeep.app.ui.profiles.openActionLabel
@@ -62,6 +65,7 @@ import com.gatekeep.domain.model.ScheduleWindow
 fun ProfilePolicyScreen(
     profileId: Long,
     onBack: () -> Unit,
+    initialTab: Int = 0,
     onNavigateLimits: () -> Unit,
     onNavigateRulesOpen: () -> Unit,
     onNavigateRulesLimit: () -> Unit,
@@ -75,18 +79,38 @@ fun ProfilePolicyScreen(
     val profile = profiles.find { it.id == profileId }
     val segments by viewModel.scheduleSegments.collectAsState()
     val windows by viewModel.scheduleWindows.collectAsState()
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab) }
+    var defaultTabDirty by remember { mutableStateOf(false) }
+    var defaultTabSave by remember { mutableStateOf<() -> Unit>({}) }
+    var defaultTabDiscard by remember { mutableStateOf<() -> Unit>({}) }
+
+    LaunchedEffect(initialTab) {
+        selectedTab = initialTab
+    }
 
     LaunchedEffect(profileId) {
         viewModel.bindProfile(profileId)
     }
+
+    val backGuard = rememberUnsavedChangesGuard(
+        isDirty = selectedTab == 0 && defaultTabDirty,
+        onNavigateBack = onBack,
+        onSave = { defaultTabSave() },
+        onDiscardChanges = { defaultTabDiscard() },
+    )
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.policy)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        if (selectedTab == 0 && defaultTabDirty) {
+                            backGuard.navigateBack()
+                        } else {
+                            onBack()
+                        }
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
                     }
                 },
@@ -116,6 +140,11 @@ fun ProfilePolicyScreen(
                     onNavigateNoMatchLimits = onNavigateNoMatchLimits,
                     onNavigateNoMatchRules = onNavigateNoMatchRules,
                     onSaveProfile = { viewModel.saveProfile(it) },
+                    onDirtyChange = { defaultTabDirty = it },
+                    onSetupHandlers = { save, discard ->
+                        defaultTabSave = save
+                        defaultTabDiscard = discard
+                    },
                 )
                 1 -> PolicySchedulesTab(
                     segments = segments,
@@ -142,6 +171,8 @@ private fun PolicyDefaultTab(
     onNavigateNoMatchLimits: () -> Unit,
     onNavigateNoMatchRules: () -> Unit,
     onSaveProfile: (Profile) -> Unit,
+    onDirtyChange: (Boolean) -> Unit,
+    onSetupHandlers: (save: () -> Unit, discard: () -> Unit) -> Unit = { _, _ -> },
 ) {
     var noMatchMode by remember(profile?.id) {
         mutableStateOf(profile?.noScheduleMatchMode ?: SchedulePolicyMode.default)
@@ -157,6 +188,27 @@ private fun PolicyDefaultTab(
                 savedNoMatchMode = mode
             }
         }
+    }
+
+    val isDirty = noMatchMode != savedNoMatchMode
+
+    LaunchedEffect(isDirty) {
+        onDirtyChange(isDirty)
+    }
+
+    fun saveNoMatch() {
+        profile?.let { p ->
+            onSaveProfile(p.copy(noScheduleMatchMode = noMatchMode))
+            savedNoMatchMode = noMatchMode
+        }
+    }
+
+    fun discardNoMatch() {
+        noMatchMode = savedNoMatchMode
+    }
+
+    SideEffect {
+        onSetupHandlers(::saveNoMatch, ::discardNoMatch)
     }
 
     Column(
@@ -215,14 +267,13 @@ private fun PolicyDefaultTab(
                     SchedulePolicyMode.entries.forEach { mode ->
                         GatekeepFilterChip(
                             selected = noMatchMode == mode,
-                            onClick = {
-                                noMatchMode = mode
-                                savedNoMatchMode = mode
-                                onSaveProfile(p.copy(noScheduleMatchMode = mode))
-                            },
+                            onClick = { noMatchMode = mode },
                             label = { Text(schedulePolicyModeLabel(mode)) },
                         )
                     }
+                }
+                if (isDirty) {
+                    SaveChangesButton(visible = true, onClick = ::saveNoMatch)
                 }
                 if (noMatchMode == SchedulePolicyMode.customize) {
                     RuleNavRow(

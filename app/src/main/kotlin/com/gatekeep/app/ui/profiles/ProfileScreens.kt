@@ -51,6 +51,8 @@ import com.gatekeep.app.ui.components.rememberUnsavedChangesGuard
 import com.gatekeep.app.ui.components.PinGateDialog
 import com.gatekeep.app.R
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
+import com.gatekeep.domain.LimitField
+import com.gatekeep.domain.LimitHierarchy
 import com.gatekeep.app.util.PasswordHasher
 import com.gatekeep.app.util.formatDurationMinutes
 import com.gatekeep.domain.model.OnOpenAction
@@ -211,8 +213,18 @@ fun ProfileHubScreen(
                 onClick = onEditPin,
             )
 
-            Card(modifier = Modifier.fillMaxWidth().clickable { showDeleteConfirm = true }) {
-                Text(stringResource(R.string.delete_profile), modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Medium)
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { showDeleteConfirm = true },
+                colors = androidx.compose.material3.CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
+                ),
+            ) {
+                Text(
+                    stringResource(R.string.delete_profile),
+                    modifier = Modifier.padding(16.dp),
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         }
     }
@@ -295,8 +307,12 @@ fun ProfileLimitsScreen(
         sessionMs != savedSessionMs ||
         hourlyMs != savedHourlyMs ||
         weeklyMs != savedWeeklyMs
+    val hierarchyValidation = LimitHierarchy.validate(weeklyMs, dailyMs, hourlyMs, sessionMs)
+    val hierarchyError = stringResource(R.string.limits_hierarchy_error)
+    val hierarchyHint = stringResource(R.string.limits_hierarchy_hint)
 
     fun saveLimits() {
+        if (!hierarchyValidation.valid) return
         profile?.copy(
             dailyLimitMs = draftToSavedMs(dailyMs),
             sessionLimitMs = draftToSavedMs(sessionMs),
@@ -354,12 +370,18 @@ fun ProfileLimitsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(stringResource(R.string.limits_apply_all_apps), style = MaterialTheme.typography.bodySmall)
+            Text(
+                hierarchyHint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             DurationPicker(
                 label = stringResource(R.string.weekly_limit_off),
                 totalMs = weeklyMs,
                 coarseStepMinutes = 60,
                 fineStepMinutes = 15,
                 isSet = weeklyMs > 0,
+                isError = LimitField.Weekly in hierarchyValidation.invalidFields,
                 onDurationChange = { weeklyMs = it },
             )
             DurationPicker(
@@ -368,6 +390,7 @@ fun ProfileLimitsScreen(
                 coarseStepMinutes = 60,
                 fineStepMinutes = 15,
                 isSet = dailyMs > 0,
+                isError = LimitField.Daily in hierarchyValidation.invalidFields,
                 onDurationChange = { dailyMs = it },
             )
             DurationPicker(
@@ -377,6 +400,7 @@ fun ProfileLimitsScreen(
                 fineStepMinutes = 5,
                 minutesOnly = true,
                 isSet = hourlyMs > 0,
+                isError = LimitField.Hourly in hierarchyValidation.invalidFields,
                 supportingText = stringResource(R.string.hourly_limit_resets),
                 onDurationChange = { hourlyMs = it },
             )
@@ -386,8 +410,16 @@ fun ProfileLimitsScreen(
                 coarseStepMinutes = 15,
                 fineStepMinutes = 5,
                 isSet = sessionMs > 0,
+                isError = LimitField.Session in hierarchyValidation.invalidFields,
                 onDurationChange = { sessionMs = it },
             )
+            if (!hierarchyValidation.valid) {
+                Text(
+                    hierarchyError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             SaveChangesButton(
                 visible = isDirty,
                 onClick = ::saveLimits,
@@ -544,6 +576,43 @@ internal fun profileLimitsSubtitle(profile: Profile): String {
     }
     return if (parts.isEmpty()) {
         stringResource(R.string.profile_limits_none)
+    } else {
+        parts.joinToString(" · ")
+    }
+}
+
+@Composable
+internal fun overrideLimitsSubtitle(overrides: com.gatekeep.domain.model.SchedulePolicyOverrides): String {
+    val parts = buildList {
+        overrides.weeklyLimitMs?.let {
+            add(stringResource(R.string.limit_weekly_short, formatDurationMinutes(it)))
+        }
+        overrides.dailyLimitMs?.let {
+            add(stringResource(R.string.limit_daily_short, formatDurationMinutes(it)))
+        }
+        overrides.hourlyLimitMs?.let {
+            add(stringResource(R.string.limit_hourly_short, formatDurationMinutes(it)))
+        }
+        overrides.sessionLimitMs?.let {
+            add(stringResource(R.string.limit_session_short, formatDurationMinutes(it)))
+        }
+    }
+    return if (parts.isEmpty()) {
+        stringResource(R.string.profile_limits_none)
+    } else {
+        parts.joinToString(" · ")
+    }
+}
+
+@Composable
+internal fun overrideRulesSubtitle(overrides: com.gatekeep.domain.model.SchedulePolicyOverrides): String {
+    val parts = buildList {
+        overrides.onOpenAction?.let { add(openActionLabel(it)) }
+        overrides.onLimitAction?.let { add(limitActionLabel(it)) }
+        overrides.onSessionLimitAction?.let { add(sessionActionLabel(it)) }
+    }
+    return if (parts.isEmpty()) {
+        stringResource(R.string.customize_rules_inherit)
     } else {
         parts.joinToString(" · ")
     }

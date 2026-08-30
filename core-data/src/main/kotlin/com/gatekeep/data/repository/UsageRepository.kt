@@ -172,6 +172,14 @@ class UsageRepository(
         }
     }
 
+    suspend fun clearAllowPauses(profileIds: List<Long>?) {
+        if (profileIds == null) {
+            pauseDao.deleteGlobalAllowPauses()
+        } else {
+            profileIds.forEach { pauseDao.deleteAllowPausesForProfile(it) }
+        }
+    }
+
     suspend fun getRecentSessions(profileId: Long, limit: Int = 100) =
         usageSessionDao.getRecent(profileId, limit)
 }

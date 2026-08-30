@@ -32,6 +32,7 @@ import com.gatekeep.domain.SchedulePolicyResolver
 import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.MonitoredApp
+import com.gatekeep.app.ui.pause.DurationChoice
 import com.gatekeep.domain.model.PauseType
 import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.ScheduleSegment
@@ -258,7 +259,10 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             val segment = profileRepository.getScheduleSegment(segmentId) ?: return@launch
             profileRepository.updateScheduleSegment(
-                segment.copy(overrides = transform(segment.overrides)),
+                segment.copy(
+                    mode = com.gatekeep.domain.model.SchedulePolicyMode.customize,
+                    overrides = transform(segment.overrides),
+                ),
             )
         }
     }
@@ -580,6 +584,7 @@ class PauseViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
+            usageRepository.clearAllowPauses(profileIds)
             if (profileIds == null) {
                 usageRepository.addPause(type, now, null, packageName, untilMs)
             } else {
@@ -626,6 +631,47 @@ class PauseViewModel @Inject constructor(
         viewModelScope.launch {
             usageRepository.clearFocusBlocks(profileIds)
             settingsRepository.updateSettings { it.copy(focusModeUntilMs = null) }
+        }
+    }
+
+    fun resetAllForScope(profileIds: List<Long>?) {
+        viewModelScope.launch {
+            usageRepository.clearAllowPauses(profileIds)
+            usageRepository.clearFocusBlocks(profileIds)
+            settingsRepository.updateSettings { it.copy(focusModeUntilMs = null) }
+        }
+    }
+
+    fun applyAllowChoice(profileIds: List<Long>?, choice: DurationChoice) {
+        when (choice) {
+            is DurationChoice.PresetMinutes -> {
+                val type = when (choice.minutes) {
+                    5 -> PauseType.fiveMin
+                    15 -> PauseType.fifteenMin
+                    60 -> PauseType.sixtyMin
+                    else -> PauseType.untilDatetime
+                }
+                if (type == PauseType.untilDatetime) {
+                    pauseUntil(profileIds, System.currentTimeMillis() + choice.minutes * 60_000L)
+                } else {
+                    pauseForTargets(type, profileIds)
+                }
+            }
+            is DurationChoice.CustomMinutes ->
+                pauseUntil(profileIds, System.currentTimeMillis() + choice.minutes * 60_000L)
+            DurationChoice.Today -> pauseToday(profileIds)
+            is DurationChoice.UntilDateTime -> pauseUntil(profileIds, choice.untilEpochMs)
+        }
+    }
+
+    fun applyFocusChoice(profileIds: List<Long>?, choice: DurationChoice) {
+        when (choice) {
+            is DurationChoice.PresetMinutes ->
+                blockForDuration(profileIds, choice.minutes * 60_000L)
+            is DurationChoice.CustomMinutes ->
+                blockForDuration(profileIds, choice.minutes * 60_000L)
+            DurationChoice.Today -> blockToday(profileIds)
+            is DurationChoice.UntilDateTime -> blockForTargets(profileIds, choice.untilEpochMs)
         }
     }
 

@@ -36,6 +36,8 @@ import com.gatekeep.app.ui.profiles.limitActionLabel
 import com.gatekeep.app.ui.profiles.openActionLabel
 import com.gatekeep.app.ui.profiles.sessionActionLabel
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
+import com.gatekeep.domain.LimitField
+import com.gatekeep.domain.LimitHierarchy
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.OnSessionLimitAction
@@ -54,6 +56,10 @@ fun PolicyOverrideRulesHubScreen(
     onNavigateSession: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
+    LaunchedEffect(profileId) {
+        viewModel.bindProfile(profileId)
+    }
+
   val profiles by viewModel.profiles.collectAsState()
     val profile = profiles.find { it.id == profileId }
     val segments by viewModel.scheduleSegments.collectAsState()
@@ -109,6 +115,10 @@ fun PolicyOverrideLimitsScreen(
     onBack: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
+    LaunchedEffect(profileId) {
+        viewModel.bindProfile(profileId)
+    }
+
     val profiles by viewModel.profiles.collectAsState()
     val profile = profiles.find { it.id == profileId }
     val segments by viewModel.scheduleSegments.collectAsState()
@@ -136,6 +146,9 @@ fun PolicyOverrideLimitsScreen(
 
     val isDirty = weeklyMs != savedWeekly || dailyMs != savedDaily ||
         hourlyMs != savedHourly || sessionMs != savedSession
+    val hierarchyValidation = LimitHierarchy.validate(weeklyMs, dailyMs, hourlyMs, sessionMs)
+    val hierarchyError = stringResource(R.string.limits_hierarchy_error)
+    val hierarchyHint = stringResource(R.string.limits_hierarchy_hint)
 
     fun currentOverrides() = SchedulePolicyOverrides(
         dailyLimitMs = dailyMs.takeIf { it > 0 },
@@ -148,6 +161,7 @@ fun PolicyOverrideLimitsScreen(
     )
 
     fun saveLimits() {
+        if (!hierarchyValidation.valid) return
         val p = profile ?: return
         when (scope) {
             is PolicyOverrideScope.NoScheduleMatch -> {
@@ -206,12 +220,18 @@ fun PolicyOverrideLimitsScreen(
                 stringResource(R.string.customize_limits_inherit_hint),
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
             )
+            Text(
+                hierarchyHint,
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             DurationPicker(
                 label = stringResource(R.string.weekly_limit_off),
                 totalMs = weeklyMs,
                 coarseStepMinutes = 60,
                 fineStepMinutes = 15,
                 isSet = weeklyMs > 0,
+                isError = LimitField.Weekly in hierarchyValidation.invalidFields,
                 onDurationChange = { weeklyMs = it },
             )
             DurationPicker(
@@ -220,6 +240,7 @@ fun PolicyOverrideLimitsScreen(
                 coarseStepMinutes = 60,
                 fineStepMinutes = 15,
                 isSet = dailyMs > 0,
+                isError = LimitField.Daily in hierarchyValidation.invalidFields,
                 onDurationChange = { dailyMs = it },
             )
             DurationPicker(
@@ -229,6 +250,7 @@ fun PolicyOverrideLimitsScreen(
                 fineStepMinutes = 5,
                 minutesOnly = true,
                 isSet = hourlyMs > 0,
+                isError = LimitField.Hourly in hierarchyValidation.invalidFields,
                 onDurationChange = { hourlyMs = it },
             )
             DurationPicker(
@@ -237,8 +259,16 @@ fun PolicyOverrideLimitsScreen(
                 coarseStepMinutes = 15,
                 fineStepMinutes = 5,
                 isSet = sessionMs > 0,
+                isError = LimitField.Session in hierarchyValidation.invalidFields,
                 onDurationChange = { sessionMs = it },
             )
+            if (!hierarchyValidation.valid) {
+                Text(
+                    hierarchyError,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+                )
+            }
             SaveChangesButton(visible = isDirty, onClick = ::saveLimits)
         }
     }

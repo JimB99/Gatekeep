@@ -605,3 +605,32 @@ class FrictionChallengeTest {
         assertTrue(FrictionChallenge.verify(challenge, challenge.answer))
     }
 }
+
+class LimitHierarchyTest {
+
+    @Test
+    fun `valid when weekly daily hourly ordered`() {
+        assertTrue(LimitHierarchy.isValid(7 * 86_400_000L, 3_600_000L, 1_800_000L))
+    }
+
+    @Test
+    fun `invalid when daily exceeds weekly`() {
+        assertFalse(LimitHierarchy.isValid(3_600_000L, 7_200_000L, 0L))
+    }
+
+    @Test
+    fun `zero tiers are skipped`() {
+        assertTrue(LimitHierarchy.isValid(7 * 86_400_000L, 0L, 1_800_000L))
+        assertTrue(LimitHierarchy.isValid(0L, 0L, 0L))
+    }
+
+    @Test
+    fun `session must not exceed hourly`() {
+        assertFalse(LimitHierarchy.isValid(0L, 0L, 1_800_000L, 3_600_000L))
+    }
+
+    @Test
+    fun `valid full hierarchy including session`() {
+        assertTrue(LimitHierarchy.isValid(7 * 86_400_000L, 3_600_000L, 1_800_000L, 900_000L))
+    }
+}

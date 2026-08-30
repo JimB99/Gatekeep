@@ -135,6 +135,7 @@
     <string name="schedule_customize_limits_rules">Customize limits and rules</string>
     <string name="customize_limits_subtitle">Override default time limits</string>
     <string name="customize_rules_subtitle">Override default rules</string>
+    <string name="customize_rules_inherit">Using default rules</string>
     <string name="customize_limits_inherit_hint">Leave at 0 to inherit from the Default tab.</string>
     <string name="schedule_next_day_suffix">(+1D)</string>
     <string name="dismiss_error">Dismiss</string>
@@ -279,6 +280,13 @@
     <string name="duration_custom">Custom</string>
     <string name="duration_today">Today</string>
     <string name="duration_until_date">Until date…</string>
+    <string name="pause_reset_title">Reset active pauses</string>
+    <string name="pause_reset_help">Clears any active pause or focus block.</string>
+    <string name="pause_reset_action">Reset</string>
+    <string name="pause_reset_done">Active pauses cleared</string>
+    <string name="pause_apply">Apply</string>
+    <string name="limits_hierarchy_error">Weekly must be at least daily, daily at least hourly, and hourly at least session.</string>
+    <string name="limits_hierarchy_hint">0 = off. When set: weekly ≥ daily ≥ hourly ≥ session.</string>
     <string name="pause_custom_duration_title">Custom duration</string>
     <string name="pause_activated">Limits paused</string>
     <string name="focus_block_activated">Focus mode started</string>

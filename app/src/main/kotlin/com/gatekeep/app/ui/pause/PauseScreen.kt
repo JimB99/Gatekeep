@@ -5,14 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,25 +30,21 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.R
-import com.gatekeep.app.ui.components.DurationPicker
 import com.gatekeep.app.ui.components.GatekeepFilterChip
 import com.gatekeep.app.ui.viewmodel.PauseViewModel
-import com.gatekeep.domain.model.Pause
 import com.gatekeep.domain.model.PauseType
 import kotlinx.coroutines.launch
-import java.text.DateFormat
 import java.util.Calendar
-import java.util.Date
 
 private enum class PickerTarget { Pause, Focus }
 
@@ -70,24 +64,24 @@ fun PauseScreen(
     var selectedProfileIds by remember { mutableStateOf(setOf<Long>()) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
-    var showCustomPicker by remember { mutableStateOf(false) }
     var selectedDateMs by remember { mutableStateOf<Long?>(null) }
     var pickerTarget by remember { mutableStateOf(PickerTarget.Pause) }
-    var customDurationMs by remember { mutableLongStateOf(30 * 60_000L) }
+
+    var pauseCustomState by rememberSaveable(stateSaver = CustomDurationStateSaver) {
+        mutableStateOf(CustomDurationState())
+    }
+    var focusCustomState by rememberSaveable(stateSaver = CustomDurationStateSaver) {
+        mutableStateOf(CustomDurationState())
+    }
+    var pauseDraftChoice by remember { mutableStateOf<DurationChoice?>(null) }
+    var focusDraftChoice by remember { mutableStateOf<DurationChoice?>(null) }
 
     val pauseActivatedMsg = stringResource(R.string.pause_activated)
     val focusActivatedMsg = stringResource(R.string.focus_block_activated)
+    val pauseResetDoneMsg = stringResource(R.string.pause_reset_done)
 
     val canAct = pauseAll || selectedProfileIds.isNotEmpty()
     fun profileIdsForScope(): List<Long>? = if (pauseAll) null else selectedProfileIds.toList()
-
-    suspend fun notifyPauseActivated() {
-        snackbarHostState.showSnackbar(pauseActivatedMsg)
-    }
-
-    suspend fun notifyFocusActivated() {
-        snackbarHostState.showSnackbar(focusActivatedMsg)
-    }
 
     val now = System.currentTimeMillis()
     val allowPauses = activePauses.filter {
@@ -98,9 +92,11 @@ fun PauseScreen(
     }
     val legacyFocusUntil = settings.focusModeUntilMs?.takeIf { it > now }
 
-    val activeAllowUntil = resolveActiveUntil(allowPauses, profileIdsForScope(), now)
-    val activeFocusUntil = resolveActiveUntil(focusBlocks, profileIdsForScope(), now)
-        ?: legacyFocusUntil
+    val activeAllowPause = resolveScopePause(allowPauses, profileIdsForScope(), now, focusBlock = false)
+    val activeFocusPause = resolveScopePause(focusBlocks, profileIdsForScope(), now, focusBlock = true)
+    val activeAllowChoice = resolveActiveDurationChoice(activeAllowPause, now)
+    val activeFocusChoice = resolveActiveDurationChoice(activeFocusPause, now)
+        ?: legacyFocusUntil?.let { DurationChoice.UntilDateTime(it) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -133,6 +129,8 @@ fun PauseScreen(
                     onClick = {
                         pauseAll = true
                         selectedProfileIds = emptySet()
+                        pauseDraftChoice = null
+                        focusDraftChoice = null
                     },
                     label = { Text(stringResource(R.string.scope_all)) },
                 )
@@ -162,6 +160,8 @@ fun PauseScreen(
                                 } else {
                                     selectedProfileIds + profile.id
                                 }
+                                pauseDraftChoice = null
+                                focusDraftChoice = null
                             },
                             label = { Text(profile.name) },
                         )
@@ -169,63 +169,42 @@ fun PauseScreen(
                 }
             }
 
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+            PauseResetBlock(
+                enabled = canAct,
+                onReset = {
+                    viewModel.resetAllForScope(profileIdsForScope())
+                    pauseDraftChoice = null
+                    focusDraftChoice = null
+                    scope.launch { snackbarHostState.showSnackbar(pauseResetDoneMsg) }
+                },
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
             PauseSectionHeader(
                 title = stringResource(R.string.pause_enforcement_section),
                 help = stringResource(R.string.pause_enforcement_help),
             )
-            if (activeAllowUntil != null) {
-                ActiveUntilBanner(
-                    label = stringResource(
-                        R.string.pause_active_until,
-                        formatUntil(activeAllowUntil),
-                    ),
-                    onEndEarly = {
-                        // Allow pauses expire naturally; no per-scope clear API yet.
-                    },
-                    showEndEarly = false,
-                )
-            }
             DurationActionGrid(
                 enabled = canAct,
-                onFiveMin = {
-                    viewModel.pauseForTargets(PauseType.fiveMin, profileIdsForScope())
-                    scope.launch { notifyPauseActivated() }
-                },
-                onFifteenMin = {
-                    viewModel.pauseForTargets(PauseType.fifteenMin, profileIdsForScope())
-                    scope.launch { notifyPauseActivated() }
-                },
-                onSixtyMin = {
-                    viewModel.pauseForTargets(PauseType.sixtyMin, profileIdsForScope())
-                    scope.launch { notifyPauseActivated() }
-                },
-                onCustom = {
-                    pickerTarget = PickerTarget.Pause
-                    showCustomPicker = true
-                },
-                onToday = {
-                    viewModel.pauseToday(profileIdsForScope())
-                    scope.launch { notifyPauseActivated() }
+                activeChoice = activeAllowChoice,
+                draftChoice = pauseDraftChoice,
+                customState = pauseCustomState,
+                onCustomStateChange = { pauseCustomState = it },
+                onDraftSelect = { pauseDraftChoice = it },
+                onApply = {
+                    val choice = pauseDraftChoice ?: return@DurationActionGrid
+                    viewModel.applyAllowChoice(profileIdsForScope(), choice)
+                    pauseDraftChoice = null
+                    scope.launch { snackbarHostState.showSnackbar(pauseActivatedMsg) }
                 },
                 onUntilDate = {
                     pickerTarget = PickerTarget.Pause
                     showDatePicker = true
                 },
             )
-
-            if (!settings.strictMode) {
-                Text(
-                    stringResource(R.string.pause_global_only),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Button(
-                    onClick = { viewModel.emergencyBypass() },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.emergency_bypass))
-                }
-            }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
@@ -233,39 +212,18 @@ fun PauseScreen(
                 title = stringResource(R.string.focus_mode_section),
                 help = stringResource(R.string.focus_mode_help),
             )
-            if (activeFocusUntil != null) {
-                ActiveUntilBanner(
-                    label = stringResource(
-                        R.string.focus_block_active_until,
-                        formatUntil(activeFocusUntil),
-                    ),
-                    onEndEarly = {
-                        viewModel.endFocusBlock(profileIdsForScope())
-                    },
-                    showEndEarly = true,
-                )
-            }
             DurationActionGrid(
                 enabled = canAct,
-                onFiveMin = {
-                    viewModel.blockForDuration(profileIdsForScope(), 5 * 60_000L)
-                    scope.launch { notifyFocusActivated() }
-                },
-                onFifteenMin = {
-                    viewModel.blockForDuration(profileIdsForScope(), 15 * 60_000L)
-                    scope.launch { notifyFocusActivated() }
-                },
-                onSixtyMin = {
-                    viewModel.blockForDuration(profileIdsForScope(), 60 * 60_000L)
-                    scope.launch { notifyFocusActivated() }
-                },
-                onCustom = {
-                    pickerTarget = PickerTarget.Focus
-                    showCustomPicker = true
-                },
-                onToday = {
-                    viewModel.blockToday(profileIdsForScope())
-                    scope.launch { notifyFocusActivated() }
+                activeChoice = activeFocusChoice,
+                draftChoice = focusDraftChoice,
+                customState = focusCustomState,
+                onCustomStateChange = { focusCustomState = it },
+                onDraftSelect = { focusDraftChoice = it },
+                onApply = {
+                    val choice = focusDraftChoice ?: return@DurationActionGrid
+                    viewModel.applyFocusChoice(profileIdsForScope(), choice)
+                    focusDraftChoice = null
+                    scope.launch { snackbarHostState.showSnackbar(focusActivatedMsg) }
                 },
                 onUntilDate = {
                     pickerTarget = PickerTarget.Focus
@@ -273,44 +231,6 @@ fun PauseScreen(
                 },
             )
         }
-    }
-
-    if (showCustomPicker) {
-        AlertDialog(
-            onDismissRequest = { showCustomPicker = false },
-            title = { Text(stringResource(R.string.pause_custom_duration_title)) },
-            text = {
-                DurationPicker(
-                    label = stringResource(R.string.duration_custom),
-                    totalMs = customDurationMs,
-                    coarseStepMinutes = 60,
-                    fineStepMinutes = 15,
-                    isSet = customDurationMs > 0,
-                    onDurationChange = { customDurationMs = it },
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val ids = profileIdsForScope()
-                    when (pickerTarget) {
-                        PickerTarget.Pause -> {
-                            viewModel.pauseUntil(ids, System.currentTimeMillis() + customDurationMs)
-                            scope.launch { notifyPauseActivated() }
-                        }
-                        PickerTarget.Focus -> {
-                            viewModel.blockForDuration(ids, customDurationMs)
-                            scope.launch { notifyFocusActivated() }
-                        }
-                    }
-                    showCustomPicker = false
-                }) { Text(stringResource(R.string.confirm)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCustomPicker = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-        )
     }
 
     if (showDatePicker) {
@@ -342,16 +262,10 @@ fun PauseScreen(
                         set(Calendar.MINUTE, timeState.minute)
                         set(Calendar.SECOND, 0)
                     }
-                    val ids = profileIdsForScope()
+                    val choice = DurationChoice.UntilDateTime(cal.timeInMillis)
                     when (pickerTarget) {
-                        PickerTarget.Pause -> {
-                            viewModel.pauseUntil(ids, cal.timeInMillis)
-                            scope.launch { notifyPauseActivated() }
-                        }
-                        PickerTarget.Focus -> {
-                            viewModel.blockForTargets(ids, cal.timeInMillis)
-                            scope.launch { notifyFocusActivated() }
-                        }
+                        PickerTarget.Pause -> pauseDraftChoice = choice
+                        PickerTarget.Focus -> focusDraftChoice = choice
                     }
                     showTimePicker = false
                     selectedDateMs = null
@@ -364,40 +278,3 @@ fun PauseScreen(
         )
     }
 }
-
-@Composable
-private fun ActiveUntilBanner(
-    label: String,
-    onEndEarly: () -> Unit,
-    showEndEarly: Boolean,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 4.dp),
-    ) {
-        Text(label, style = MaterialTheme.typography.bodySmall)
-        if (showEndEarly) {
-            TextButton(onClick = onEndEarly) {
-                Text(stringResource(R.string.end_early))
-            }
-        }
-    }
-}
-
-private fun resolveActiveUntil(
-    pauses: List<Pause>,
-    profileIds: List<Long>?,
-    now: Long,
-): Long? {
-    val active = pauses.filter { it.untilEpochMs > now && it.packageName == null }
-    return when {
-        profileIds == null -> active.firstOrNull { it.profileId == null }?.untilEpochMs
-            ?: active.maxOfOrNull { it.untilEpochMs }
-        profileIds.size == 1 -> active.firstOrNull { it.profileId == profileIds.first() }?.untilEpochMs
-        else -> active.filter { it.profileId in profileIds }.maxOfOrNull { it.untilEpochMs }
-    }
-}
-
-private fun formatUntil(untilMs: Long): String =
-    DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(untilMs))

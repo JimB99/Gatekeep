@@ -2,6 +2,8 @@ package com.gatekeep.app.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -147,8 +149,12 @@ fun GatekeepNavHost(
             arguments = listOf(navArgument("profileId") { type = NavType.LongType }),
         ) { entry ->
             val profileId = entry.arguments?.getLong("profileId") ?: return@composable
+            val policyTab by entry.savedStateHandle
+                .getStateFlow("policyTab", 0)
+                .collectAsState()
             ProfilePolicyScreen(
                 profileId = profileId,
+                initialTab = policyTab,
                 onBack = { navController.popBackStack() },
                 onNavigateLimits = { navController.navigate(Routes.profilePolicyLimits(profileId)) },
                 onNavigateRulesOpen = { navController.navigate(Routes.profilePolicyRulesOpen(profileId)) },
@@ -205,14 +211,20 @@ fun GatekeepNavHost(
             SegmentEditorScreen(
                 profileId = profileId,
                 segmentId = segmentId,
-                onBack = { navController.popBackStack() },
+                onBack = {
+                    navController.previousBackStackEntry?.savedStateHandle?.set("policyTab", 1)
+                    navController.popBackStack()
+                },
                 onNavigateCustomizeLimits = { segId ->
                     navController.navigate(Routes.profilePolicySegmentCustomizeLimits(profileId, segId))
                 },
                 onNavigateCustomizeRules = { segId ->
                     navController.navigate(Routes.profilePolicySegmentCustomizeRules(profileId, segId))
                 },
-                onDelete = { navController.popBackStack() },
+                onDelete = {
+                    navController.previousBackStackEntry?.savedStateHandle?.set("policyTab", 1)
+                    navController.popBackStack()
+                },
             )
         }
         composable(
@@ -223,7 +235,10 @@ fun GatekeepNavHost(
             SegmentEditorScreen(
                 profileId = profileId,
                 segmentId = null,
-                onBack = { navController.popBackStack() },
+                onBack = {
+                    navController.previousBackStackEntry?.savedStateHandle?.set("policyTab", 1)
+                    navController.popBackStack()
+                },
                 onNavigateCustomizeLimits = { segId ->
                     navController.navigate(Routes.profilePolicySegmentCustomizeLimits(profileId, segId))
                 },

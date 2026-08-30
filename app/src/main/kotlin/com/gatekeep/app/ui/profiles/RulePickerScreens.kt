@@ -197,6 +197,11 @@ fun RuleOpenActionScreen(
     overrideScope: PolicyOverrideScope? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
+    LaunchedEffect(profileId, overrideScope) {
+        if (overrideScope != null) {
+            viewModel.bindProfile(profileId)
+        }
+    }
     val profiles by viewModel.profiles.collectAsState()
     val segments by viewModel.scheduleSegments.collectAsState()
     val profile = profiles.find { it.id == profileId }
@@ -327,6 +332,11 @@ fun RuleLimitActionScreen(
     overrideScope: PolicyOverrideScope? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
+    LaunchedEffect(profileId, overrideScope) {
+        if (overrideScope != null) {
+            viewModel.bindProfile(profileId)
+        }
+    }
     val profiles by viewModel.profiles.collectAsState()
     val segments by viewModel.scheduleSegments.collectAsState()
     val profile = profiles.find { it.id == profileId }
@@ -470,6 +480,11 @@ fun RuleSessionActionScreen(
     overrideScope: PolicyOverrideScope? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
+    LaunchedEffect(profileId, overrideScope) {
+        if (overrideScope != null) {
+            viewModel.bindProfile(profileId)
+        }
+    }
     val profiles by viewModel.profiles.collectAsState()
     val segments by viewModel.scheduleSegments.collectAsState()
     val profile = profiles.find { it.id == profileId }

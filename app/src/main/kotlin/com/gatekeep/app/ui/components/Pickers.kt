@@ -321,6 +321,7 @@ fun DurationPicker(
     fineStepMinutes: Int = 15,
     minutesOnly: Boolean = false,
     isSet: Boolean = totalMs > 0,
+    isError: Boolean = false,
     supportingText: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -341,15 +342,15 @@ fun DurationPicker(
     }
 
     val displayText = if (minutesOnly) "${totalMinutes}m" else "${hours}h ${minutes}m"
-    val containerColor = if (isSet) {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f)
-    } else {
-        MaterialTheme.colorScheme.surface
+    val containerColor = when {
+        isError -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.12f)
+        isSet -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f)
+        else -> MaterialTheme.colorScheme.surface
     }
-    val border = if (isSet) {
-        BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
-    } else {
-        null
+    val border = when {
+        isError -> BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+        isSet -> BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+        else -> null
     }
 
     Surface(
@@ -362,7 +363,11 @@ fun DurationPicker(
         Text(
             label,
             style = MaterialTheme.typography.labelMedium,
-            color = if (isSet) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = when {
+                isError -> MaterialTheme.colorScheme.error
+                isSet -> MaterialTheme.colorScheme.onSurface
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            },
         )
         if (supportingText != null) {
             Text(

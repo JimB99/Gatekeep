@@ -22,10 +22,12 @@ fun SaveChangesButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     label: String = stringResource(R.string.save_changes),
+    enabled: Boolean = true,
 ) {
     if (!visible) return
     Button(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier.fillMaxWidth(),
     ) { Text(label) }
 }

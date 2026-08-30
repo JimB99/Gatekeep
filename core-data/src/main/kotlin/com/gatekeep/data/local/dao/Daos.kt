@@ -110,6 +110,16 @@ interface PauseDao {
 
     @Query("DELETE FROM pauses WHERE type = 'focusBlock' AND profileId = :profileId")
     suspend fun deleteFocusBlocksForProfile(profileId: Long)
+
+    @Query(
+        "DELETE FROM pauses WHERE type NOT IN ('focusBlock', 'focusMode', 'emergencyBypass') AND profileId IS NULL",
+    )
+    suspend fun deleteGlobalAllowPauses()
+
+    @Query(
+        "DELETE FROM pauses WHERE type NOT IN ('focusBlock', 'focusMode', 'emergencyBypass') AND profileId = :profileId",
+    )
+    suspend fun deleteAllowPausesForProfile(profileId: Long)
 }
 
 @Dao
