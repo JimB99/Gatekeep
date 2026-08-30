@@ -62,9 +62,7 @@ fun ProfileHubScreen(
     profileId: Long,
     onBack: () -> Unit,
     onEditApps: () -> Unit,
-    onEditSchedule: () -> Unit,
-    onEditLimits: () -> Unit,
-    onEditRules: () -> Unit,
+    onEditPolicy: () -> Unit,
     onEditPin: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
@@ -73,6 +71,7 @@ fun ProfileHubScreen(
     val appPasswordHash by viewModel.appPasswordHash.collectAsState()
     val monitoredPackages by viewModel.monitoredPackages.collectAsState()
     val scheduleWindows by viewModel.scheduleWindows.collectAsState()
+    val scheduleSegments by viewModel.scheduleSegments.collectAsState()
     var profileName by remember(profile?.name) { mutableStateOf(profile?.name ?: "") }
     var savedName by remember(profile?.name) { mutableStateOf(profile?.name ?: "") }
     var showDeactivatePinGate by remember { mutableStateOf(false) }
@@ -198,22 +197,10 @@ fun ProfileHubScreen(
                 iconPackages = monitoredPackages,
             )
             ProfileNavRow(
-                title = stringResource(R.string.schedule),
-                subtitle = profileScheduleSubtitle(scheduleWindows.size),
-                onClick = onEditSchedule,
+                title = stringResource(R.string.policy),
+                subtitle = profilePolicySubtitle(profile, scheduleSegments.size),
+                onClick = onEditPolicy,
             )
-            profile?.let { p ->
-                ProfileNavRow(
-                    title = stringResource(R.string.time_limits),
-                    subtitle = profileLimitsSubtitle(p),
-                    onClick = onEditLimits,
-                )
-                ProfileNavRow(
-                    title = stringResource(R.string.rules),
-                    subtitle = profileRulesSubtitle(p),
-                    onClick = onEditRules,
-                )
-            }
             ProfileNavRow(
                 title = stringResource(R.string.profile_pin),
                 subtitle = if (profile?.onOpenAction == OnOpenAction.pinGate) {
@@ -521,6 +508,17 @@ private fun profileAppsSubtitle(count: Int): String =
     stringResource(R.string.profile_apps_tracked, count)
 
 @Composable
+private fun profilePolicySubtitle(profile: Profile?, segmentCount: Int): String {
+    if (profile == null) return stringResource(R.string.no_schedules)
+    val limits = profileLimitsSubtitle(profile)
+    return if (segmentCount == 0) {
+        limits
+    } else {
+        stringResource(R.string.policy_subtitle_format, limits, segmentCount)
+    }
+}
+
+@Composable
 private fun profileScheduleSubtitle(windowCount: Int): String =
     if (windowCount == 0) {
         stringResource(R.string.profile_schedule_always)
@@ -529,7 +527,7 @@ private fun profileScheduleSubtitle(windowCount: Int): String =
     }
 
 @Composable
-private fun profileLimitsSubtitle(profile: Profile): String {
+internal fun profileLimitsSubtitle(profile: Profile): String {
     val parts = buildList {
         profile.weeklyLimitMs?.let {
             add(stringResource(R.string.limit_weekly_short, formatDurationMinutes(it)))

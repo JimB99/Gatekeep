@@ -9,6 +9,9 @@ import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.ProfileEnforcementConfig
 import com.gatekeep.domain.model.RuleEvaluationContext
 import com.gatekeep.domain.model.RuleResult
+import com.gatekeep.domain.model.ResolvedSchedulePolicy
+import com.gatekeep.domain.model.SchedulePolicyMode
+import com.gatekeep.domain.model.PolicySource
 import com.gatekeep.domain.model.ScheduleWindow
 import com.gatekeep.domain.model.UsageSnapshot
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -85,16 +88,35 @@ class RuleEngineTest {
     }
 
     @Test
-    fun `blocks outside schedule window`() {
-        val monday10am = ZonedDateTime.of(2025, 1, 6, 10, 0, 0, 0, ZoneId.of("UTC")).toInstant().toEpochMilli()
-        val windows = listOf(
-            ScheduleWindow(profileId = 1, dayOfWeek = 1, startMinute = 18 * 60, endMinute = 20 * 60),
-        )
+    fun `blocks on schedule block policy`() {
         val result = RuleEngine.evaluate(
-            baseContext(now = monday10am, scheduleWindows = windows),
+            baseContext(
+                resolvedSchedulePolicy = ResolvedSchedulePolicy(
+                    mode = SchedulePolicyMode.block,
+                    limits = null,
+                    enforcementConfig = null,
+                    source = PolicySource.noScheduleMatch,
+                ),
+            ),
         )
         assertTrue(result is RuleResult.Blocked)
-        assertEquals(BlockReason.outsideSchedule, (result as RuleResult.Blocked).reason)
+        assertEquals(BlockReason.scheduleBlock, (result as RuleResult.Blocked).reason)
+    }
+
+    @Test
+    fun `allow policy bypasses limits`() {
+        val result = RuleEngine.evaluate(
+            baseContext(
+                usage = UsageSnapshot(dailyMs = 999 * 60_000L),
+                resolvedSchedulePolicy = ResolvedSchedulePolicy(
+                    mode = SchedulePolicyMode.allow,
+                    limits = null,
+                    enforcementConfig = null,
+                    source = PolicySource.segment,
+                ),
+            ),
+        )
+        assertTrue(result is RuleResult.Allowed)
     }
 
     @Test
@@ -111,6 +133,32 @@ class RuleEngineTest {
             ),
         )
         assertTrue(result is RuleResult.Allowed)
+    }
+
+    @Test
+    fun `focus block returns blocked before pause allow`() {
+        val focusBlock = PauseManager.createPause(
+            type = com.gatekeep.domain.model.PauseType.focusBlock,
+            nowEpochMs = 1000,
+            profileId = 1,
+            untilEpochMs = Long.MAX_VALUE,
+        )
+        val allowPause = PauseManager.createPause(
+            type = com.gatekeep.domain.model.PauseType.fifteenMin,
+            nowEpochMs = 1000,
+            profileId = 1,
+        )
+        val blocked = RuleEngine.evaluate(
+            baseContext(
+                usage = UsageSnapshot(dailyMs = 999 * 60_000L),
+                pauses = listOf(
+                    focusBlock,
+                    allowPause.copy(untilEpochMs = Long.MAX_VALUE),
+                ),
+            ),
+        )
+        assertTrue(blocked is RuleResult.Blocked)
+        assertEquals(BlockReason.focusMode, (blocked as RuleResult.Blocked).reason)
     }
 
     @Test
@@ -231,7 +279,7 @@ class RuleEngineTest {
         now: Long = 1_000_000L,
         profile: Profile = this.profile,
         usage: UsageSnapshot = UsageSnapshot(),
-        scheduleWindows: List<ScheduleWindow> = emptyList(),
+        resolvedSchedulePolicy: ResolvedSchedulePolicy? = null,
         pauses: List<com.gatekeep.domain.model.Pause> = emptyList(),
         enforcementConfig: ProfileEnforcementConfig = profile.enforcementConfig(),
         sessionState: com.gatekeep.domain.model.SessionState? = null,
@@ -244,7 +292,7 @@ class RuleEngineTest {
         usage = usage,
         sessionState = sessionState,
         pauses = pauses,
-        scheduleWindows = scheduleWindows,
+        resolvedSchedulePolicy = resolvedSchedulePolicy,
         enforcementConfig = enforcementConfig,
     )
 }
@@ -520,6 +568,32 @@ class SessionTrackerTest {
         assertTrue(session.sessionLimitNotified)
         val newSession = SessionTracker.startSession("com.test", now + 1000)
         assertFalse(newSession.sessionLimitNotified)
+    }
+}
+
+class FocusBlockManagerTest {
+
+    @Test
+    fun `global focus block applies to any profile`() {
+        val pause = PauseManager.createPause(
+            type = com.gatekeep.domain.model.PauseType.focusBlock,
+            nowEpochMs = 1000,
+            untilEpochMs = 2000,
+        )
+        val check = FocusBlockManager.isBlocked(listOf(pause), profileId = 99, nowEpochMs = 1500)
+        assertTrue(check is FocusBlockManager.BlockCheck.Blocked)
+    }
+
+    @Test
+    fun `profile focus block does not apply to other profiles`() {
+        val pause = PauseManager.createPause(
+            type = com.gatekeep.domain.model.PauseType.focusBlock,
+            nowEpochMs = 1000,
+            profileId = 1,
+            untilEpochMs = 2000,
+        )
+        val check = FocusBlockManager.isBlocked(listOf(pause), profileId = 2, nowEpochMs = 1500)
+        assertTrue(check is FocusBlockManager.BlockCheck.NotBlocked)
     }
 }
 

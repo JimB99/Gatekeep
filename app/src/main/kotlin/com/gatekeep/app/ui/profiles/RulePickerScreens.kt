@@ -41,13 +41,16 @@ import com.gatekeep.app.ui.components.DurationPickerWithSeconds
 import com.gatekeep.app.ui.components.GatekeepFilterChip
 import com.gatekeep.app.ui.components.SaveChangesButton
 import com.gatekeep.app.ui.components.rememberUnsavedChangesGuard
+import com.gatekeep.app.ui.policy.PolicyOverrideScope
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
 import com.gatekeep.app.util.PasswordHasher
+import com.gatekeep.domain.model.ExtensionPolicy
 import com.gatekeep.domain.model.FrictionDifficulty
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.Profile
+import com.gatekeep.domain.model.SchedulePolicyMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,14 +69,14 @@ fun ProfileRulesScreen(
     var savedExtensionDraft by remember(profile?.id) {
         mutableStateOf(
             ExtensionPolicyDraft.fromPolicy(
-                profile?.extensionPolicy ?: com.gatekeep.domain.model.ExtensionPolicy(),
+                profile?.limitExtensionPolicy ?: com.gatekeep.domain.model.ExtensionPolicy(),
             ),
         )
     }
     var extensionDraft by remember(profile?.id) { mutableStateOf(savedExtensionDraft) }
 
-    LaunchedEffect(profile?.extensionPolicy) {
-        profile?.extensionPolicy?.let {
+    LaunchedEffect(profile?.limitExtensionPolicy) {
+        profile?.limitExtensionPolicy?.let {
             val loaded = ExtensionPolicyDraft.fromPolicy(it)
             savedExtensionDraft = loaded
             extensionDraft = loaded
@@ -84,7 +87,7 @@ fun ProfileRulesScreen(
 
     fun saveExtension() {
         profile?.let { p ->
-            viewModel.saveProfile(p.copy(extensionPolicy = extensionDraft.toPolicy()))
+            viewModel.saveProfile(p.copy(limitExtensionPolicy = extensionDraft.toPolicy()))
             savedExtensionDraft = extensionDraft
         }
     }
@@ -162,7 +165,7 @@ fun ProfileRulesScreen(
 }
 
 @Composable
-private fun RuleNavRow(
+internal fun RuleNavRow(
     title: String,
     subtitle: String,
     onClick: () -> Unit,
@@ -191,12 +194,17 @@ private fun RuleNavRow(
 fun RuleOpenActionScreen(
     profileId: Long,
     onBack: () -> Unit,
+    overrideScope: PolicyOverrideScope? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val profiles by viewModel.profiles.collectAsState()
+    val segments by viewModel.scheduleSegments.collectAsState()
     val profile = profiles.find { it.id == profileId }
-    var savedOnOpen by remember(profile?.id) { mutableStateOf(profile?.onOpenAction ?: OnOpenAction.none) }
-    var onOpen by remember(profile?.id) { mutableStateOf(savedOnOpen) }
+    val overrideOnOpen = remember(profile, segments, overrideScope) {
+        resolveOverrideOnOpen(profile, segments, overrideScope)
+    }
+    var savedOnOpen by remember(profile?.id, overrideScope) { mutableStateOf(overrideOnOpen) }
+    var onOpen by remember(profile?.id, overrideScope) { mutableStateOf(savedOnOpen) }
     var savedDifficulty by remember(profile?.id) {
         mutableStateOf(profile?.defaultFrictionDifficulty ?: FrictionDifficulty.medium)
     }
@@ -208,9 +216,9 @@ fun RuleOpenActionScreen(
     var profilePin by remember { mutableStateOf("") }
     var savedPin by remember { mutableStateOf("") }
 
-    LaunchedEffect(profile?.onOpenAction, profile?.defaultFrictionDifficulty, profile?.openWaitDurationSeconds) {
+    LaunchedEffect(profile?.onOpenAction, profile?.noScheduleMatchOverrides, segments, overrideScope) {
         if (profile == null) return@LaunchedEffect
-        savedOnOpen = profile.onOpenAction
+        savedOnOpen = resolveOverrideOnOpen(profile, segments, overrideScope)
         onOpen = savedOnOpen
         savedDifficulty = profile.defaultFrictionDifficulty
         difficulty = savedDifficulty
@@ -248,18 +256,30 @@ fun RuleOpenActionScreen(
             viewModel.clearProfilePin(p.id)
         }
         viewModel.saveProfile(
-            p.copy(
-                onOpenAction = onOpen,
-                defaultFrictionDifficulty = difficulty,
-                openWaitDurationSeconds = openWaitSeconds.coerceIn(1, 3600),
-                passwordHash = passwordHash,
-                lockEnabled = onOpen == OnOpenAction.pinGate && !passwordHash.isNullOrBlank(),
-            ),
+            when (overrideScope) {
+                is PolicyOverrideScope.NoScheduleMatch -> p.copy(
+                    noScheduleMatchMode = SchedulePolicyMode.customize,
+                    noScheduleMatchOverrides = p.noScheduleMatchOverrides.copy(onOpenAction = onOpen),
+                )
+                is PolicyOverrideScope.Segment -> p
+                null -> p.copy(
+                    onOpenAction = onOpen,
+                    defaultFrictionDifficulty = difficulty,
+                    openWaitDurationSeconds = openWaitSeconds.coerceIn(1, 3600),
+                    passwordHash = passwordHash,
+                    lockEnabled = onOpen == OnOpenAction.pinGate && !passwordHash.isNullOrBlank(),
+                )
+            },
         )
+        if (overrideScope is PolicyOverrideScope.Segment) {
+            viewModel.updateSegmentOverrides(overrideScope.segmentId) { it.copy(onOpenAction = onOpen) }
+        }
         savedOnOpen = onOpen
-        savedDifficulty = difficulty
-        savedOpenWaitSeconds = openWaitSeconds
-        savedPin = trimmedPin
+        if (overrideScope == null) {
+            savedDifficulty = difficulty
+            savedOpenWaitSeconds = openWaitSeconds
+            savedPin = trimmedPin
+        }
     }
 
     fun discardChanges() {
@@ -304,14 +324,17 @@ fun RuleOpenActionScreen(
 fun RuleLimitActionScreen(
     profileId: Long,
     onBack: () -> Unit,
+    overrideScope: PolicyOverrideScope? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val profiles by viewModel.profiles.collectAsState()
+    val segments by viewModel.scheduleSegments.collectAsState()
     val profile = profiles.find { it.id == profileId }
-    var savedOnLimit by remember(profile?.id) {
-        mutableStateOf(profile?.onLimitAction ?: OnLimitAction.limitWithExtensions)
+    val initialOnLimit = remember(profile, segments, overrideScope) {
+        resolveOverrideOnLimit(profile, segments, overrideScope)
     }
-    var onLimit by remember(profile?.id) { mutableStateOf(savedOnLimit) }
+    var savedOnLimit by remember(profile?.id, overrideScope) { mutableStateOf(initialOnLimit) }
+    var onLimit by remember(profile?.id, overrideScope) { mutableStateOf(savedOnLimit) }
     var savedDifficulty by remember(profile?.id) {
         mutableStateOf(profile?.defaultFrictionDifficulty ?: FrictionDifficulty.medium)
     }
@@ -324,15 +347,23 @@ fun RuleLimitActionScreen(
         mutableLongStateOf(profile?.limitBreakDurationMs ?: 0L)
     }
     var limitBreakMs by remember(profile?.id) { mutableLongStateOf(savedLimitBreakMs) }
+    var savedExtensionDraft by remember(profile?.id) {
+        mutableStateOf(ExtensionPolicyDraft.fromPolicy(profile?.limitExtensionPolicy ?: ExtensionPolicy()))
+    }
+    var extensionDraft by remember(profile?.id) { mutableStateOf(savedExtensionDraft) }
 
     LaunchedEffect(
         profile?.onLimitAction,
+        profile?.noScheduleMatchOverrides,
+        profile?.limitExtensionPolicy,
+        segments,
+        overrideScope,
         profile?.defaultFrictionDifficulty,
         profile?.limitWaitDurationSeconds,
         profile?.limitBreakDurationMs,
     ) {
         if (profile == null) return@LaunchedEffect
-        savedOnLimit = profile.onLimitAction
+        savedOnLimit = resolveOverrideOnLimit(profile, segments, overrideScope)
         onLimit = savedOnLimit
         savedDifficulty = profile.defaultFrictionDifficulty
         difficulty = savedDifficulty
@@ -340,31 +371,54 @@ fun RuleLimitActionScreen(
         limitWaitSeconds = savedLimitWaitSeconds
         savedLimitBreakMs = profile.limitBreakDurationMs ?: 0L
         limitBreakMs = savedLimitBreakMs
+        val loadedExtension = ExtensionPolicyDraft.fromPolicy(profile.limitExtensionPolicy)
+        savedExtensionDraft = loadedExtension
+        extensionDraft = loadedExtension
     }
 
     val isDirty = onLimit != savedOnLimit ||
         difficulty != savedDifficulty ||
         limitWaitSeconds != savedLimitWaitSeconds ||
-        limitBreakMs != savedLimitBreakMs
+        limitBreakMs != savedLimitBreakMs ||
+        (overrideScope == null && extensionDraft != savedExtensionDraft)
 
     fun saveRules() {
         val p = profile ?: return
-        viewModel.saveProfile(
-            p.copy(
-                onLimitAction = onLimit,
-                defaultFrictionDifficulty = difficulty,
-                limitWaitDurationSeconds = limitWaitSeconds.coerceIn(1, 3600),
-                limitBreakDurationMs = if (onLimit == OnLimitAction.mandatoryBreak) {
-                    limitBreakMs.takeIf { it > 0 }
-                } else {
-                    null
-                },
-            ),
-        )
+        val limitBreak = if (onLimit == OnLimitAction.mandatoryBreak) limitBreakMs.takeIf { it > 0 } else null
+        when (overrideScope) {
+            is PolicyOverrideScope.NoScheduleMatch -> viewModel.saveProfile(
+                p.copy(
+                    noScheduleMatchMode = SchedulePolicyMode.customize,
+                    noScheduleMatchOverrides = p.noScheduleMatchOverrides.copy(onLimitAction = onLimit),
+                    limitExtensionPolicy = if (onLimit == OnLimitAction.limitWithExtensions) {
+                        extensionDraft.toPolicy()
+                    } else {
+                        p.limitExtensionPolicy
+                    },
+                ),
+            )
+            is PolicyOverrideScope.Segment -> {
+                viewModel.updateSegmentOverrides(overrideScope.segmentId) {
+                    it.copy(onLimitAction = onLimit)
+                }
+            }
+            null -> viewModel.saveProfile(
+                p.copy(
+                    onLimitAction = onLimit,
+                    defaultFrictionDifficulty = difficulty,
+                    limitWaitDurationSeconds = limitWaitSeconds.coerceIn(1, 3600),
+                    limitBreakDurationMs = limitBreak,
+                    limitExtensionPolicy = extensionDraft.toPolicy(),
+                ),
+            )
+        }
         savedOnLimit = onLimit
-        savedDifficulty = difficulty
-        savedLimitWaitSeconds = limitWaitSeconds
-        savedLimitBreakMs = limitBreakMs
+        if (overrideScope == null) {
+            savedDifficulty = difficulty
+            savedLimitWaitSeconds = limitWaitSeconds
+            savedLimitBreakMs = limitBreakMs
+            savedExtensionDraft = extensionDraft
+        }
     }
 
     fun discardChanges() {
@@ -372,6 +426,7 @@ fun RuleLimitActionScreen(
         difficulty = savedDifficulty
         limitWaitSeconds = savedLimitWaitSeconds
         limitBreakMs = savedLimitBreakMs
+        extensionDraft = savedExtensionDraft
     }
 
     val backGuard = rememberUnsavedChangesGuard(
@@ -397,6 +452,13 @@ fun RuleLimitActionScreen(
             onLimitWaitChange = { limitWaitSeconds = it.coerceIn(1, 3600) },
             onLimitBreakChange = { limitBreakMs = it },
         )
+        if (onLimit == OnLimitAction.limitWithExtensions && overrideScope !is PolicyOverrideScope.Segment) {
+            Text(stringResource(R.string.extension_options), fontWeight = FontWeight.SemiBold)
+            ExtensionPolicyEditor(
+                draft = extensionDraft,
+                onDraftChange = { extensionDraft = it },
+            )
+        }
     }
 }
 
@@ -405,14 +467,17 @@ fun RuleLimitActionScreen(
 fun RuleSessionActionScreen(
     profileId: Long,
     onBack: () -> Unit,
+    overrideScope: PolicyOverrideScope? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val profiles by viewModel.profiles.collectAsState()
+    val segments by viewModel.scheduleSegments.collectAsState()
     val profile = profiles.find { it.id == profileId }
-    var savedOnSession by remember(profile?.id) {
-        mutableStateOf(profile?.onSessionLimitAction ?: OnSessionLimitAction.limitWithExtensions)
+    val initialOnSession = remember(profile, segments, overrideScope) {
+        resolveOverrideOnSession(profile, segments, overrideScope)
     }
-    var onSession by remember(profile?.id) { mutableStateOf(savedOnSession) }
+    var savedOnSession by remember(profile?.id, overrideScope) { mutableStateOf(initialOnSession) }
+    var onSession by remember(profile?.id, overrideScope) { mutableStateOf(savedOnSession) }
     var savedDifficulty by remember(profile?.id) {
         mutableStateOf(profile?.defaultFrictionDifficulty ?: FrictionDifficulty.medium)
     }
@@ -425,15 +490,23 @@ fun RuleSessionActionScreen(
         mutableLongStateOf(profile?.breakDurationMs ?: 0L)
     }
     var sessionBreakMs by remember(profile?.id) { mutableLongStateOf(savedSessionBreakMs) }
+    var savedExtensionDraft by remember(profile?.id) {
+        mutableStateOf(ExtensionPolicyDraft.fromPolicy(profile?.sessionExtensionPolicy ?: ExtensionPolicy()))
+    }
+    var extensionDraft by remember(profile?.id) { mutableStateOf(savedExtensionDraft) }
 
     LaunchedEffect(
         profile?.onSessionLimitAction,
+        profile?.noScheduleMatchOverrides,
+        profile?.sessionExtensionPolicy,
+        segments,
+        overrideScope,
         profile?.defaultFrictionDifficulty,
         profile?.sessionWaitDurationSeconds,
         profile?.breakDurationMs,
     ) {
         if (profile == null) return@LaunchedEffect
-        savedOnSession = profile.onSessionLimitAction
+        savedOnSession = resolveOverrideOnSession(profile, segments, overrideScope)
         onSession = savedOnSession
         savedDifficulty = profile.defaultFrictionDifficulty
         difficulty = savedDifficulty
@@ -441,31 +514,58 @@ fun RuleSessionActionScreen(
         sessionWaitSeconds = savedSessionWaitSeconds
         savedSessionBreakMs = profile.breakDurationMs ?: 0L
         sessionBreakMs = savedSessionBreakMs
+        val loadedExtension = ExtensionPolicyDraft.fromPolicy(profile.sessionExtensionPolicy)
+        savedExtensionDraft = loadedExtension
+        extensionDraft = loadedExtension
     }
 
     val isDirty = onSession != savedOnSession ||
         difficulty != savedDifficulty ||
         sessionWaitSeconds != savedSessionWaitSeconds ||
-        sessionBreakMs != savedSessionBreakMs
+        sessionBreakMs != savedSessionBreakMs ||
+        (overrideScope == null && extensionDraft != savedExtensionDraft)
 
     fun saveRules() {
         val p = profile ?: return
-        viewModel.saveProfile(
-            p.copy(
-                onSessionLimitAction = onSession,
-                defaultFrictionDifficulty = difficulty,
-                sessionWaitDurationSeconds = sessionWaitSeconds.coerceIn(1, 3600),
-                breakDurationMs = if (onSession == OnSessionLimitAction.mandatoryBreak) {
-                    sessionBreakMs.takeIf { it > 0 }
-                } else {
-                    null
-                },
-            ),
-        )
+        val sessionBreak = if (onSession == OnSessionLimitAction.mandatoryBreak) {
+            sessionBreakMs.takeIf { it > 0 }
+        } else {
+            null
+        }
+        when (overrideScope) {
+            is PolicyOverrideScope.NoScheduleMatch -> viewModel.saveProfile(
+                p.copy(
+                    noScheduleMatchMode = SchedulePolicyMode.customize,
+                    noScheduleMatchOverrides = p.noScheduleMatchOverrides.copy(onSessionLimitAction = onSession),
+                    sessionExtensionPolicy = if (onSession == OnSessionLimitAction.limitWithExtensions) {
+                        extensionDraft.toPolicy()
+                    } else {
+                        p.sessionExtensionPolicy
+                    },
+                ),
+            )
+            is PolicyOverrideScope.Segment -> {
+                viewModel.updateSegmentOverrides(overrideScope.segmentId) {
+                    it.copy(onSessionLimitAction = onSession)
+                }
+            }
+            null -> viewModel.saveProfile(
+                p.copy(
+                    onSessionLimitAction = onSession,
+                    defaultFrictionDifficulty = difficulty,
+                    sessionWaitDurationSeconds = sessionWaitSeconds.coerceIn(1, 3600),
+                    breakDurationMs = sessionBreak,
+                    sessionExtensionPolicy = extensionDraft.toPolicy(),
+                ),
+            )
+        }
         savedOnSession = onSession
-        savedDifficulty = difficulty
-        savedSessionWaitSeconds = sessionWaitSeconds
-        savedSessionBreakMs = sessionBreakMs
+        if (overrideScope == null) {
+            savedDifficulty = difficulty
+            savedSessionWaitSeconds = sessionWaitSeconds
+            savedSessionBreakMs = sessionBreakMs
+            savedExtensionDraft = extensionDraft
+        }
     }
 
     fun discardChanges() {
@@ -473,6 +573,7 @@ fun RuleSessionActionScreen(
         difficulty = savedDifficulty
         sessionWaitSeconds = savedSessionWaitSeconds
         sessionBreakMs = savedSessionBreakMs
+        extensionDraft = savedExtensionDraft
     }
 
     val backGuard = rememberUnsavedChangesGuard(
@@ -498,6 +599,13 @@ fun RuleSessionActionScreen(
             onSessionWaitChange = { sessionWaitSeconds = it.coerceIn(1, 3600) },
             onSessionBreakChange = { sessionBreakMs = it },
         )
+        if (onSession == OnSessionLimitAction.limitWithExtensions && overrideScope !is PolicyOverrideScope.Segment) {
+            Text(stringResource(R.string.extension_options), fontWeight = FontWeight.SemiBold)
+            ExtensionPolicyEditor(
+                draft = extensionDraft,
+                onDraftChange = { extensionDraft = it },
+            )
+        }
     }
 }
 
@@ -809,4 +917,42 @@ internal fun SessionActionRuleEditor(
             )
         }
     }
+}
+
+private fun resolveOverrideOnOpen(
+    profile: Profile?,
+    segments: List<com.gatekeep.domain.model.ScheduleSegment>,
+    overrideScope: PolicyOverrideScope?,
+): OnOpenAction = when (overrideScope) {
+    is PolicyOverrideScope.NoScheduleMatch ->
+        profile?.noScheduleMatchOverrides?.onOpenAction ?: OnOpenAction.none
+    is PolicyOverrideScope.Segment ->
+        segments.find { it.id == overrideScope.segmentId }?.overrides?.onOpenAction ?: OnOpenAction.none
+    null -> profile?.onOpenAction ?: OnOpenAction.none
+}
+
+private fun resolveOverrideOnLimit(
+    profile: Profile?,
+    segments: List<com.gatekeep.domain.model.ScheduleSegment>,
+    overrideScope: PolicyOverrideScope?,
+): OnLimitAction = when (overrideScope) {
+    is PolicyOverrideScope.NoScheduleMatch ->
+        profile?.noScheduleMatchOverrides?.onLimitAction ?: OnLimitAction.limitWithExtensions
+    is PolicyOverrideScope.Segment ->
+        segments.find { it.id == overrideScope.segmentId }?.overrides?.onLimitAction
+            ?: OnLimitAction.limitWithExtensions
+    null -> profile?.onLimitAction ?: OnLimitAction.limitWithExtensions
+}
+
+private fun resolveOverrideOnSession(
+    profile: Profile?,
+    segments: List<com.gatekeep.domain.model.ScheduleSegment>,
+    overrideScope: PolicyOverrideScope?,
+): OnSessionLimitAction = when (overrideScope) {
+    is PolicyOverrideScope.NoScheduleMatch ->
+        profile?.noScheduleMatchOverrides?.onSessionLimitAction ?: OnSessionLimitAction.limitWithExtensions
+    is PolicyOverrideScope.Segment ->
+        segments.find { it.id == overrideScope.segmentId }?.overrides?.onSessionLimitAction
+            ?: OnSessionLimitAction.limitWithExtensions
+    null -> profile?.onSessionLimitAction ?: OnSessionLimitAction.limitWithExtensions
 }

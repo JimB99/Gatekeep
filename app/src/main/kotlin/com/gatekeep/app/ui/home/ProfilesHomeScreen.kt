@@ -57,7 +57,7 @@ fun ProfilesHomeScreen(
     onNavigatePause: () -> Unit,
     onNavigateSettings: () -> Unit,
     onNavigateApps: (Long) -> Unit,
-    onNavigateSchedule: (Long) -> Unit,
+    onNavigatePolicy: (Long) -> Unit,
     onNavigateProfileDetail: (Long) -> Unit,
     viewModel: ProfilesHomeViewModel = hiltViewModel(),
 ) {
@@ -105,6 +105,7 @@ fun ProfilesHomeScreen(
                 PermissionBanner(
                     state = permissionState,
                     onEnableEnforcement = { viewModel.enableEnforcement() },
+                    onDismissError = { viewModel.clearEnforcementError() },
                 )
             }
             if (profiles.isEmpty()) {
@@ -192,8 +193,8 @@ fun ProfilesHomeScreen(
                                 TextButton(onClick = { onNavigateApps(profile.id) }) {
                                     Text(stringResource(R.string.apps))
                                 }
-                                TextButton(onClick = { onNavigateSchedule(profile.id) }) {
-                                    Text(stringResource(R.string.allowed_hours))
+                                TextButton(onClick = { onNavigatePolicy(profile.id) }) {
+                                    Text(stringResource(R.string.policy))
                                 }
                             }
                         }

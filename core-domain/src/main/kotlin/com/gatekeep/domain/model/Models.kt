@@ -7,6 +7,7 @@ enum class PauseType {
     untilDatetime,
     noLimitToday,
     focusMode,
+    focusBlock,
     emergencyBypass,
 }
 
@@ -35,6 +36,50 @@ enum class OnSessionLimitAction {
     hardBlock,
 }
 
+enum class SchedulePolicyMode {
+    allow,
+    block,
+    default,
+    customize,
+}
+
+enum class PolicySource {
+    segment,
+    noScheduleMatch,
+}
+
+/** Nullable fields inherit from the profile Default tab when merged. */
+data class SchedulePolicyOverrides(
+    val dailyLimitMs: Long? = null,
+    val hourlyLimitMs: Long? = null,
+    val weeklyLimitMs: Long? = null,
+    val sessionLimitMs: Long? = null,
+    val onOpenAction: OnOpenAction? = null,
+    val onLimitAction: OnLimitAction? = null,
+    val onSessionLimitAction: OnSessionLimitAction? = null,
+)
+
+data class ScheduleSegment(
+    val id: Long,
+    val profileId: Long,
+    val label: String? = null,
+    val isActive: Boolean = true,
+    val mode: SchedulePolicyMode = SchedulePolicyMode.default,
+    val sortOrder: Int = 0,
+    val overrides: SchedulePolicyOverrides = SchedulePolicyOverrides(),
+) {
+    fun customizeOverrides(): SchedulePolicyOverrides? =
+        if (mode == SchedulePolicyMode.customize) overrides else null
+}
+
+data class ResolvedSchedulePolicy(
+    val mode: SchedulePolicyMode,
+    val limits: AppLimit?,
+    val enforcementConfig: ProfileEnforcementConfig?,
+    val activeSegmentId: Long? = null,
+    val source: PolicySource,
+)
+
 data class ExtensionPolicy(
     val optionMinutes: List<Int> = listOf(1, 5, 10),
     val maxExtensionsPerDay: Int? = null,
@@ -54,7 +99,8 @@ data class ProfileEnforcementConfig(
     val limitWaitDurationSeconds: Int = 60,
     val sessionBreakDurationMs: Long? = null,
     val limitBreakDurationMs: Long? = null,
-    val extensionPolicy: ExtensionPolicy = ExtensionPolicy(),
+    val limitExtensionPolicy: ExtensionPolicy = ExtensionPolicy(),
+    val sessionExtensionPolicy: ExtensionPolicy = ExtensionPolicy(),
 )
 
 enum class FrictionMethod {
@@ -112,7 +158,10 @@ data class Profile(
     val onOpenAction: OnOpenAction = OnOpenAction.none,
     val onLimitAction: OnLimitAction = OnLimitAction.limitWithExtensions,
     val onSessionLimitAction: OnSessionLimitAction = OnSessionLimitAction.limitWithExtensions,
-    val extensionPolicy: ExtensionPolicy = ExtensionPolicy(),
+    val limitExtensionPolicy: ExtensionPolicy = ExtensionPolicy(),
+    val sessionExtensionPolicy: ExtensionPolicy = ExtensionPolicy(),
+    val noScheduleMatchMode: SchedulePolicyMode = SchedulePolicyMode.default,
+    val noScheduleMatchOverrides: SchedulePolicyOverrides = SchedulePolicyOverrides(),
 ) {
     fun enforcementConfig(): ProfileEnforcementConfig = ProfileEnforcementConfig(
         onOpenAction = onOpenAction,
@@ -124,7 +173,8 @@ data class Profile(
         limitWaitDurationSeconds = limitWaitDurationSeconds,
         sessionBreakDurationMs = breakDurationMs,
         limitBreakDurationMs = limitBreakDurationMs,
-        extensionPolicy = extensionPolicy,
+        limitExtensionPolicy = limitExtensionPolicy,
+        sessionExtensionPolicy = sessionExtensionPolicy,
     )
 
     fun toAppLimit(packageName: String): AppLimit = AppLimit(
@@ -166,6 +216,7 @@ data class AppLimit(
 data class ScheduleWindow(
     val id: Long = 0,
     val profileId: Long,
+    val segmentId: Long? = null,
     val packageName: String? = null,
     val dayOfWeek: Int,
     val startMinute: Int,
@@ -206,7 +257,8 @@ data class RuleEvaluationContext(
     val usage: UsageSnapshot,
     val sessionState: SessionState?,
     val pauses: List<Pause>,
-    val scheduleWindows: List<ScheduleWindow>,
+    val scheduleWindows: List<ScheduleWindow> = emptyList(),
+    val resolvedSchedulePolicy: ResolvedSchedulePolicy? = null,
     val focusModeUntilMs: Long? = null,
     val emergencyBypassAvailable: Boolean = false,
     val lastEmergencyBypassEpochMs: Long? = null,
@@ -251,6 +303,7 @@ enum class BlockReason {
     profilePaused,
     appPaused,
     outsideSchedule,
+    scheduleBlock,
     hourlyLimit,
     dailyLimit,
     weeklyLimit,

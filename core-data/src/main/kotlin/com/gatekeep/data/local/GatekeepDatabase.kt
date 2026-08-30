@@ -7,6 +7,7 @@ import com.gatekeep.data.local.dao.MonitoredAppDao
 import com.gatekeep.data.local.dao.OverrideEventDao
 import com.gatekeep.data.local.dao.PauseDao
 import com.gatekeep.data.local.dao.ProfileDao
+import com.gatekeep.data.local.dao.ScheduleSegmentDao
 import com.gatekeep.data.local.dao.ScheduleWindowDao
 import com.gatekeep.data.local.dao.SessionStateDao
 import com.gatekeep.data.local.dao.UsageAggregateDao
@@ -16,6 +17,7 @@ import com.gatekeep.data.local.entity.MonitoredAppEntity
 import com.gatekeep.data.local.entity.OverrideEventEntity
 import com.gatekeep.data.local.entity.PauseEntity
 import com.gatekeep.data.local.entity.ProfileEntity
+import com.gatekeep.data.local.entity.ScheduleSegmentEntity
 import com.gatekeep.data.local.entity.ScheduleWindowEntity
 import com.gatekeep.data.local.entity.SessionStateEntity
 import com.gatekeep.data.local.entity.UsageAggregateEntity
@@ -26,6 +28,7 @@ import com.gatekeep.data.local.entity.UsageSessionEntity
         ProfileEntity::class,
         MonitoredAppEntity::class,
         AppLimitEntity::class,
+        ScheduleSegmentEntity::class,
         ScheduleWindowEntity::class,
         PauseEntity::class,
         UsageSessionEntity::class,
@@ -33,13 +36,14 @@ import com.gatekeep.data.local.entity.UsageSessionEntity
         OverrideEventEntity::class,
         SessionStateEntity::class,
     ],
-    version = 8,
+    version = 10,
     exportSchema = false,
 )
 abstract class GatekeepDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
     abstract fun monitoredAppDao(): MonitoredAppDao
     abstract fun appLimitDao(): AppLimitDao
+    abstract fun scheduleSegmentDao(): ScheduleSegmentDao
     abstract fun scheduleWindowDao(): ScheduleWindowDao
     abstract fun pauseDao(): PauseDao
     abstract fun usageSessionDao(): UsageSessionDao

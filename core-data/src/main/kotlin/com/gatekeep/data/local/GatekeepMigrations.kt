@@ -30,4 +30,127 @@ object GatekeepMigrations {
             )
         }
     }
+
+    val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE profiles ADD COLUMN noScheduleMatchMode TEXT NOT NULL DEFAULT 'default'",
+            )
+            db.execSQL("ALTER TABLE profiles ADD COLUMN noScheduleMatchDailyLimitMs INTEGER DEFAULT NULL")
+            db.execSQL("ALTER TABLE profiles ADD COLUMN noScheduleMatchHourlyLimitMs INTEGER DEFAULT NULL")
+            db.execSQL("ALTER TABLE profiles ADD COLUMN noScheduleMatchWeeklyLimitMs INTEGER DEFAULT NULL")
+            db.execSQL("ALTER TABLE profiles ADD COLUMN noScheduleMatchSessionLimitMs INTEGER DEFAULT NULL")
+            db.execSQL("ALTER TABLE profiles ADD COLUMN noScheduleMatchOnOpenAction TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE profiles ADD COLUMN noScheduleMatchOnLimitAction TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE profiles ADD COLUMN noScheduleMatchOnSessionLimitAction TEXT DEFAULT NULL")
+
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS schedule_segments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    profileId INTEGER NOT NULL,
+                    label TEXT,
+                    isActive INTEGER NOT NULL,
+                    mode TEXT NOT NULL,
+                    sortOrder INTEGER NOT NULL,
+                    dailyLimitMs INTEGER,
+                    hourlyLimitMs INTEGER,
+                    weeklyLimitMs INTEGER,
+                    sessionLimitMs INTEGER,
+                    onOpenAction TEXT,
+                    onLimitAction TEXT,
+                    onSessionLimitAction TEXT
+                )
+                """.trimIndent(),
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_schedule_segments_profileId ON schedule_segments(profileId)")
+
+            db.execSQL("ALTER TABLE schedule_windows ADD COLUMN segmentId INTEGER DEFAULT NULL")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_schedule_windows_segmentId ON schedule_windows(segmentId)")
+
+            migrateWindowsToSegments(db)
+        }
+
+        private fun migrateWindowsToSegments(db: SupportSQLiteDatabase) {
+            val profileIds = mutableListOf<Long>()
+            db.query("SELECT id FROM profiles").use { cursor ->
+                while (cursor.moveToNext()) {
+                    profileIds.add(cursor.getLong(0))
+                }
+            }
+
+            for (profileId in profileIds) {
+                val enforcementCount = db.query(
+                    "SELECT COUNT(*) FROM schedule_windows WHERE profileId = ? AND isProfileAutoSwitch = 0",
+                    arrayOf(profileId.toString()),
+                ).use { cursor ->
+                    if (cursor.moveToNext()) cursor.getInt(0) else 0
+                }
+
+                if (enforcementCount > 0) {
+                    db.execSQL(
+                        "UPDATE profiles SET noScheduleMatchMode = 'block' WHERE id = ?",
+                        arrayOf(profileId),
+                    )
+                }
+
+                val windows = mutableListOf<Triple<Long, Int, Pair<Int, Int>>>()
+                db.query(
+                    """
+                    SELECT id, dayOfWeek, startMinute, endMinute
+                    FROM schedule_windows
+                    WHERE profileId = ? AND isProfileAutoSwitch = 0
+                    """.trimIndent(),
+                    arrayOf(profileId.toString()),
+                ).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        windows.add(
+                            Triple(
+                                cursor.getLong(0),
+                                cursor.getInt(1),
+                                cursor.getInt(2) to cursor.getInt(3),
+                            ),
+                        )
+                    }
+                }
+
+                val groups = windows.groupBy { it.third }
+                var sortOrder = 0
+                for ((timeRange, group) in groups) {
+                    db.execSQL(
+                        """
+                        INSERT INTO schedule_segments (profileId, isActive, mode, sortOrder)
+                        VALUES (?, 1, 'default', ?)
+                        """.trimIndent(),
+                        arrayOf(profileId, sortOrder++),
+                    )
+                    val segmentId = db.query("SELECT last_insert_rowid()").use { c ->
+                        c.moveToFirst()
+                        c.getLong(0)
+                    }
+                    for ((windowId, _, _) in group) {
+                        db.execSQL(
+                            "UPDATE schedule_windows SET segmentId = ? WHERE id = ?",
+                            arrayOf(segmentId, windowId),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    val MIGRATION_9_10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE profiles ADD COLUMN limitExtensionPolicyJson TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE profiles ADD COLUMN sessionExtensionPolicyJson TEXT DEFAULT NULL")
+            db.execSQL(
+                """
+                UPDATE profiles
+                SET limitExtensionPolicyJson = extensionPolicyJson,
+                    sessionExtensionPolicyJson = extensionPolicyJson
+                WHERE extensionPolicyJson IS NOT NULL
+                """.trimIndent(),
+            )
+        }
+    }
 }

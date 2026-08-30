@@ -4,6 +4,7 @@ import com.gatekeep.data.local.entity.AppLimitEntity
 import com.gatekeep.data.local.entity.MonitoredAppEntity
 import com.gatekeep.data.local.entity.PauseEntity
 import com.gatekeep.data.local.entity.ProfileEntity
+import com.gatekeep.data.local.entity.ScheduleSegmentEntity
 import com.gatekeep.data.local.entity.ScheduleWindowEntity
 import com.gatekeep.data.local.entity.SessionStateEntity
 import com.gatekeep.domain.model.AppCategory
@@ -17,6 +18,9 @@ import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.Pause
 import com.gatekeep.domain.model.PauseType
 import com.gatekeep.domain.model.Profile
+import com.gatekeep.domain.model.SchedulePolicyMode
+import com.gatekeep.domain.model.SchedulePolicyOverrides
+import com.gatekeep.domain.model.ScheduleSegment
 import com.gatekeep.domain.model.ScheduleWindow
 import com.gatekeep.domain.model.SessionState
 
@@ -47,7 +51,29 @@ fun ProfileEntity.toDomain() = Profile(
     onLimitAction = runCatching { OnLimitAction.valueOf(onLimitAction) }.getOrDefault(OnLimitAction.limitWithExtensions),
     onSessionLimitAction = runCatching { OnSessionLimitAction.valueOf(onSessionLimitAction) }
         .getOrDefault(OnSessionLimitAction.limitWithExtensions),
-    extensionPolicy = decodeExtensionPolicy(extensionPolicyJson),
+    limitExtensionPolicy = decodeExtensionPolicy(
+        limitExtensionPolicyJson ?: extensionPolicyJson,
+    ),
+    sessionExtensionPolicy = decodeExtensionPolicy(
+        sessionExtensionPolicyJson ?: extensionPolicyJson,
+    ),
+    noScheduleMatchMode = runCatching { SchedulePolicyMode.valueOf(noScheduleMatchMode) }
+        .getOrDefault(SchedulePolicyMode.default),
+    noScheduleMatchOverrides = SchedulePolicyOverrides(
+        dailyLimitMs = noScheduleMatchDailyLimitMs,
+        hourlyLimitMs = noScheduleMatchHourlyLimitMs,
+        weeklyLimitMs = noScheduleMatchWeeklyLimitMs,
+        sessionLimitMs = noScheduleMatchSessionLimitMs,
+        onOpenAction = noScheduleMatchOnOpenAction?.let {
+            runCatching { OnOpenAction.valueOf(it) }.getOrNull()
+        },
+        onLimitAction = noScheduleMatchOnLimitAction?.let {
+            runCatching { OnLimitAction.valueOf(it) }.getOrNull()
+        },
+        onSessionLimitAction = noScheduleMatchOnSessionLimitAction?.let {
+            runCatching { OnSessionLimitAction.valueOf(it) }.getOrNull()
+        },
+    ),
 )
 
 private fun ProfileEntity.resolveOnOpenAction(): OnOpenAction {
@@ -84,7 +110,17 @@ fun Profile.toEntity() = ProfileEntity(
     onOpenAction = onOpenAction.name,
     onLimitAction = onLimitAction.name,
     onSessionLimitAction = onSessionLimitAction.name,
-    extensionPolicyJson = encodeExtensionPolicy(extensionPolicy),
+    extensionPolicyJson = encodeExtensionPolicy(limitExtensionPolicy),
+    limitExtensionPolicyJson = encodeExtensionPolicy(limitExtensionPolicy),
+    sessionExtensionPolicyJson = encodeExtensionPolicy(sessionExtensionPolicy),
+    noScheduleMatchMode = noScheduleMatchMode.name,
+    noScheduleMatchDailyLimitMs = noScheduleMatchOverrides.dailyLimitMs,
+    noScheduleMatchHourlyLimitMs = noScheduleMatchOverrides.hourlyLimitMs,
+    noScheduleMatchWeeklyLimitMs = noScheduleMatchOverrides.weeklyLimitMs,
+    noScheduleMatchSessionLimitMs = noScheduleMatchOverrides.sessionLimitMs,
+    noScheduleMatchOnOpenAction = noScheduleMatchOverrides.onOpenAction?.name,
+    noScheduleMatchOnLimitAction = noScheduleMatchOverrides.onLimitAction?.name,
+    noScheduleMatchOnSessionLimitAction = noScheduleMatchOverrides.onSessionLimitAction?.name,
 )
 
 fun MonitoredAppEntity.toDomain() = MonitoredApp(
@@ -126,6 +162,54 @@ fun AppLimit.toEntity() = AppLimitEntity(
 fun ScheduleWindowEntity.toDomain() = ScheduleWindow(
     id = id,
     profileId = profileId,
+    segmentId = segmentId,
+    packageName = packageName,
+    dayOfWeek = dayOfWeek,
+    startMinute = startMinute,
+    endMinute = endMinute,
+    isProfileAutoSwitch = isProfileAutoSwitch,
+)
+
+fun ScheduleSegmentEntity.toDomain() = ScheduleSegment(
+    id = id,
+    profileId = profileId,
+    label = label,
+    isActive = isActive,
+    mode = runCatching { SchedulePolicyMode.valueOf(mode) }.getOrDefault(SchedulePolicyMode.default),
+    sortOrder = sortOrder,
+    overrides = SchedulePolicyOverrides(
+        dailyLimitMs = dailyLimitMs,
+        hourlyLimitMs = hourlyLimitMs,
+        weeklyLimitMs = weeklyLimitMs,
+        sessionLimitMs = sessionLimitMs,
+        onOpenAction = onOpenAction?.let { runCatching { OnOpenAction.valueOf(it) }.getOrNull() },
+        onLimitAction = onLimitAction?.let { runCatching { OnLimitAction.valueOf(it) }.getOrNull() },
+        onSessionLimitAction = onSessionLimitAction?.let {
+            runCatching { OnSessionLimitAction.valueOf(it) }.getOrNull()
+        },
+    ),
+)
+
+fun ScheduleSegment.toEntity() = ScheduleSegmentEntity(
+    id = id,
+    profileId = profileId,
+    label = label,
+    isActive = isActive,
+    mode = mode.name,
+    sortOrder = sortOrder,
+    dailyLimitMs = overrides.dailyLimitMs,
+    hourlyLimitMs = overrides.hourlyLimitMs,
+    weeklyLimitMs = overrides.weeklyLimitMs,
+    sessionLimitMs = overrides.sessionLimitMs,
+    onOpenAction = overrides.onOpenAction?.name,
+    onLimitAction = overrides.onLimitAction?.name,
+    onSessionLimitAction = overrides.onSessionLimitAction?.name,
+)
+
+fun ScheduleWindow.toEntity() = ScheduleWindowEntity(
+    id = id,
+    profileId = profileId,
+    segmentId = segmentId,
     packageName = packageName,
     dayOfWeek = dayOfWeek,
     startMinute = startMinute,

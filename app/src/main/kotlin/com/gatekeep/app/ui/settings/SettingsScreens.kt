@@ -46,6 +46,8 @@ import androidx.compose.material3.Scaffold
 
 import androidx.compose.material3.Text
 
+import androidx.compose.material3.TextButton
+
 import androidx.compose.material3.TopAppBar
 
 import androidx.compose.runtime.Composable
@@ -573,43 +575,34 @@ fun EnforcementSettingsScreen(
 @Composable
 
 fun AboutSettingsScreen(
-
     onBack: () -> Unit,
-
     viewModel: SettingsViewModel = hiltViewModel(),
-
 ) {
+    var lastError by remember { mutableStateOf(viewModel.lastEnforcementError()) }
 
     SettingsDetailScaffold(title = stringResource(R.string.about), onBack = onBack) {
-
         Text(
-
             stringResource(R.string.version_full_format, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
-
             style = MaterialTheme.typography.bodyLarge,
-
         )
-
         Text(
-
-            if (viewModel.lastEnforcementError() != null) {
-
-                stringResource(R.string.last_error_format, viewModel.lastEnforcementError()!!)
-
+            if (lastError != null) {
+                stringResource(R.string.last_error_format, lastError!!)
             } else {
-
                 stringResource(R.string.no_recent_enforcement_errors)
-
             },
-
             style = MaterialTheme.typography.bodySmall,
-
             modifier = Modifier.padding(top = 12.dp),
-
         )
-
+        if (lastError != null) {
+            TextButton(onClick = {
+                viewModel.clearEnforcementError()
+                lastError = null
+            }) {
+                Text(stringResource(R.string.clear_error_log))
+            }
+        }
     }
-
 }
 
 

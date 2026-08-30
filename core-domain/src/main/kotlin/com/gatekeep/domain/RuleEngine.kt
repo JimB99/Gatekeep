@@ -1,13 +1,19 @@
 package com.gatekeep.domain
 
+import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.BlockReason
 import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.OnSessionLimitAction
+import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.ProfileEnforcementConfig
+import com.gatekeep.domain.model.ResolvedSchedulePolicy
 import com.gatekeep.domain.model.RuleEvaluationContext
 import com.gatekeep.domain.model.RuleResult
+import com.gatekeep.domain.model.SchedulePolicyMode
+import com.gatekeep.domain.model.ScheduleSegment
+import com.gatekeep.domain.model.ScheduleWindow
 import com.gatekeep.domain.model.WarningLevel
 
 object RuleEngine {
@@ -22,11 +28,47 @@ object RuleEngine {
             )
         }
 
-        if (context.limit == null) {
+        val schedulePolicy = context.resolvedSchedulePolicy
+        if (schedulePolicy != null) {
+            when (schedulePolicy.mode) {
+                SchedulePolicyMode.allow -> {
+                    return RuleResult.Allowed(null, null, null, null)
+                }
+                SchedulePolicyMode.block -> {
+                    return RuleResult.Blocked(
+                        reason = BlockReason.scheduleBlock,
+                        bypassAllowed = false,
+                    )
+                }
+                SchedulePolicyMode.default, SchedulePolicyMode.customize -> { /* continue */ }
+            }
+        }
+
+        val limit = context.limit
+        if (limit == null) {
             return RuleResult.Allowed(null, null, null, null)
         }
 
         val config = context.enforcementConfig
+
+        val focusBlock = FocusBlockManager.isBlocked(
+            pauses = context.pauses,
+            profileId = context.profile.id,
+            nowEpochMs = context.nowEpochMs,
+        )
+        if (focusBlock is FocusBlockManager.BlockCheck.Blocked) {
+            return RuleResult.Blocked(
+                reason = BlockReason.focusMode,
+                bypassAllowed = false,
+            )
+        }
+
+        if (context.focusModeUntilMs != null && context.nowEpochMs < context.focusModeUntilMs) {
+            return RuleResult.Blocked(
+                reason = BlockReason.focusMode,
+                bypassAllowed = false,
+            )
+        }
 
         val pauseCheck = PauseManager.isPaused(
             pauses = context.pauses,
@@ -43,28 +85,8 @@ object RuleEngine {
             )
         }
 
-        if (context.focusModeUntilMs != null && context.nowEpochMs < context.focusModeUntilMs) {
-            return RuleResult.Blocked(
-                reason = BlockReason.focusMode,
-                bypassAllowed = false,
-            )
-        }
-
-        if (!ScheduleEvaluator.isWithinAllowedWindow(
-                windows = context.scheduleWindows,
-                packageName = context.packageName,
-                profileId = context.profile.id,
-                nowEpochMs = context.nowEpochMs,
-            ) && context.scheduleWindows.isNotEmpty()
-        ) {
-            return RuleResult.Blocked(
-                reason = BlockReason.outsideSchedule,
-                bypassAllowed = false,
-            )
-        }
-
         val sessionResult = SessionTracker.evaluateSession(
-            limit = context.limit,
+            limit = limit,
             session = context.sessionState,
             nowEpochMs = context.nowEpochMs,
         )
@@ -86,14 +108,14 @@ object RuleEngine {
             is SessionTracker.SessionCheckResult.Allowed -> { /* continue */ }
         }
 
-        val limitResult = LimitEvaluator.evaluate(context.limit, context.usage)
+        val limitResult = LimitEvaluator.evaluate(limit, context.usage)
         when (limitResult) {
             is LimitEvaluator.LimitCheckResult.Blocked -> {
                 return applyLimitAction(
                     config = config,
                     reason = limitResult.reason,
                     nowEpochMs = context.nowEpochMs,
-                    limit = context.limit,
+                    limit = limit,
                     usage = context.usage,
                 )
             }
@@ -117,7 +139,7 @@ object RuleEngine {
         config: ProfileEnforcementConfig,
         reason: BlockReason,
         nowEpochMs: Long,
-        limit: com.gatekeep.domain.model.AppLimit,
+        limit: AppLimit,
         usage: com.gatekeep.domain.model.UsageSnapshot,
     ): RuleResult {
         val limitCrossedAt = limitCrossedAtFor(reason, limit, usage, nowEpochMs)
@@ -159,7 +181,7 @@ object RuleEngine {
 
     private fun limitCrossedAtFor(
         reason: BlockReason,
-        limit: com.gatekeep.domain.model.AppLimit,
+        limit: AppLimit,
         usage: com.gatekeep.domain.model.UsageSnapshot,
         nowEpochMs: Long,
     ): Long = when (reason) {
@@ -218,7 +240,7 @@ object RuleEngine {
 
     private fun evaluateOnOpen(
         config: ProfileEnforcementConfig,
-        profile: com.gatekeep.domain.model.Profile,
+        profile: Profile,
     ): RuleResult? = when (config.onOpenAction) {
         OnOpenAction.none -> {
             if (profile.delayOpenSeconds > 0) {

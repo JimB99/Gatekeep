@@ -47,3 +47,7 @@ See [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
 ## Architecture
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Roadmap
+
+- [ ] **Week timeline view** on the Policy → Schedules tab (visual 7-day grid; list editor remains primary)

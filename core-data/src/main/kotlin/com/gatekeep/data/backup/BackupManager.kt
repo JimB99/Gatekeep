@@ -3,6 +3,7 @@ package com.gatekeep.data.backup
 import com.gatekeep.data.local.entity.AppLimitEntity
 import com.gatekeep.data.local.entity.MonitoredAppEntity
 import com.gatekeep.data.local.entity.ProfileEntity
+import com.gatekeep.data.local.entity.ScheduleSegmentEntity
 import com.gatekeep.data.local.entity.ScheduleWindowEntity
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -13,6 +14,7 @@ data class ProfileBackup(
     val profile: ProfileBackupData,
     val monitoredApps: List<MonitoredAppBackup>,
     val limits: List<AppLimitBackup>,
+    val scheduleSegments: List<ScheduleSegmentBackup> = emptyList(),
     val scheduleWindows: List<ScheduleWindowBackup>,
 )
 
@@ -31,6 +33,16 @@ data class ProfileBackupData(
     val onLimitAction: String = "limitWithExtensions",
     val onSessionLimitAction: String = "limitWithExtensions",
     val extensionPolicyJson: String? = null,
+    val limitExtensionPolicyJson: String? = null,
+    val sessionExtensionPolicyJson: String? = null,
+    val noScheduleMatchMode: String = "default",
+    val noScheduleMatchDailyLimitMs: Long? = null,
+    val noScheduleMatchHourlyLimitMs: Long? = null,
+    val noScheduleMatchWeeklyLimitMs: Long? = null,
+    val noScheduleMatchSessionLimitMs: Long? = null,
+    val noScheduleMatchOnOpenAction: String? = null,
+    val noScheduleMatchOnLimitAction: String? = null,
+    val noScheduleMatchOnSessionLimitAction: String? = null,
 )
 
 @Serializable
@@ -56,7 +68,24 @@ data class AppLimitBackup(
 )
 
 @Serializable
+data class ScheduleSegmentBackup(
+    val localId: Long,
+    val label: String? = null,
+    val isActive: Boolean = true,
+    val mode: String = "default",
+    val sortOrder: Int = 0,
+    val dailyLimitMs: Long? = null,
+    val hourlyLimitMs: Long? = null,
+    val weeklyLimitMs: Long? = null,
+    val sessionLimitMs: Long? = null,
+    val onOpenAction: String? = null,
+    val onLimitAction: String? = null,
+    val onSessionLimitAction: String? = null,
+)
+
+@Serializable
 data class ScheduleWindowBackup(
+    val segmentLocalId: Long? = null,
     val packageName: String?,
     val dayOfWeek: Int,
     val startMinute: Int,
@@ -66,7 +95,7 @@ data class ScheduleWindowBackup(
 
 @Serializable
 data class GatekeepBackup(
-    val version: Int = 1,
+    val version: Int = 2,
     val profiles: List<ProfileBackup>,
 )
 
@@ -83,6 +112,7 @@ object BackupManager {
         profile: ProfileEntity,
         apps: List<MonitoredAppEntity>,
         limits: List<AppLimitEntity>,
+        segments: List<ScheduleSegmentEntity>,
         windows: List<ScheduleWindowEntity>,
     ) = ProfileBackup(
         profile = ProfileBackupData(
@@ -98,7 +128,17 @@ object BackupManager {
             onOpenAction = profile.onOpenAction,
             onLimitAction = profile.onLimitAction,
             onSessionLimitAction = profile.onSessionLimitAction,
-            extensionPolicyJson = profile.extensionPolicyJson,
+            extensionPolicyJson = profile.limitExtensionPolicyJson ?: profile.extensionPolicyJson,
+            limitExtensionPolicyJson = profile.limitExtensionPolicyJson ?: profile.extensionPolicyJson,
+            sessionExtensionPolicyJson = profile.sessionExtensionPolicyJson ?: profile.extensionPolicyJson,
+            noScheduleMatchMode = profile.noScheduleMatchMode,
+            noScheduleMatchDailyLimitMs = profile.noScheduleMatchDailyLimitMs,
+            noScheduleMatchHourlyLimitMs = profile.noScheduleMatchHourlyLimitMs,
+            noScheduleMatchWeeklyLimitMs = profile.noScheduleMatchWeeklyLimitMs,
+            noScheduleMatchSessionLimitMs = profile.noScheduleMatchSessionLimitMs,
+            noScheduleMatchOnOpenAction = profile.noScheduleMatchOnOpenAction,
+            noScheduleMatchOnLimitAction = profile.noScheduleMatchOnLimitAction,
+            noScheduleMatchOnSessionLimitAction = profile.noScheduleMatchOnSessionLimitAction,
         ),
         monitoredApps = apps.map {
             MonitoredAppBackup(it.packageName, it.label, it.category, it.isWhitelistedEssential)
@@ -110,9 +150,30 @@ object BackupManager {
                 it.frictionMethod, it.frictionDifficulty, it.extensionMsOnBypass,
             )
         },
+        scheduleSegments = segments.map {
+            ScheduleSegmentBackup(
+                localId = it.id,
+                label = it.label,
+                isActive = it.isActive,
+                mode = it.mode,
+                sortOrder = it.sortOrder,
+                dailyLimitMs = it.dailyLimitMs,
+                hourlyLimitMs = it.hourlyLimitMs,
+                weeklyLimitMs = it.weeklyLimitMs,
+                sessionLimitMs = it.sessionLimitMs,
+                onOpenAction = it.onOpenAction,
+                onLimitAction = it.onLimitAction,
+                onSessionLimitAction = it.onSessionLimitAction,
+            )
+        },
         scheduleWindows = windows.map {
             ScheduleWindowBackup(
-                it.packageName, it.dayOfWeek, it.startMinute, it.endMinute, it.isProfileAutoSwitch,
+                segmentLocalId = it.segmentId,
+                packageName = it.packageName,
+                dayOfWeek = it.dayOfWeek,
+                startMinute = it.startMinute,
+                endMinute = it.endMinute,
+                isProfileAutoSwitch = it.isProfileAutoSwitch,
             )
         },
     )

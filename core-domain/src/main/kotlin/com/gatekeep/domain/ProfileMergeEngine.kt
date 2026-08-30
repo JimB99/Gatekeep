@@ -2,9 +2,21 @@ package com.gatekeep.domain
 
 import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.FrictionMethod
+import com.gatekeep.domain.model.Profile
+import com.gatekeep.domain.model.ProfileEnforcementConfig
+import com.gatekeep.domain.model.ResolvedSchedulePolicy
+import com.gatekeep.domain.model.SchedulePolicyMode
+import com.gatekeep.domain.model.ScheduleSegment
 import com.gatekeep.domain.model.ScheduleWindow
 
 object ProfileMergeEngine {
+
+    private val modePriority = mapOf(
+        SchedulePolicyMode.block to 4,
+        SchedulePolicyMode.customize to 3,
+        SchedulePolicyMode.default to 2,
+        SchedulePolicyMode.allow to 1,
+    )
 
     fun mergedLimitForApp(limits: List<AppLimit>, packageName: String): AppLimit? {
         val applicable = limits.filter { it.packageName == packageName && it.enabled }
@@ -25,27 +37,49 @@ object ProfileMergeEngine {
         )
     }
 
-    fun mergedScheduleWindows(windows: List<ScheduleWindow>): List<ScheduleWindow> = windows
-
-    fun isWithinMergedSchedule(
+    fun mergedSchedulePolicy(
+        profiles: List<Profile>,
+        segments: List<ScheduleSegment>,
         windows: List<ScheduleWindow>,
         packageName: String,
-        profileIds: Set<Long>,
         nowEpochMs: Long,
-    ): Boolean {
-        val applicable = windows.filter { window ->
-            window.profileId in profileIds && !window.isProfileAutoSwitch
-        }
-        if (applicable.isEmpty()) return true
-
-        return applicable.any { window ->
-            ScheduleEvaluator.isWithinAllowedWindow(
-                windows = listOf(window),
+    ): ResolvedSchedulePolicy {
+        val perProfile = profiles.map { profile ->
+            SchedulePolicyResolver.resolveForProfile(
+                profile = profile,
+                segments = segments,
+                windows = windows,
                 packageName = packageName,
-                profileId = window.profileId,
                 nowEpochMs = nowEpochMs,
             )
         }
+        if (perProfile.isEmpty()) {
+            return ResolvedSchedulePolicy(
+                mode = SchedulePolicyMode.default,
+                limits = null,
+                enforcementConfig = null,
+                source = com.gatekeep.domain.model.PolicySource.noScheduleMatch,
+            )
+        }
+        val strictest = perProfile.maxBy { modePriority[it.mode] ?: 0 }
+        if (strictest.mode == SchedulePolicyMode.allow || strictest.mode == SchedulePolicyMode.block) {
+            return strictest
+        }
+        val limits = perProfile.mapNotNull { it.limits }
+        val mergedLimit = mergedLimitForApp(limits, packageName)
+        val mergedConfig = mergeEnforcementConfigs(
+            perProfile.mapNotNull { it.enforcementConfig },
+        )
+        return strictest.copy(
+            limits = mergedLimit,
+            enforcementConfig = mergedConfig ?: strictest.enforcementConfig,
+        )
+    }
+
+    private fun mergeEnforcementConfigs(configs: List<ProfileEnforcementConfig>): ProfileEnforcementConfig? {
+        if (configs.isEmpty()) return null
+        if (configs.size == 1) return configs.first()
+        return configs.first()
     }
 
     fun mergeUsageSnapshots(usages: List<com.gatekeep.domain.model.UsageSnapshot>): com.gatekeep.domain.model.UsageSnapshot {

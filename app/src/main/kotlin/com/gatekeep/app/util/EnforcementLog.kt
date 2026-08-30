@@ -24,12 +24,28 @@ class EnforcementLog(context: Context) {
     fun getLastErrorTime(): Long = dataStore.getLong(KEY_LAST_ERROR_TIME, 0L)
 
     fun clear() {
-        dataStore.edit().clear().apply()
+        dataStore.edit()
+            .remove(KEY_LAST_ERROR)
+            .remove(KEY_LAST_ERROR_TIME)
+            .apply()
+    }
+
+    fun clearStaleMigrationErrors() {
+        val error = getLastError() ?: return
+        if (STALE_MIGRATION_MARKERS.any { marker -> error.contains(marker, ignoreCase = true) }) {
+            clear()
+        }
     }
 
     companion object {
         private const val PREFS = "gatekeep_enforcement_log"
         private const val KEY_LAST_ERROR = "last_error"
         private const val KEY_LAST_ERROR_TIME = "last_error_time"
+
+        private val STALE_MIGRATION_MARKERS = listOf(
+            "schedule_segments",
+            "Migration didn't properly handle",
+            "Migration",
+        )
     }
 }

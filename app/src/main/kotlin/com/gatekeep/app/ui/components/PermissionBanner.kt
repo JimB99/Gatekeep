@@ -20,6 +20,7 @@ import com.gatekeep.app.util.PermissionHelper
 fun PermissionBanner(
     state: PermissionState,
     onEnableEnforcement: (() -> Unit)? = null,
+    onDismissError: (() -> Unit)? = null,
 ) {
     if (!state.showBanner) return
     val context = LocalContext.current
@@ -67,6 +68,12 @@ fun PermissionBanner(
                 if (!state.accessibilityGranted) Text(stringResource(R.string.accessibility_not_enabled))
                 if (!state.overlayGranted) Text(stringResource(R.string.overlay_not_granted))
                 state.lastError?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                if (state.lastError != null && state.allGranted && onDismissError != null) {
+                    Button(
+                        onClick = onDismissError,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    ) { Text(stringResource(R.string.dismiss_error)) }
+                }
                 if (!state.accessibilityGranted) {
                     Button(
                         onClick = { context.startActivity(PermissionHelper.accessibilityIntent(context)) },

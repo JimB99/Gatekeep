@@ -11,7 +11,9 @@ object PauseManager {
         packageName: String,
         nowEpochMs: Long,
     ): PauseCheck {
-        val active = pauses.filter { it.untilEpochMs > nowEpochMs }
+        val active = pauses.filter {
+            it.untilEpochMs > nowEpochMs && !isFocusOrBlockType(it.type)
+        }
 
         val globalPause = active.firstOrNull { it.profileId == null && it.packageName == null }
         if (globalPause != null) {
@@ -46,6 +48,7 @@ object PauseManager {
             PauseType.emergencyBypass -> nowEpochMs + 15 * 60_000L
             PauseType.untilDatetime -> error("untilDatetime requires explicit untilEpochMs")
             PauseType.noLimitToday -> error("noLimitToday requires explicit untilEpochMs")
+            PauseType.focusBlock -> error("focusBlock requires explicit untilEpochMs")
         }
         return Pause(
             profileId = profileId,
@@ -65,4 +68,7 @@ object PauseManager {
         profile,
         app,
     }
+
+    private fun isFocusOrBlockType(type: PauseType): Boolean =
+        type == PauseType.focusBlock || type == PauseType.focusMode
 }

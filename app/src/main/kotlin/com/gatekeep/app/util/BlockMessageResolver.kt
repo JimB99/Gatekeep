@@ -12,6 +12,7 @@ object BlockMessageResolver {
         when (reason) {
             BlockReason.focusMode -> context.getString(R.string.block_focus_mode)
             BlockReason.outsideSchedule -> context.getString(R.string.block_outside_schedule)
+            BlockReason.scheduleBlock -> context.getString(R.string.block_schedule_block)
             BlockReason.onBreak -> context.getString(R.string.block_take_break)
             BlockReason.sessionLimit -> context.getString(R.string.block_session_limit)
             BlockReason.dailyLimit -> context.getString(R.string.block_daily_limit)
@@ -57,6 +58,7 @@ object BlockMessageResolver {
 
     fun reasonLabel(context: Context, reasonKey: String): String = when (reasonKey) {
         "outsideSchedule" -> context.getString(R.string.block_outside_schedule)
+        "scheduleBlock" -> context.getString(R.string.block_schedule_block)
         "openGate" -> context.getString(R.string.block_open_gate)
         "profilePin" -> context.getString(R.string.enter_profile_pin)
         "extensionDenied" -> context.getString(R.string.extension_denied_title)

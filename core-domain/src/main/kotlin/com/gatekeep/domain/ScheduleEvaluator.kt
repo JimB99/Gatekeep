@@ -24,9 +24,7 @@ object ScheduleEvaluator {
         val minuteOfDay = now.hour * 60 + now.minute
 
         return applicable.any { window ->
-            window.dayOfWeek == dayOfWeek &&
-                minuteOfDay >= window.startMinute &&
-                minuteOfDay < window.endMinute
+            ScheduleWindowMatcher.matchesWindow(window, dayOfWeek, minuteOfDay)
         }
     }
 
@@ -44,9 +42,7 @@ object ScheduleEvaluator {
 
         return autoWindows
             .filter { window ->
-                window.dayOfWeek == dayOfWeek &&
-                    minuteOfDay >= window.startMinute &&
-                    minuteOfDay < window.endMinute
+                ScheduleWindowMatcher.matchesWindow(window, dayOfWeek, minuteOfDay)
             }
             .maxByOrNull { it.startMinute }
             ?.profileId

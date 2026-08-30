@@ -22,14 +22,22 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): GatekeepDatabase =
-        Room.databaseBuilder(context, GatekeepDatabase::class.java, "gatekeep.db")
+    fun provideDatabase(
+        @ApplicationContext context: Context,
+        enforcementLog: EnforcementLog,
+    ): GatekeepDatabase {
+        val db = Room.databaseBuilder(context, GatekeepDatabase::class.java, "gatekeep.db")
             .addMigrations(
                 GatekeepMigrations.MIGRATION_5_6,
                 GatekeepMigrations.MIGRATION_6_7,
                 GatekeepMigrations.MIGRATION_7_8,
+                GatekeepMigrations.MIGRATION_8_9,
+                GatekeepMigrations.MIGRATION_9_10,
             )
             .build()
+        enforcementLog.clearStaleMigrationErrors()
+        return db
+    }
 
     @Provides
     @Singleton
@@ -38,6 +46,7 @@ object AppModule {
             db.profileDao(),
             db.monitoredAppDao(),
             db.appLimitDao(),
+            db.scheduleSegmentDao(),
             db.scheduleWindowDao(),
             db.pauseDao(),
         )

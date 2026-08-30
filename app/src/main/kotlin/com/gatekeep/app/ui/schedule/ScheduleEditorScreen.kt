@@ -208,7 +208,7 @@ fun ScheduleEditorScreen(
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(formatGroupedDays(group.days))
                             Text(
-                                "${formatMinute(group.startMinute)} – ${formatMinute(group.endMinute)}",
+                                formatScheduleTimeRange(group.startMinute, group.endMinute),
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             Button(onClick = { viewModel.removeDraftWindows(group.windowIds) }) {
@@ -228,7 +228,7 @@ fun ScheduleEditorScreen(
 }
 
 @Composable
-private fun formatGroupedDays(days: Set<Int>): String {
+internal fun formatGroupedDays(days: Set<Int>): String {
     val ordered = days.sortedWith(compareBy { day -> if (day == 0) 7 else day })
     return ordered.map { day -> stringResource(dayNameRes(day)) }.joinToString(", ")
 }
@@ -249,9 +249,6 @@ private fun dayNameRes(day: Int): Int = when (day) {
 
 private fun dayName(context: Context, day: Int): String =
     context.getString(dayNameRes(day))
-
-private fun formatMinute(minute: Int): String =
-    "%02d:%02d".format(minute / 60, minute % 60)
 
 private data class ScheduleEditorValidation(
     val invalidRange: Boolean,

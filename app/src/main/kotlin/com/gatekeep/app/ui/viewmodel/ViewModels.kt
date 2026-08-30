@@ -17,6 +17,7 @@ import com.gatekeep.app.data.TopAppUsage
 import com.gatekeep.app.ui.components.buildPermissionState
 import com.gatekeep.app.util.EnforcementLog
 import com.gatekeep.app.util.LocaleController
+import com.gatekeep.app.util.UsageStatsCollector
 import com.gatekeep.app.util.PinStorage
 import com.gatekeep.app.worker.WeeklyReportWorker
 import com.gatekeep.data.locale.LocalePreferences
@@ -27,14 +28,17 @@ import com.gatekeep.domain.AppCategories
 import com.gatekeep.domain.StatsPeriodKind
 import com.gatekeep.domain.StatsPeriodLogic
 import com.gatekeep.domain.ProfileMergeEngine
+import com.gatekeep.domain.SchedulePolicyResolver
 import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.MonitoredApp
 import com.gatekeep.domain.model.PauseType
 import com.gatekeep.domain.model.Profile
+import com.gatekeep.domain.model.ScheduleSegment
 import com.gatekeep.domain.model.ScheduleWindow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -98,6 +102,11 @@ class ProfilesHomeViewModel @Inject constructor(
                 enforcementEnabled = settings.enforcementEnabled,
             )
         }
+    }
+
+    fun clearEnforcementError() {
+        enforcementLog.clear()
+        refreshPermissions()
     }
 
     fun refreshAll() {
@@ -166,6 +175,13 @@ class ProfileViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val scheduleSegments = _profileId
+        .flatMapLatest { id ->
+            if (id == null) flowOf(emptyList())
+            else profileRepository.observeScheduleSegments(id)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun bindProfile(profileId: Long) {
         _profileId.value = profileId
     }
@@ -221,6 +237,49 @@ class ProfileViewModel @Inject constructor(
     fun saveProfilePin(profileId: Long, pin: String) = pinStorage.setProfilePin(profileId, pin)
 
     fun clearProfilePin(profileId: Long) = pinStorage.clearProfilePin(profileId)
+
+    fun toggleSegmentActive(segmentId: Long, active: Boolean) {
+        viewModelScope.launch { profileRepository.toggleScheduleSegmentActive(segmentId, active) }
+    }
+
+    fun duplicateSegment(segmentId: Long) {
+        viewModelScope.launch { profileRepository.duplicateScheduleSegment(segmentId) }
+    }
+
+    fun deleteSegment(segmentId: Long) {
+        viewModelScope.launch { profileRepository.deleteScheduleSegment(segmentId) }
+    }
+
+    fun updateSegmentOverrides(
+        segmentId: Long,
+        transform: (com.gatekeep.domain.model.SchedulePolicyOverrides) ->
+            com.gatekeep.domain.model.SchedulePolicyOverrides,
+    ) {
+        viewModelScope.launch {
+            val segment = profileRepository.getScheduleSegment(segmentId) ?: return@launch
+            profileRepository.updateScheduleSegment(
+                segment.copy(overrides = transform(segment.overrides)),
+            )
+        }
+    }
+
+    suspend fun saveSegmentWithWindows(segment: ScheduleSegment, windows: List<ScheduleWindow>): Long {
+        val segmentId = if (segment.id > 0) {
+            profileRepository.updateScheduleSegment(segment)
+            segment.id
+        } else {
+            profileRepository.upsertScheduleSegment(segment.copy(id = 0))
+        }
+        val existing = profileRepository.observeScheduleWindows(segment.profileId).first()
+            .filter { it.segmentId == segmentId }
+        existing.forEach { profileRepository.deleteScheduleWindow(it.id) }
+        windows.forEach { window ->
+            profileRepository.addScheduleWindow(
+                window.copy(id = 0, profileId = segment.profileId, segmentId = segmentId),
+            )
+        }
+        return segmentId
+    }
 }
 
 @HiltViewModel
@@ -256,17 +315,22 @@ class AppPickerViewModel @Inject constructor(
         .flatMapLatest { id ->
             if (id == null) flowOf(emptyMap())
             else combine(
+                profileRepository.observeProfiles(),
                 profileRepository.observeMonitoredApps(id),
+                profileRepository.observeScheduleSegments(id),
                 profileRepository.observeScheduleWindows(id),
-            ) { apps, windows ->
+            ) { profiles, apps, segments, windows ->
+                val profile = profiles.find { it.id == id } ?: return@combine emptyMap()
                 val now = System.currentTimeMillis()
                 apps.associate { app ->
-                    app.packageName to ProfileMergeEngine.isWithinMergedSchedule(
+                    val policy = SchedulePolicyResolver.resolveForProfile(
+                        profile = profile,
+                        segments = segments,
                         windows = windows,
                         packageName = app.packageName,
-                        profileIds = setOf(id),
                         nowEpochMs = now,
                     )
+                    app.packageName to SchedulePolicyResolver.isAppAvailable(policy)
                 }
             }
         }
@@ -478,7 +542,19 @@ class PauseViewModel @Inject constructor(
     private val usageRepository: UsageRepository,
     private val profileRepository: ProfileRepository,
     private val settingsRepository: SettingsRepository,
+    private val usageStatsCollector: UsageStatsCollector,
 ) : ViewModel() {
+
+    private val nowMs = MutableStateFlow(System.currentTimeMillis())
+
+    init {
+        viewModelScope.launch {
+            while (true) {
+                delay(1_000)
+                nowMs.value = System.currentTimeMillis()
+            }
+        }
+    }
 
     val profiles = profileRepository.observeProfiles()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -486,11 +562,15 @@ class PauseViewModel @Inject constructor(
     val activeProfiles = profileRepository.observeActiveProfiles()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun pause(type: PauseType, profileId: Long?, packageName: String?, untilMs: Long? = null) {
-        viewModelScope.launch {
-            usageRepository.addPause(type, System.currentTimeMillis(), profileId, packageName, untilMs)
-        }
-    }
+    val activePauses = nowMs
+        .flatMapLatest { now -> usageRepository.observeActivePauses(now) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val settings = settingsRepository.settings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.gatekeep.data.repository.AppSettings())
+
+    fun dayEndEpochMs(now: Long = System.currentTimeMillis()): Long =
+        usageStatsCollector.dayStartEpochMs(now) + 86_400_000L
 
     fun pauseForTargets(
         type: PauseType,
@@ -510,16 +590,44 @@ class PauseViewModel @Inject constructor(
         }
     }
 
-    fun activateFocusMode() {
+    fun pauseUntil(profileIds: List<Long>?, untilMs: Long) {
+        pauseForTargets(PauseType.untilDatetime, profileIds, untilMs = untilMs)
+    }
+
+    fun pauseToday(profileIds: List<Long>?) {
+        val dayEnd = dayEndEpochMs()
+        pauseForTargets(PauseType.noLimitToday, profileIds, untilMs = dayEnd)
+    }
+
+    fun blockForTargets(profileIds: List<Long>?, untilMs: Long) {
         viewModelScope.launch {
-            val until = System.currentTimeMillis() + 25 * 60_000L
-            settingsRepository.updateSettings { it.copy(focusModeUntilMs = until) }
-            usageRepository.addPause(PauseType.focusMode, System.currentTimeMillis())
+            val now = System.currentTimeMillis()
+            usageRepository.clearFocusBlocks(profileIds)
+            if (profileIds == null) {
+                usageRepository.addFocusBlock(null, untilMs, now)
+            } else {
+                profileIds.forEach { profileId ->
+                    usageRepository.addFocusBlock(profileId, untilMs, now)
+                }
+            }
+            settingsRepository.updateSettings { it.copy(focusModeUntilMs = null) }
         }
     }
 
-    val settings = settingsRepository.settings
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.gatekeep.data.repository.AppSettings())
+    fun blockForDuration(profileIds: List<Long>?, durationMs: Long) {
+        blockForTargets(profileIds, System.currentTimeMillis() + durationMs)
+    }
+
+    fun blockToday(profileIds: List<Long>?) {
+        blockForTargets(profileIds, dayEndEpochMs())
+    }
+
+    fun endFocusBlock(profileIds: List<Long>?) {
+        viewModelScope.launch {
+            usageRepository.clearFocusBlocks(profileIds)
+            settingsRepository.updateSettings { it.copy(focusModeUntilMs = null) }
+        }
+    }
 
     fun emergencyBypass() {
         viewModelScope.launch {
@@ -567,6 +675,10 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun lastEnforcementError(): String? = enforcementLog.getLastError()
+
+    fun clearEnforcementError() {
+        enforcementLog.clear()
+    }
 }
 
 @HiltViewModel

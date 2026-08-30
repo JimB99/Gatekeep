@@ -42,3 +42,16 @@ fun frictionDifficultyLabel(difficulty: FrictionDifficulty): String = when (diff
     FrictionDifficulty.medium -> stringResource(R.string.difficulty_medium)
     FrictionDifficulty.hard -> stringResource(R.string.difficulty_hard)
 }
+
+@Composable
+fun schedulePolicyModeLabel(mode: com.gatekeep.domain.model.SchedulePolicyMode): String =
+    when (mode) {
+        com.gatekeep.domain.model.SchedulePolicyMode.allow ->
+            stringResource(R.string.schedule_mode_allow)
+        com.gatekeep.domain.model.SchedulePolicyMode.block ->
+            stringResource(R.string.schedule_mode_block)
+        com.gatekeep.domain.model.SchedulePolicyMode.default ->
+            stringResource(R.string.schedule_mode_default)
+        com.gatekeep.domain.model.SchedulePolicyMode.customize ->
+            stringResource(R.string.schedule_mode_customize)
+    }

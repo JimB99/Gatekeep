@@ -4,13 +4,14 @@ import com.gatekeep.data.local.dao.AppLimitDao
 import com.gatekeep.data.local.dao.MonitoredAppDao
 import com.gatekeep.data.local.dao.PauseDao
 import com.gatekeep.data.local.dao.ProfileDao
+import com.gatekeep.data.local.dao.ScheduleSegmentDao
 import com.gatekeep.data.local.dao.ScheduleWindowDao
-import com.gatekeep.data.local.entity.ProfileEntity
 import com.gatekeep.data.mapper.toDomain
 import com.gatekeep.data.mapper.toEntity
 import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.MonitoredApp
 import com.gatekeep.domain.model.Profile
+import com.gatekeep.domain.model.ScheduleSegment
 import com.gatekeep.domain.model.ScheduleWindow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -20,6 +21,7 @@ class ProfileRepository(
     private val profileDao: ProfileDao,
     private val monitoredAppDao: MonitoredAppDao,
     private val appLimitDao: AppLimitDao,
+    private val scheduleSegmentDao: ScheduleSegmentDao,
     private val scheduleWindowDao: ScheduleWindowDao,
     private val pauseDao: PauseDao,
 ) {
@@ -33,7 +35,7 @@ class ProfileRepository(
         profileDao.observeActive().map { it?.toDomain() }
 
     suspend fun createProfile(name: String): Long {
-        return profileDao.insert(ProfileEntity(name = name, isActive = false))
+        return profileDao.insert(com.gatekeep.data.local.entity.ProfileEntity(name = name, isActive = false))
     }
 
     suspend fun toggleProfileActive(id: Long, active: Boolean) {
@@ -92,17 +94,58 @@ class ProfileRepository(
     fun observeAllScheduleWindows(): Flow<List<ScheduleWindow>> =
         scheduleWindowDao.observeAll().map { list -> list.map { it.toDomain() } }
 
-    suspend fun addScheduleWindow(window: ScheduleWindow) {
-        scheduleWindowDao.insert(
-            com.gatekeep.data.local.entity.ScheduleWindowEntity(
-                profileId = window.profileId,
-                packageName = window.packageName,
-                dayOfWeek = window.dayOfWeek,
-                startMinute = window.startMinute,
-                endMinute = window.endMinute,
-                isProfileAutoSwitch = window.isProfileAutoSwitch,
-            ),
+    fun observeScheduleSegments(profileId: Long): Flow<List<ScheduleSegment>> =
+        scheduleSegmentDao.observeForProfile(profileId).map { list -> list.map { it.toDomain() } }
+
+    fun observeAllScheduleSegments(): Flow<List<ScheduleSegment>> =
+        scheduleSegmentDao.observeAll().map { list -> list.map { it.toDomain() } }
+
+    suspend fun upsertScheduleSegment(segment: ScheduleSegment): Long {
+        return scheduleSegmentDao.insert(segment.toEntity())
+    }
+
+    suspend fun updateScheduleSegment(segment: ScheduleSegment) {
+        scheduleSegmentDao.update(segment.toEntity())
+    }
+
+    suspend fun getScheduleSegment(segmentId: Long): ScheduleSegment? =
+        scheduleSegmentDao.getById(segmentId)?.toDomain()
+
+    suspend fun deleteScheduleSegment(segmentId: Long) {
+        scheduleWindowDao.deleteForSegment(segmentId)
+        scheduleSegmentDao.delete(segmentId)
+    }
+
+    suspend fun toggleScheduleSegmentActive(segmentId: Long, active: Boolean) {
+        val segment = scheduleSegmentDao.getById(segmentId) ?: return
+        scheduleSegmentDao.update(segment.copy(isActive = active))
+    }
+
+    suspend fun duplicateScheduleSegment(segmentId: Long): Long? {
+        val segment = scheduleSegmentDao.getById(segmentId)?.toDomain() ?: return null
+        val windows = scheduleWindowDao.observeForProfile(segment.profileId).first()
+            .filter { it.segmentId == segmentId }
+            .map { it.toDomain() }
+
+        val newLabel = segment.label?.let { "$it (copy)" }
+        val newSegmentId = scheduleSegmentDao.insert(
+            segment.copy(
+                id = 0,
+                label = newLabel,
+                sortOrder = segment.sortOrder + 1,
+            ).toEntity(),
         )
+
+        windows.forEach { window ->
+            scheduleWindowDao.insert(
+                window.copy(id = 0, segmentId = newSegmentId).toEntity(),
+            )
+        }
+        return newSegmentId
+    }
+
+    suspend fun addScheduleWindow(window: ScheduleWindow) {
+        scheduleWindowDao.insert(window.toEntity())
     }
 
     suspend fun deleteScheduleWindow(id: Long) {

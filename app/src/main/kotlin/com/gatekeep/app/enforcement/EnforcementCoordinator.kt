@@ -98,13 +98,14 @@ class EnforcementCoordinator @Inject constructor(
     private var showCountdownNotification = false
     private var consecutiveExtensionCount = 0
     private var openGatePassedPackage: String? = null
+    private var blockEnteredAtMs: Long = 0
     private val warnedPackagesToday = mutableSetOf<String>()
     private var warnedDayStartMs: Long = 0L
     private var lastNotificationBody: String? = null
     private var countdownNotificationTitle: String? = null
     private val notifiedLimitKeys = mutableSetOf<String>()
     private val evaluateMutex = Mutex()
-    private var blockEnteredAtMs: Long = 0L
+    private var activeExtensionPolicy: com.gatekeep.domain.model.ExtensionPolicy? = null
     private val lastForegroundEvaluationAtMs = mutableMapOf<String, Long>()
     private var foregroundPollRunnable: Runnable? = null
 
@@ -311,7 +312,7 @@ class EnforcementCoordinator @Inject constructor(
                 val profiles = profileRepository.observeActiveProfiles().first()
                 val profile = profiles.firstOrNull() ?: return@launch
                 val profileId = profile.id
-                val policy = profile.extensionPolicy
+                val policy = activeExtensionPolicy ?: profile.limitExtensionPolicy
                 val dayStart = usageStatsCollector.dayStartEpochMs()
                 val overridesToday = usageRepository.countOverridesForPackageToday(
                     profileId, packageName, dayStart,
@@ -369,7 +370,7 @@ class EnforcementCoordinator @Inject constructor(
                     profileId, packageName, dayStart,
                 )
                 val decision = ExtensionPolicyEvaluator.evaluateExtension(
-                    policy = profile.extensionPolicy,
+                    policy = activeExtensionPolicy ?: profile.limitExtensionPolicy,
                     requestedMinutes = 0,
                     overridesToday = overridesToday,
                     consecutiveInSession = consecutiveExtensionCount,
@@ -588,8 +589,8 @@ class EnforcementCoordinator @Inject constructor(
             return
         }
 
-        val activeProfileIds = activeProfiles.map { it.id }.toSet()
         val allScheduleWindows = profileRepository.observeAllScheduleWindows().first()
+        val allScheduleSegments = profileRepository.observeAllScheduleSegments().first()
         val pauses = usageRepository.observeActivePauses(System.currentTimeMillis()).first()
         val now = System.currentTimeMillis()
 
@@ -633,29 +634,31 @@ class EnforcementCoordinator @Inject constructor(
             return
         }
 
-        val scheduleAllowed = ProfileMergeEngine.isWithinMergedSchedule(
+        val primaryProfile = matchingProfiles.first()
+
+        val resolvedSchedulePolicy = ProfileMergeEngine.mergedSchedulePolicy(
+            profiles = matchingProfiles,
+            segments = allScheduleSegments,
             windows = allScheduleWindows,
             packageName = packageName,
-            profileIds = activeProfileIds,
             nowEpochMs = now,
         )
 
-        val primaryProfile = matchingProfiles.first()
+        val effectiveConfig = resolvedSchedulePolicy.enforcementConfig
+            ?: primaryProfile.enforcementConfig()
+        val mergedLimit = resolvedSchedulePolicy.limits
+            ?: ProfileMergeEngine.mergedLimitForApp(limitsForMerge, packageName)
 
-        if (!scheduleAllowed) {
-            val blockMessage = BlockMessageResolver.blockMessage(localizedContext, BlockReason.outsideSchedule)
-            showBlocked(
-                packageName, blockMessage, "outsideSchedule", null,
-                primaryProfile, null, RuleResult.Blocked(
-                    reason = BlockReason.outsideSchedule,
-                    bypassAllowed = false,
-                ),
+        val profileNeedingPin = matchingProfiles.firstOrNull { profile ->
+            val policy = ProfileMergeEngine.mergedSchedulePolicy(
+                profiles = listOf(profile),
+                segments = allScheduleSegments,
+                windows = allScheduleWindows,
+                packageName = packageName,
+                nowEpochMs = now,
             )
-            return
-        }
-
-        val profileNeedingPin = matchingProfiles.firstOrNull {
-            it.onOpenAction == OnOpenAction.pinGate && !it.passwordHash.isNullOrBlank()
+            val openAction = policy.enforcementConfig?.onOpenAction ?: profile.onOpenAction
+            openAction == OnOpenAction.pinGate && !profile.passwordHash.isNullOrBlank()
         }
         if (profileNeedingPin != null && !profileUnlockCache.isUnlocked(profileNeedingPin.id, now)) {
             scope.launch {
@@ -669,7 +672,7 @@ class EnforcementCoordinator @Inject constructor(
             return
         }
 
-        val config = primaryProfile.enforcementConfig()
+        val config = effectiveConfig
 
         if (openGatePassedPackage != packageName &&
             config.onOpenAction != OnOpenAction.none &&
@@ -678,7 +681,6 @@ class EnforcementCoordinator @Inject constructor(
             // open deterrent evaluated in RuleEngine
         }
 
-        val mergedLimit = ProfileMergeEngine.mergedLimitForApp(limitsForMerge, packageName)
         val usage = usageStatsCollector.getUsageSnapshot(packageName, now)
 
         val sessionStateRaw = usageRepository.getSessionState(packageName)
@@ -723,8 +725,9 @@ class EnforcementCoordinator @Inject constructor(
             usage = usage,
             sessionState = sessionForEval,
             pauses = pauses,
-            scheduleWindows = emptyList(),
+            resolvedSchedulePolicy = resolvedSchedulePolicy,
             focusModeUntilMs = settings.focusModeUntilMs,
+            enforcementConfig = config,
         )
 
         val result = when (val ruleResult = RuleEngine.evaluate(evalContext)) {
@@ -1181,11 +1184,15 @@ class EnforcementCoordinator @Inject constructor(
         breakUntilMs: Long? = blocked.breakUntilEpochMs,
         useExtensions: Boolean = blocked.bypassAllowed &&
             blocked.sessionDeterrent == null &&
-            reason != "outsideSchedule" &&
+            reason != "scheduleBlock" &&
             reason != "extensionDenied",
     ): BlockOverlayRequest {
         val friction = blocked.sessionDeterrent ?: profile.defaultFrictionMethod
-        val policy = profile.extensionPolicy
+        val policy = when (blocked.reason) {
+            BlockReason.sessionLimit -> profile.sessionExtensionPolicy
+            else -> profile.limitExtensionPolicy
+        }
+        activeExtensionPolicy = policy
         val waitSeconds = when {
             blocked.sessionDeterrent == FrictionMethod.waitOneMin &&
                 blocked.reason in setOf(

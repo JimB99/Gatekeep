@@ -52,8 +52,8 @@
     <string name="limit_action_break">Break</string>
     <string name="show_system_apps">Show system apps</string>
     <string name="profile_apps_tracked">%1$d apps tracked</string>
-    <string name="profile_schedule_always">Always allowed</string>
-    <string name="profile_schedule_windows">%1$d allowed windows</string>
+    <string name="profile_schedule_always">Default policy only</string>
+    <string name="profile_schedule_windows">%1$d schedules</string>
     <string name="profile_limits_none">No limits set</string>
     <string name="limit_weekly_short">Weekly %1$s</string>
     <string name="limit_daily_short">Daily %1$s</string>
@@ -114,6 +114,34 @@
     <string name="active">Active</string>
     <string name="manage_tracked_apps">Manage tracked apps</string>
     <string name="schedule">Schedule</string>
+    <string name="policy">Policy</string>
+    <string name="policy_default_tab">Default</string>
+    <string name="policy_schedules_tab">Schedules</string>
+    <string name="policy_subtitle_format">%1$s · %2$d schedules</string>
+    <string name="when_no_schedule_matches">When no schedule matches</string>
+    <string name="when_no_schedule_matches_hint">Used when no schedule matches, or when a schedule is set to Default.</string>
+    <string name="schedule_mode_allow">Allow</string>
+    <string name="schedule_mode_block">Block</string>
+    <string name="schedule_mode_default">Default</string>
+    <string name="schedule_mode_customize">Customize</string>
+    <string name="schedule_active">Schedule active</string>
+    <string name="duplicate_schedule">Duplicate</string>
+    <string name="delete_schedule">Delete</string>
+    <string name="delete_schedule_title">Delete schedule?</string>
+    <string name="delete_schedule_message">Remove \"%1$s\"? This cannot be undone.</string>
+    <string name="add_schedule">Add schedule</string>
+    <string name="edit_schedule">Edit schedule</string>
+    <string name="schedule_label_optional">Label (optional)</string>
+    <string name="schedule_customize_limits_rules">Customize limits and rules</string>
+    <string name="customize_limits_subtitle">Override default time limits</string>
+    <string name="customize_rules_subtitle">Override default rules</string>
+    <string name="customize_limits_inherit_hint">Leave at 0 to inherit from the Default tab.</string>
+    <string name="schedule_next_day_suffix">(+1D)</string>
+    <string name="dismiss_error">Dismiss</string>
+    <string name="clear_error_log">Clear error log</string>
+    <string name="profile_schedule_count">%1$d schedules</string>
+    <string name="no_schedules">No schedules</string>
+    <string name="schedules_summary_on_default_tab">When no schedule matches is configured on the Default tab.</string>
     <string name="time_limits">Time limits</string>
     <string name="daily_session_break">Daily, session, break</string>
     <string name="rules">Rules</string>
@@ -192,7 +220,7 @@
     <string name="not_available_now">Not available right now</string>
 
     <!-- Schedule -->
-    <string name="schedule_hint">Apps in this profile can only be used during these times.</string>
+    <string name="schedule_hint">Schedules override your Default policy during specific times.</string>
     <string name="allowed_days">Allowed days</string>
     <string name="start_time">Start time</string>
     <string name="end_time">End time</string>
@@ -241,6 +269,23 @@
 
     <!-- Pause -->
     <string name="pause_limits">Pause limits</string>
+    <string name="pause_enforcement_section">Pause enforcement</string>
+    <string name="pause_enforcement_help">Temporarily disables limits for the selected scope. Apps stay usable.</string>
+    <string name="focus_mode_section">Focus mode</string>
+    <string name="focus_mode_help">Blocks monitored apps for the selected scope.</string>
+    <string name="duration_5_min">5 min</string>
+    <string name="duration_15_min">15 min</string>
+    <string name="duration_60_min">60 min</string>
+    <string name="duration_custom">Custom</string>
+    <string name="duration_today">Today</string>
+    <string name="duration_until_date">Until date…</string>
+    <string name="pause_custom_duration_title">Custom duration</string>
+    <string name="pause_activated">Limits paused</string>
+    <string name="focus_block_activated">Focus mode started</string>
+    <string name="pause_active_until">Paused until %1$s</string>
+    <string name="focus_block_active_until">Blocking until %1$s</string>
+    <string name="end_early">End early</string>
+    <string name="pause_global_only">Global only · 15 minutes</string>
     <string name="scope">Scope</string>
     <string name="scope_all">All</string>
     <string name="scope_active_profiles">Active profiles</string>
@@ -318,6 +363,7 @@
     <!-- Block messages -->
     <string name="block_focus_mode">Focus mode is active</string>
     <string name="block_outside_schedule">Outside allowed time window</string>
+    <string name="block_schedule_block">Blocked by schedule</string>
     <string name="block_take_break">Take a break</string>
     <string name="block_session_limit">Session limit reached</string>
     <string name="block_daily_limit">Daily limit reached</string>

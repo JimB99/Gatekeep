@@ -150,6 +150,28 @@ class UsageRepository(
         )
     }
 
+    suspend fun addFocusBlock(
+        profileId: Long?,
+        untilEpochMs: Long,
+        nowEpochMs: Long,
+    ) {
+        addPause(
+            type = PauseType.focusBlock,
+            nowEpochMs = nowEpochMs,
+            profileId = profileId,
+            packageName = null,
+            untilEpochMs = untilEpochMs,
+        )
+    }
+
+    suspend fun clearFocusBlocks(profileIds: List<Long>?) {
+        if (profileIds == null) {
+            pauseDao.deleteGlobalFocusBlocks()
+        } else {
+            profileIds.forEach { pauseDao.deleteFocusBlocksForProfile(it) }
+        }
+    }
+
     suspend fun getRecentSessions(profileId: Long, limit: Int = 100) =
         usageSessionDao.getRecent(profileId, limit)
 }

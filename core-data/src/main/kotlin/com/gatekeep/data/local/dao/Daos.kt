@@ -81,6 +81,12 @@ interface ScheduleWindowDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(window: ScheduleWindowEntity): Long
 
+    @Query("UPDATE schedule_windows SET segmentId = :segmentId WHERE id = :windowId")
+    suspend fun setSegmentId(windowId: Long, segmentId: Long)
+
+    @Query("DELETE FROM schedule_windows WHERE segmentId = :segmentId")
+    suspend fun deleteForSegment(segmentId: Long)
+
     @Query("DELETE FROM schedule_windows WHERE id = :id")
     suspend fun delete(id: Long)
 }
@@ -98,6 +104,12 @@ interface PauseDao {
 
     @Query("DELETE FROM pauses WHERE profileId = :profileId AND type = 'noLimitToday'")
     suspend fun deleteNoLimitTodayForProfile(profileId: Long)
+
+    @Query("DELETE FROM pauses WHERE type = 'focusBlock' AND profileId IS NULL")
+    suspend fun deleteGlobalFocusBlocks()
+
+    @Query("DELETE FROM pauses WHERE type = 'focusBlock' AND profileId = :profileId")
+    suspend fun deleteFocusBlocksForProfile(profileId: Long)
 }
 
 @Dao

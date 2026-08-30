@@ -32,6 +32,16 @@ data class ProfileEntity(
     val onLimitAction: String = "limitWithExtensions",
     val onSessionLimitAction: String = "limitWithExtensions",
     val extensionPolicyJson: String? = null,
+    val limitExtensionPolicyJson: String? = null,
+    val sessionExtensionPolicyJson: String? = null,
+    val noScheduleMatchMode: String = "default",
+    val noScheduleMatchDailyLimitMs: Long? = null,
+    val noScheduleMatchHourlyLimitMs: Long? = null,
+    val noScheduleMatchWeeklyLimitMs: Long? = null,
+    val noScheduleMatchSessionLimitMs: Long? = null,
+    val noScheduleMatchOnOpenAction: String? = null,
+    val noScheduleMatchOnLimitAction: String? = null,
+    val noScheduleMatchOnSessionLimitAction: String? = null,
 )
 
 @Entity(
@@ -65,12 +75,33 @@ data class AppLimitEntity(
 )
 
 @Entity(
-    tableName = "schedule_windows",
+    tableName = "schedule_segments",
     indices = [Index("profileId")],
+)
+data class ScheduleSegmentEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val profileId: Long,
+    val label: String? = null,
+    val isActive: Boolean = true,
+    val mode: String = "default",
+    val sortOrder: Int = 0,
+    val dailyLimitMs: Long? = null,
+    val hourlyLimitMs: Long? = null,
+    val weeklyLimitMs: Long? = null,
+    val sessionLimitMs: Long? = null,
+    val onOpenAction: String? = null,
+    val onLimitAction: String? = null,
+    val onSessionLimitAction: String? = null,
+)
+
+@Entity(
+    tableName = "schedule_windows",
+    indices = [Index("profileId"), Index("segmentId")],
 )
 data class ScheduleWindowEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val profileId: Long,
+    val segmentId: Long? = null,
     val packageName: String? = null,
     val dayOfWeek: Int,
     val startMinute: Int,

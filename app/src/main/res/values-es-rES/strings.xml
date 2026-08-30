@@ -102,6 +102,33 @@
     <string name="active">Activo</string>
     <string name="manage_tracked_apps">Gestionar apps rastreadas</string>
     <string name="schedule">Horario</string>
+    <string name="policy">Política</string>
+    <string name="policy_default_tab">Predeterminado</string>
+    <string name="policy_schedules_tab">Horarios</string>
+    <string name="policy_subtitle_format">%1$s · %2$d horarios</string>
+    <string name="when_no_schedule_matches">Cuando no coincide ningún horario</string>
+    <string name="when_no_schedule_matches_hint">Se usa cuando no coincide ningún horario o un horario está en Predeterminado.</string>
+    <string name="schedule_mode_allow">Permitir</string>
+    <string name="schedule_mode_block">Bloquear</string>
+    <string name="schedule_mode_default">Predeterminado</string>
+    <string name="schedule_mode_customize">Personalizar</string>
+    <string name="duplicate_schedule">Duplicar</string>
+    <string name="delete_schedule">Eliminar</string>
+    <string name="delete_schedule_title">¿Eliminar horario?</string>
+    <string name="delete_schedule_message">¿Eliminar «%1$s»? No se puede deshacer.</string>
+    <string name="add_schedule">Añadir horario</string>
+    <string name="edit_schedule">Editar horario</string>
+    <string name="schedule_label_optional">Etiqueta (opcional)</string>
+    <string name="schedule_customize_limits_rules">Personalizar límites y reglas</string>
+    <string name="customize_limits_subtitle">Sustituir límites de tiempo predeterminados</string>
+    <string name="customize_rules_subtitle">Sustituir reglas predeterminadas</string>
+    <string name="customize_limits_inherit_hint">Deja en 0 para heredar de la pestaña Predeterminado.</string>
+    <string name="schedule_next_day_suffix">(+1D)</string>
+    <string name="dismiss_error">Descartar</string>
+    <string name="clear_error_log">Borrar registro de errores</string>
+    <string name="profile_schedule_count">%1$d horarios</string>
+    <string name="no_schedules">Sin horarios</string>
+    <string name="schedules_summary_on_default_tab">«Cuando no coincide ningún horario» se configura en la pestaña Predeterminado.</string>
     <string name="time_limits">Límites de tiempo</string>
     <string name="daily_session_break">Diario, sesión, descanso</string>
     <string name="rules">Reglas</string>
@@ -171,7 +198,7 @@
     <string name="all_apps">Todas las apps</string>
     <string name="not_available_now">No disponible ahora</string>
 
-    <string name="schedule_hint">Las apps de este perfil solo se pueden usar en estos horarios.</string>
+    <string name="schedule_hint">Los horarios sustituyen tu política predeterminada en horas concretas.</string>
     <string name="allowed_days">Días permitidos</string>
     <string name="start_time">Hora de inicio</string>
     <string name="end_time">Hora de fin</string>
@@ -219,6 +246,23 @@
     <string name="no_limit_dash">—</string>
 
     <string name="pause_limits">Pausar límites</string>
+    <string name="pause_enforcement_section">Pausar límites</string>
+    <string name="pause_enforcement_help">Desactiva temporalmente los límites del ámbito seleccionado. Las apps siguen disponibles.</string>
+    <string name="focus_mode_section">Modo enfoque</string>
+    <string name="focus_mode_help">Bloquea las apps supervisadas del ámbito seleccionado.</string>
+    <string name="duration_5_min">5 min</string>
+    <string name="duration_15_min">15 min</string>
+    <string name="duration_60_min">60 min</string>
+    <string name="duration_custom">Personalizado</string>
+    <string name="duration_today">Hoy</string>
+    <string name="duration_until_date">Hasta fecha…</string>
+    <string name="pause_custom_duration_title">Duración personalizada</string>
+    <string name="pause_activated">Límites pausados</string>
+    <string name="focus_block_activated">Modo enfoque iniciado</string>
+    <string name="pause_active_until">Pausado hasta %1$s</string>
+    <string name="focus_block_active_until">Bloqueado hasta %1$s</string>
+    <string name="end_early">Terminar antes</string>
+    <string name="pause_global_only">Solo global · 15 minutos</string>
     <string name="scope">Ámbito</string>
     <string name="scope_all">Todos</string>
     <string name="scope_active_profiles">Perfiles activos</string>
@@ -289,6 +333,7 @@
 
     <string name="block_focus_mode">El modo enfoque está activo</string>
     <string name="block_outside_schedule">Fuera del horario permitido</string>
+    <string name="block_schedule_block">Bloqueado por horario</string>
     <string name="block_take_break">Toma un descanso</string>
     <string name="block_session_limit">Límite de sesión alcanzado</string>
     <string name="block_daily_limit">Límite diario alcanzado</string>

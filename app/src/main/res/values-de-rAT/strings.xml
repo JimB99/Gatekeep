@@ -102,6 +102,33 @@
     <string name="active">Aktiv</string>
     <string name="manage_tracked_apps">Verfolgte Apps verwalten</string>
     <string name="schedule">Zeitplan</string>
+    <string name="policy">Richtlinie</string>
+    <string name="policy_default_tab">Standard</string>
+    <string name="policy_schedules_tab">Zeitpläne</string>
+    <string name="policy_subtitle_format">%1$s · %2$d Zeitpläne</string>
+    <string name="when_no_schedule_matches">Wenn kein Zeitplan passt</string>
+    <string name="when_no_schedule_matches_hint">Gilt, wenn kein Zeitplan passt oder ein Zeitplan auf Standard steht.</string>
+    <string name="schedule_mode_allow">Erlauben</string>
+    <string name="schedule_mode_block">Blockieren</string>
+    <string name="schedule_mode_default">Standard</string>
+    <string name="schedule_mode_customize">Anpassen</string>
+    <string name="duplicate_schedule">Duplizieren</string>
+    <string name="delete_schedule">Löschen</string>
+    <string name="delete_schedule_title">Zeitplan löschen?</string>
+    <string name="delete_schedule_message">„%1$s“ entfernen? Dies kann nicht rückgängig gemacht werden.</string>
+    <string name="add_schedule">Zeitplan hinzufügen</string>
+    <string name="edit_schedule">Zeitplan bearbeiten</string>
+    <string name="schedule_label_optional">Bezeichnung (optional)</string>
+    <string name="schedule_customize_limits_rules">Limits und Regeln anpassen</string>
+    <string name="customize_limits_subtitle">Standard-Zeitlimits überschreiben</string>
+    <string name="customize_rules_subtitle">Standard-Regeln überschreiben</string>
+    <string name="customize_limits_inherit_hint">0 = vom Standard-Tab übernehmen.</string>
+    <string name="schedule_next_day_suffix">(+1T)</string>
+    <string name="dismiss_error">Schließen</string>
+    <string name="clear_error_log">Fehlerprotokoll löschen</string>
+    <string name="profile_schedule_count">%1$d Zeitpläne</string>
+    <string name="no_schedules">Keine Zeitpläne</string>
+    <string name="schedules_summary_on_default_tab">„Wenn kein Zeitplan passt“ ist auf dem Standard-Tab konfiguriert.</string>
     <string name="time_limits">Zeitlimits</string>
     <string name="daily_session_break">Täglich, Sitzung, Pause</string>
     <string name="rules">Regeln</string>
@@ -171,7 +198,7 @@
     <string name="all_apps">Alle Apps</string>
     <string name="not_available_now">Derzeit nicht verfügbar</string>
 
-    <string name="schedule_hint">Apps in diesem Profil können nur zu diesen Zeiten genutzt werden.</string>
+    <string name="schedule_hint">Zeitpläne überschreiben deine Standard-Richtlinie zu bestimmten Zeiten.</string>
     <string name="allowed_days">Erlaubte Tage</string>
     <string name="start_time">Startzeit</string>
     <string name="end_time">Endzeit</string>
@@ -219,6 +246,23 @@
     <string name="no_limit_dash">—</string>
 
     <string name="pause_limits">Limits pausieren</string>
+    <string name="pause_enforcement_section">Limits pausieren</string>
+    <string name="pause_enforcement_help">Deaktiviert Limits vorübergehend für den gewählten Bereich. Apps bleiben nutzbar.</string>
+    <string name="focus_mode_section">Fokusmodus</string>
+    <string name="focus_mode_help">Blockiert überwachte Apps für den gewählten Bereich.</string>
+    <string name="duration_5_min">5 Min.</string>
+    <string name="duration_15_min">15 Min.</string>
+    <string name="duration_60_min">60 Min.</string>
+    <string name="duration_custom">Benutzerdefiniert</string>
+    <string name="duration_today">Heute</string>
+    <string name="duration_until_date">Bis Datum…</string>
+    <string name="pause_custom_duration_title">Benutzerdefinierte Dauer</string>
+    <string name="pause_activated">Limits pausiert</string>
+    <string name="focus_block_activated">Fokusmodus gestartet</string>
+    <string name="pause_active_until">Pausiert bis %1$s</string>
+    <string name="focus_block_active_until">Blockiert bis %1$s</string>
+    <string name="end_early">Vorzeitig beenden</string>
+    <string name="pause_global_only">Nur global · 15 Minuten</string>
     <string name="scope">Bereich</string>
     <string name="scope_all">Alle</string>
     <string name="scope_active_profiles">Aktive Profile</string>
@@ -289,6 +333,7 @@
 
     <string name="block_focus_mode">Fokusmodus ist aktiv</string>
     <string name="block_outside_schedule">Außerhalb des erlaubten Zeitfensters</string>
+    <string name="block_schedule_block">Durch Zeitplan blockiert</string>
     <string name="block_take_break">Mach eine Pause</string>
     <string name="block_session_limit">Sitzungslimit erreicht</string>
     <string name="block_daily_limit">Tageslimit erreicht</string>
