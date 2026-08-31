@@ -80,6 +80,11 @@ data class ResolvedSchedulePolicy(
     val source: PolicySource,
 )
 
+enum class LimitUsageScope {
+    perApp,
+    sharedPool,
+}
+
 data class ExtensionPolicy(
     val optionMinutes: List<Int> = listOf(1, 5, 10),
     val maxExtensionsPerDay: Int? = null,
@@ -87,6 +92,15 @@ data class ExtensionPolicy(
     val showNoLimitToday: Boolean = true,
     val customMinutes: Int? = null,
     val customEnabled: Boolean = false,
+    val showExtensionsInOverlay: Boolean = true,
+    val allowExtensionsInApp: Boolean = true,
+)
+
+/** Extra limit budget from logged extension overrides (daily/hourly/weekly). */
+data class LimitExtensionBonus(
+    val dailyMs: Long = 0L,
+    val hourlyMs: Long = 0L,
+    val weeklyMs: Long = 0L,
 )
 
 data class ProfileEnforcementConfig(
@@ -162,6 +176,7 @@ data class Profile(
     val sessionExtensionPolicy: ExtensionPolicy = ExtensionPolicy(),
     val noScheduleMatchMode: SchedulePolicyMode = SchedulePolicyMode.default,
     val noScheduleMatchOverrides: SchedulePolicyOverrides = SchedulePolicyOverrides(),
+    val limitUsageScope: LimitUsageScope = LimitUsageScope.perApp,
 ) {
     fun enforcementConfig(): ProfileEnforcementConfig = ProfileEnforcementConfig(
         onOpenAction = onOpenAction,
@@ -263,6 +278,7 @@ data class RuleEvaluationContext(
     val emergencyBypassAvailable: Boolean = false,
     val lastEmergencyBypassEpochMs: Long? = null,
     val enforcementConfig: ProfileEnforcementConfig = profile.enforcementConfig(),
+    val limitExtensionBonus: LimitExtensionBonus = LimitExtensionBonus(),
 )
 
 sealed class RuleResult {

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.gatekeep.app.ui.policy
 
 import androidx.compose.foundation.layout.Arrangement
@@ -42,12 +44,15 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.R
 import com.gatekeep.app.ui.components.DayOfWeekSelector
 import com.gatekeep.app.ui.components.GatekeepFilterChip
+import com.gatekeep.app.ui.components.GatekeepFilterChipLabel
+import com.gatekeep.app.ui.components.GatekeepFilterChipRow
 import com.gatekeep.app.ui.components.SaveChangesButton
 import com.gatekeep.app.ui.components.TimeOfDayPicker
 import com.gatekeep.app.ui.components.rememberUnsavedChangesGuard
 import com.gatekeep.app.ui.profiles.RuleNavRow
 import com.gatekeep.app.ui.profiles.overrideLimitsSubtitle
 import com.gatekeep.app.ui.profiles.overrideRulesSubtitle
+import com.gatekeep.app.ui.profiles.schedulePolicyModeChipLabel
 import com.gatekeep.app.ui.profiles.schedulePolicyModeLabel
 import com.gatekeep.app.ui.schedule.formatScheduleTimeRange
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
@@ -276,12 +281,12 @@ fun SegmentEditorScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(stringResource(R.string.schedule_hint), style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            GatekeepFilterChipRow {
                 SchedulePolicyMode.entries.forEach { entry ->
                     GatekeepFilterChip(
                         selected = mode == entry,
                         onClick = { mode = entry },
-                        label = { Text(schedulePolicyModeLabel(entry)) },
+                        label = { GatekeepFilterChipLabel(schedulePolicyModeChipLabel(entry)) },
                     )
                 }
             }

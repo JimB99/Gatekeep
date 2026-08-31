@@ -153,4 +153,12 @@ object GatekeepMigrations {
             )
         }
     }
+
+    val MIGRATION_10_11 = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE profiles ADD COLUMN limitUsageScope TEXT NOT NULL DEFAULT 'perApp'",
+            )
+        }
+    }
 }

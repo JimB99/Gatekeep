@@ -112,6 +112,10 @@
     <string name="schedule_mode_block">Bloquear</string>
     <string name="schedule_mode_default">Predeterminado</string>
     <string name="schedule_mode_customize">Personalizar</string>
+    <string name="schedule_mode_allow_short">Permitir</string>
+    <string name="schedule_mode_block_short">Bloquear</string>
+    <string name="schedule_mode_default_short">Predet.</string>
+    <string name="schedule_mode_customize_short">Pers.</string>
     <string name="duplicate_schedule">Duplicar</string>
     <string name="delete_schedule">Eliminar</string>
     <string name="delete_schedule_title">¿Eliminar horario?</string>

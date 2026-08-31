@@ -108,7 +108,7 @@ object RuleEngine {
             is SessionTracker.SessionCheckResult.Allowed -> { /* continue */ }
         }
 
-        val limitResult = LimitEvaluator.evaluate(limit, context.usage)
+        val limitResult = LimitEvaluator.evaluate(limit, context.usage, context.limitExtensionBonus)
         when (limitResult) {
             is LimitEvaluator.LimitCheckResult.Blocked -> {
                 return applyLimitAction(

@@ -42,6 +42,7 @@ data class ProfileEntity(
     val noScheduleMatchOnOpenAction: String? = null,
     val noScheduleMatchOnLimitAction: String? = null,
     val noScheduleMatchOnSessionLimitAction: String? = null,
+    val limitUsageScope: String = "perApp",
 )
 
 @Entity(

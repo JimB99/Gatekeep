@@ -3,8 +3,9 @@ package com.gatekeep.app.ui.profiles
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.HorizontalDivider
@@ -42,16 +43,19 @@ fun RuleGroupLabel(text: String, modifier: Modifier = Modifier) {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RuleChipRow(
     modifier: Modifier = Modifier,
-    chips: @Composable RowScope.() -> Unit,
+    chips: @Composable FlowRowScope.() -> Unit,
 ) {
-    Row(
+    FlowRow(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        content = chips,
-    )
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        chips()
+    }
 }
 
 @Composable

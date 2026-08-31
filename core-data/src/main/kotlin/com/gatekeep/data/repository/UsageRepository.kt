@@ -128,6 +128,17 @@ class UsageRepository(
         dayStartMs: Long,
     ): Int = overrideEventDao.countOverridesForPackageToday(profileId, packageName, dayStartMs)
 
+    suspend fun sumExtensionMsForPackageSince(
+        profileId: Long,
+        packageName: String,
+        sinceMs: Long,
+    ): Long = overrideEventDao.sumExtensionMsForPackageSince(profileId, packageName, sinceMs)
+
+    suspend fun sumExtensionMsForProfileSince(
+        profileId: Long,
+        sinceMs: Long,
+    ): Long = overrideEventDao.sumExtensionMsForProfileSince(profileId, sinceMs)
+
     suspend fun getRecentOverridesForPackage(
         profileId: Long,
         packageName: String,

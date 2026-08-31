@@ -155,4 +155,52 @@ class BlockPresentationReducerTest {
         assertEquals("com.blocked", BlockPresentationReducer.blockedPackage(hidden))
         assertTrue(hidden.presentation is BlockPresentation.HiddenForOtherApp)
     }
+
+    @Test
+    fun `block entered for matching foreground is visible`() {
+        val next = BlockPresentationReducer.onBlockEnteredForForeground(
+            BlockPresentationState(),
+            "com.blocked",
+            "com.blocked",
+        )
+
+        assertEquals(BlockPresentation.Visible("com.blocked", 1L), next.presentation)
+    }
+
+    @Test
+    fun `block entered for other foreground is hidden for other app`() {
+        val next = BlockPresentationReducer.onBlockEnteredForForeground(
+            BlockPresentationState(),
+            "com.blocked",
+            "com.launcher",
+        )
+
+        assertEquals(BlockPresentation.HiddenForOtherApp("com.blocked", 1L), next.presentation)
+    }
+
+    @Test
+    fun `should present overlay only for visible block on matching foreground`() {
+        val visible = BlockPresentationReducer.onBlockEntered(BlockPresentationState(), "com.blocked")
+        val hidden = BlockPresentationReducer.onHideForOtherApp(visible)
+
+        assertTrue(
+            BlockPresentationReducer.shouldPresentOverlay(visible, "com.blocked", "com.blocked"),
+        )
+        assertFalse(
+            BlockPresentationReducer.shouldPresentOverlay(hidden, "com.blocked", "com.blocked"),
+        )
+        assertFalse(
+            BlockPresentationReducer.shouldPresentOverlay(visible, "com.launcher", "com.blocked"),
+        )
+    }
+
+    @Test
+    fun `should defer overlay when hidden or foreground differs`() {
+        val visible = BlockPresentationReducer.onBlockEntered(BlockPresentationState(), "com.blocked")
+        val hidden = BlockPresentationReducer.onHideForOtherApp(visible)
+
+        assertTrue(BlockPresentationReducer.shouldDeferOverlay(hidden, "com.blocked", "com.blocked"))
+        assertTrue(BlockPresentationReducer.shouldDeferOverlay(visible, "com.launcher", "com.blocked"))
+        assertFalse(BlockPresentationReducer.shouldDeferOverlay(visible, "com.blocked", "com.blocked"))
+    }
 }

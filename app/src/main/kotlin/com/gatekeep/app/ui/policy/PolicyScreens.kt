@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.gatekeep.app.ui.policy
 
 import androidx.compose.foundation.clickable
@@ -43,12 +45,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.R
 import com.gatekeep.app.ui.components.GatekeepFilterChip
+import com.gatekeep.app.ui.components.GatekeepFilterChipLabel
+import com.gatekeep.app.ui.components.GatekeepFilterChipRow
 import com.gatekeep.app.ui.components.SaveChangesButton
 import com.gatekeep.app.ui.components.rememberUnsavedChangesGuard
 import com.gatekeep.app.ui.profiles.RuleNavRow
 import com.gatekeep.app.ui.profiles.limitActionLabel
 import com.gatekeep.app.ui.profiles.openActionLabel
 import com.gatekeep.app.ui.profiles.profileLimitsSubtitle
+import com.gatekeep.app.ui.profiles.schedulePolicyModeChipLabel
 import com.gatekeep.app.ui.profiles.schedulePolicyModeLabel
 import com.gatekeep.app.ui.profiles.sessionActionLabel
 import com.gatekeep.app.ui.schedule.formatGroupedDays
@@ -276,12 +281,12 @@ private fun PolicyDefaultTab(
                     stringResource(R.string.when_no_schedule_matches_hint),
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GatekeepFilterChipRow {
                     SchedulePolicyMode.entries.forEach { mode ->
                         GatekeepFilterChip(
                             selected = noMatchMode == mode,
                             onClick = { noMatchMode = mode },
-                            label = { Text(schedulePolicyModeLabel(mode)) },
+                            label = { GatekeepFilterChipLabel(schedulePolicyModeChipLabel(mode)) },
                         )
                     }
                 }

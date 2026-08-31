@@ -153,6 +153,7 @@ class ProfilesHomeViewModel @Inject constructor(
 class ProfileViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
     private val pinStorage: PinStorage,
+    private val enforcementCoordinator: com.gatekeep.app.enforcement.EnforcementCoordinator,
     @ApplicationContext private val context: Context,
     settingsRepository: SettingsRepository,
 ) : ViewModel() {
@@ -231,6 +232,18 @@ class ProfileViewModel @Inject constructor(
 
     fun clearSaveMessage() {
         _saveMessage.value = null
+    }
+
+    fun grantExtensionInApp(packageNames: List<String>, minutes: Int) {
+        packageNames.forEach { pkg ->
+            enforcementCoordinator.grantExtensionMinutes(pkg, minutes)
+        }
+    }
+
+    fun grantNoLimitTodayInApp(packageNames: List<String>) {
+        packageNames.forEach { pkg ->
+            enforcementCoordinator.grantNoLimitToday(pkg)
+        }
     }
 
     fun loadProfilePin(profileId: Long): String? = pinStorage.getProfilePin(profileId)

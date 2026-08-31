@@ -33,6 +33,7 @@ object AppModule {
                 GatekeepMigrations.MIGRATION_7_8,
                 GatekeepMigrations.MIGRATION_8_9,
                 GatekeepMigrations.MIGRATION_9_10,
+                GatekeepMigrations.MIGRATION_10_11,
             )
             .build()
         enforcementLog.clearStaleMigrationErrors()

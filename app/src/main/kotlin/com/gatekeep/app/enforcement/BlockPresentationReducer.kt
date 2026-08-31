@@ -19,6 +19,37 @@ object BlockPresentationReducer {
         )
     }
 
+    fun onBlockEnteredForForeground(
+        state: BlockPresentationState,
+        packageName: String,
+        foregroundPackage: String?,
+    ): BlockPresentationState {
+        val nextGen = state.generation + 1
+        val presentation = if (foregroundPackage == packageName) {
+            BlockPresentation.Visible(packageName, nextGen)
+        } else {
+            BlockPresentation.HiddenForOtherApp(packageName, nextGen)
+        }
+        return BlockPresentationState(presentation = presentation, generation = nextGen)
+    }
+
+    fun shouldPresentOverlay(
+        state: BlockPresentationState,
+        foregroundPackage: String?,
+        blockedPackage: String,
+    ): Boolean =
+        foregroundPackage == blockedPackage &&
+            blockedPackage(state) == blockedPackage &&
+            state.presentation is BlockPresentation.Visible
+
+    fun shouldDeferOverlay(
+        state: BlockPresentationState,
+        foregroundPackage: String?,
+        blockedPackage: String,
+    ): Boolean =
+        foregroundPackage != blockedPackage ||
+            state.presentation is BlockPresentation.HiddenForOtherApp
+
     fun onHideForOtherApp(state: BlockPresentationState): BlockPresentationState {
         val presentation = state.presentation
         if (presentation !is BlockPresentation.Visible) return state

@@ -8,6 +8,7 @@ import com.gatekeep.app.util.UsageStatsCollector
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.UsageRepository
 import com.gatekeep.domain.StreakCalculator
+import com.gatekeep.domain.model.LimitUsageScope
 import com.gatekeep.domain.TrackedAppMerge
 import com.gatekeep.domain.UsageBucketAggregator
 import com.gatekeep.domain.model.StreakInfo
@@ -150,13 +151,28 @@ class StatsRepository @Inject constructor(
         usageRepository.getOverrideCount(profileId)
 
     suspend fun profileUsageSummary(profileId: Long, profileName: String): ProfileUsageSummary {
+        val profile = profileRepository.observeProfiles().first().find { it.id == profileId }
         val apps = trackedAppsForRange(profileId, StatsTimeRange.SingleDay(System.currentTimeMillis()))
+        val totalUsageMs = apps.sumOf { it.usageMs }
+        val displayApps = if (profile?.limitUsageScope == LimitUsageScope.sharedPool) {
+            val sharedLimit = profile.dailyLimitMs
+            listOf(
+                AppUsageStat(
+                    packageName = "",
+                    label = profile.name,
+                    usageMs = totalUsageMs,
+                    limitMs = sharedLimit,
+                ),
+            )
+        } else {
+            apps
+        }
         return ProfileUsageSummary(
             profileId = profileId,
             profileName = profileName,
             appCount = apps.size,
-            totalUsageMs = apps.sumOf { it.usageMs },
-            apps = apps,
+            totalUsageMs = totalUsageMs,
+            apps = displayApps,
         )
     }
 

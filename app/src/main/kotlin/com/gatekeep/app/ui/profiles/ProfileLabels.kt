@@ -55,3 +55,16 @@ fun schedulePolicyModeLabel(mode: com.gatekeep.domain.model.SchedulePolicyMode):
         com.gatekeep.domain.model.SchedulePolicyMode.customize ->
             stringResource(R.string.schedule_mode_customize)
     }
+
+@Composable
+fun schedulePolicyModeChipLabel(mode: com.gatekeep.domain.model.SchedulePolicyMode): String =
+    when (mode) {
+        com.gatekeep.domain.model.SchedulePolicyMode.allow ->
+            stringResource(R.string.schedule_mode_allow_short)
+        com.gatekeep.domain.model.SchedulePolicyMode.block ->
+            stringResource(R.string.schedule_mode_block_short)
+        com.gatekeep.domain.model.SchedulePolicyMode.default ->
+            stringResource(R.string.schedule_mode_default_short)
+        com.gatekeep.domain.model.SchedulePolicyMode.customize ->
+            stringResource(R.string.schedule_mode_customize_short)
+    }

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.gatekeep.app.ui.profiles
 
 import androidx.compose.foundation.clickable
@@ -45,6 +47,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.ui.components.AppIcon
+import com.gatekeep.app.ui.components.GatekeepFilterChip
+import com.gatekeep.app.ui.components.GatekeepFilterChipRow
 import com.gatekeep.app.ui.components.DurationPicker
 import com.gatekeep.app.ui.components.SaveChangesButton
 import com.gatekeep.app.ui.components.rememberUnsavedChangesGuard
@@ -55,7 +59,10 @@ import com.gatekeep.domain.LimitField
 import com.gatekeep.domain.LimitHierarchy
 import com.gatekeep.app.util.PasswordHasher
 import com.gatekeep.app.util.formatDurationMinutes
+import com.gatekeep.domain.model.LimitUsageScope
+import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
+import com.gatekeep.domain.model.ExtensionPolicy
 import com.gatekeep.domain.model.Profile
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -213,6 +220,23 @@ fun ProfileHubScreen(
                 onClick = onEditPin,
             )
 
+            if (
+                profile != null &&
+                profile.onLimitAction == OnLimitAction.limitWithExtensions &&
+                profile.limitExtensionPolicy.allowExtensionsInApp &&
+                monitoredPackages.isNotEmpty()
+            ) {
+                InAppExtensionCard(
+                    policy = profile.limitExtensionPolicy,
+                    onExtendMinutes = { minutes ->
+                        viewModel.grantExtensionInApp(monitoredPackages, minutes)
+                    },
+                    onNoLimitToday = {
+                        viewModel.grantNoLimitTodayInApp(monitoredPackages)
+                    },
+                )
+            }
+
             Card(
                 modifier = Modifier.fillMaxWidth().clickable { showDeleteConfirm = true },
                 colors = androidx.compose.material3.CardDefaults.cardColors(
@@ -225,6 +249,45 @@ fun ProfileHubScreen(
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.error,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InAppExtensionCard(
+    policy: ExtensionPolicy,
+    onExtendMinutes: (Int) -> Unit,
+    onNoLimitToday: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                stringResource(R.string.extension_in_app_heading),
+                fontWeight = FontWeight.Medium,
+            )
+            GatekeepFilterChipRow {
+                policy.optionMinutes.forEach { minutes ->
+                    GatekeepFilterChip(
+                        selected = false,
+                        onClick = { onExtendMinutes(minutes) },
+                        label = {
+                            Text(
+                                stringResource(R.string.extension_minutes_format, minutes),
+                            )
+                        },
+                    )
+                }
+                if (policy.showNoLimitToday) {
+                    GatekeepFilterChip(
+                        selected = false,
+                        onClick = onNoLimitToday,
+                        label = { Text(stringResource(R.string.no_limit_today_short)) },
+                    )
+                }
             }
         }
     }
@@ -285,28 +348,41 @@ fun ProfileLimitsScreen(
     var savedSessionMs by remember(profile?.id) { mutableLongStateOf(limitToDraftMs(profile?.sessionLimitMs)) }
     var savedHourlyMs by remember(profile?.id) { mutableLongStateOf(limitToDraftMs(profile?.hourlyLimitMs)) }
     var savedWeeklyMs by remember(profile?.id) { mutableLongStateOf(limitToDraftMs(profile?.weeklyLimitMs)) }
+    var savedUsageScope by remember(profile?.id) {
+        mutableStateOf(profile?.limitUsageScope ?: LimitUsageScope.perApp)
+    }
 
     var dailyMs by remember(profile?.id) { mutableLongStateOf(savedDailyMs) }
     var sessionMs by remember(profile?.id) { mutableLongStateOf(savedSessionMs) }
     var hourlyMs by remember(profile?.id) { mutableLongStateOf(savedHourlyMs) }
     var weeklyMs by remember(profile?.id) { mutableLongStateOf(savedWeeklyMs) }
+    var usageScope by remember(profile?.id) { mutableStateOf(savedUsageScope) }
 
-    LaunchedEffect(profile?.dailyLimitMs, profile?.sessionLimitMs, profile?.hourlyLimitMs, profile?.weeklyLimitMs) {
+    LaunchedEffect(
+        profile?.dailyLimitMs,
+        profile?.sessionLimitMs,
+        profile?.hourlyLimitMs,
+        profile?.weeklyLimitMs,
+        profile?.limitUsageScope,
+    ) {
         if (profile == null) return@LaunchedEffect
         savedDailyMs = limitToDraftMs(profile.dailyLimitMs)
         savedSessionMs = limitToDraftMs(profile.sessionLimitMs)
         savedHourlyMs = limitToDraftMs(profile.hourlyLimitMs)
         savedWeeklyMs = limitToDraftMs(profile.weeklyLimitMs)
+        savedUsageScope = profile.limitUsageScope
         dailyMs = savedDailyMs
         sessionMs = savedSessionMs
         hourlyMs = savedHourlyMs
         weeklyMs = savedWeeklyMs
+        usageScope = savedUsageScope
     }
 
     val isDirty = dailyMs != savedDailyMs ||
         sessionMs != savedSessionMs ||
         hourlyMs != savedHourlyMs ||
-        weeklyMs != savedWeeklyMs
+        weeklyMs != savedWeeklyMs ||
+        usageScope != savedUsageScope
     val hierarchyValidation = LimitHierarchy.validate(weeklyMs, dailyMs, hourlyMs, sessionMs)
     val hierarchyError = stringResource(R.string.limits_hierarchy_error)
     val hierarchyHint = stringResource(R.string.limits_hierarchy_hint)
@@ -318,12 +394,14 @@ fun ProfileLimitsScreen(
             sessionLimitMs = draftToSavedMs(sessionMs),
             hourlyLimitMs = draftToSavedMs(hourlyMs),
             weeklyLimitMs = draftToSavedMs(weeklyMs),
+            limitUsageScope = usageScope,
         )?.let { updated ->
             viewModel.saveProfile(updated)
             savedDailyMs = dailyMs
             savedSessionMs = sessionMs
             savedHourlyMs = hourlyMs
             savedWeeklyMs = weeklyMs
+            savedUsageScope = usageScope
         }
     }
 
@@ -332,6 +410,7 @@ fun ProfileLimitsScreen(
         sessionMs = savedSessionMs
         hourlyMs = savedHourlyMs
         weeklyMs = savedWeeklyMs
+        usageScope = savedUsageScope
     }
 
     val backGuard = rememberUnsavedChangesGuard(
@@ -372,6 +451,31 @@ fun ProfileLimitsScreen(
             Text(stringResource(R.string.limits_apply_all_apps), style = MaterialTheme.typography.bodySmall)
             Text(
                 hierarchyHint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                stringResource(R.string.limit_usage_scope_label),
+                style = MaterialTheme.typography.labelMedium,
+            )
+            GatekeepFilterChipRow {
+                GatekeepFilterChip(
+                    selected = usageScope == LimitUsageScope.perApp,
+                    onClick = { usageScope = LimitUsageScope.perApp },
+                    label = { Text(stringResource(R.string.limit_usage_scope_per_app)) },
+                )
+                GatekeepFilterChip(
+                    selected = usageScope == LimitUsageScope.sharedPool,
+                    onClick = { usageScope = LimitUsageScope.sharedPool },
+                    label = { Text(stringResource(R.string.limit_usage_scope_shared)) },
+                )
+            }
+            Text(
+                if (usageScope == LimitUsageScope.sharedPool) {
+                    stringResource(R.string.limit_usage_scope_shared_hint)
+                } else {
+                    stringResource(R.string.limit_usage_scope_per_app_hint)
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

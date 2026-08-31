@@ -88,8 +88,8 @@ fun AppPickerScreen(
     val selectedApps by remember {
         derivedStateOf { filteredApps.filter { it.packageName in draftMonitored } }
     }
-    val otherApps by remember {
-        derivedStateOf { filteredApps.filter { it.packageName !in draftMonitored } }
+    val allApps by remember {
+        derivedStateOf { filteredApps }
     }
 
     Scaffold(
@@ -135,7 +135,7 @@ fun AppPickerScreen(
                             modifier = Modifier.padding(vertical = 8.dp),
                         )
                     }
-                    items(selectedApps, key = { it.packageName }) { app ->
+                    items(selectedApps, key = { "selected-${it.packageName}" }) { app ->
                         AppPickerRow(
                             app = app,
                             checked = true,
@@ -146,7 +146,7 @@ fun AppPickerScreen(
                         )
                     }
                 }
-                if (otherApps.isNotEmpty()) {
+                if (allApps.isNotEmpty()) {
                     item {
                         Text(
                             stringResource(R.string.all_apps),
@@ -154,10 +154,10 @@ fun AppPickerScreen(
                             modifier = Modifier.padding(vertical = 8.dp),
                         )
                     }
-                    items(otherApps, key = { it.packageName }) { app ->
+                    items(allApps, key = { "all-${it.packageName}" }) { app ->
                         AppPickerRow(
                             app = app,
-                            checked = false,
+                            checked = app.packageName in draftMonitored,
                             scheduleAllowed = scheduleAllowed[app.packageName] != false,
                             onToggle = { checked ->
                                 viewModel.toggleApp(app.packageName, checked)

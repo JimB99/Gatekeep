@@ -18,6 +18,7 @@ import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.Pause
 import com.gatekeep.domain.model.PauseType
 import com.gatekeep.domain.model.Profile
+import com.gatekeep.domain.model.LimitUsageScope
 import com.gatekeep.domain.model.SchedulePolicyMode
 import com.gatekeep.domain.model.SchedulePolicyOverrides
 import com.gatekeep.domain.model.ScheduleSegment
@@ -74,6 +75,8 @@ fun ProfileEntity.toDomain() = Profile(
             runCatching { OnSessionLimitAction.valueOf(it) }.getOrNull()
         },
     ),
+    limitUsageScope = runCatching { LimitUsageScope.valueOf(limitUsageScope) }
+        .getOrDefault(LimitUsageScope.perApp),
 )
 
 private fun ProfileEntity.resolveOnOpenAction(): OnOpenAction {
@@ -121,6 +124,7 @@ fun Profile.toEntity() = ProfileEntity(
     noScheduleMatchOnOpenAction = noScheduleMatchOverrides.onOpenAction?.name,
     noScheduleMatchOnLimitAction = noScheduleMatchOverrides.onLimitAction?.name,
     noScheduleMatchOnSessionLimitAction = noScheduleMatchOverrides.onSessionLimitAction?.name,
+    limitUsageScope = limitUsageScope.name,
 )
 
 fun MonitoredAppEntity.toDomain() = MonitoredApp(

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.gatekeep.app.ui.profiles
 
 import androidx.compose.foundation.clickable
@@ -39,6 +41,7 @@ import com.gatekeep.app.R
 import com.gatekeep.app.ui.components.DurationPicker
 import com.gatekeep.app.ui.components.DurationPickerWithSeconds
 import com.gatekeep.app.ui.components.GatekeepFilterChip
+import com.gatekeep.app.ui.components.GatekeepFilterChipLabel
 import com.gatekeep.app.ui.components.SaveChangesButton
 import com.gatekeep.app.ui.components.rememberUnsavedChangesGuard
 import com.gatekeep.app.ui.policy.PolicyOverrideScope
@@ -681,7 +684,7 @@ internal fun OpenActionRuleEditor(
             GatekeepFilterChip(
                 selected = onOpen == OnOpenAction.none,
                 onClick = { onOpenChange(OnOpenAction.none) },
-                label = { Text(openActionLabel(OnOpenAction.none)) },
+                label = { GatekeepFilterChipLabel(openActionLabel(OnOpenAction.none)) },
             )
         }
         RuleDivider()
@@ -690,12 +693,12 @@ internal fun OpenActionRuleEditor(
             GatekeepFilterChip(
                 selected = onOpen == OnOpenAction.deterrentWait,
                 onClick = { onOpenChange(OnOpenAction.deterrentWait) },
-                label = { Text(openActionLabel(OnOpenAction.deterrentWait)) },
+                label = { GatekeepFilterChipLabel(openActionLabel(OnOpenAction.deterrentWait)) },
             )
             GatekeepFilterChip(
                 selected = onOpen == OnOpenAction.deterrentMath,
                 onClick = { onOpenChange(OnOpenAction.deterrentMath) },
-                label = { Text(openActionLabel(OnOpenAction.deterrentMath)) },
+                label = { GatekeepFilterChipLabel(openActionLabel(OnOpenAction.deterrentMath)) },
             )
         }
         RuleDivider()
@@ -704,7 +707,7 @@ internal fun OpenActionRuleEditor(
             GatekeepFilterChip(
                 selected = onOpen == OnOpenAction.pinGate,
                 onClick = { onOpenChange(OnOpenAction.pinGate) },
-                label = { Text(openActionLabel(OnOpenAction.pinGate)) },
+                label = { GatekeepFilterChipLabel(openActionLabel(OnOpenAction.pinGate)) },
             )
         }
         if (onOpen == OnOpenAction.pinGate) {
@@ -732,7 +735,7 @@ internal fun OpenActionRuleEditor(
                     GatekeepFilterChip(
                         selected = difficulty == d,
                         onClick = { onDifficultyChange(d) },
-                        label = { Text(frictionDifficultyLabel(d)) },
+                        label = { GatekeepFilterChipLabel(frictionDifficultyLabel(d)) },
                     )
                 }
             }
@@ -764,7 +767,7 @@ internal fun LimitActionRuleEditor(
             GatekeepFilterChip(
                 selected = onLimit == OnLimitAction.notifyOnly,
                 onClick = { onLimitChange(OnLimitAction.notifyOnly) },
-                label = { Text(limitActionLabel(OnLimitAction.notifyOnly)) },
+                label = { GatekeepFilterChipLabel(limitActionLabel(OnLimitAction.notifyOnly)) },
             )
         }
         RuleDivider()
@@ -773,12 +776,12 @@ internal fun LimitActionRuleEditor(
             GatekeepFilterChip(
                 selected = onLimit == OnLimitAction.deterrentWait,
                 onClick = { onLimitChange(OnLimitAction.deterrentWait) },
-                label = { Text(limitActionLabel(OnLimitAction.deterrentWait)) },
+                label = { GatekeepFilterChipLabel(limitActionLabel(OnLimitAction.deterrentWait)) },
             )
             GatekeepFilterChip(
                 selected = onLimit == OnLimitAction.deterrentMath,
                 onClick = { onLimitChange(OnLimitAction.deterrentMath) },
-                label = { Text(limitActionLabel(OnLimitAction.deterrentMath)) },
+                label = { GatekeepFilterChipLabel(limitActionLabel(OnLimitAction.deterrentMath)) },
             )
         }
         RuleDivider()
@@ -787,7 +790,7 @@ internal fun LimitActionRuleEditor(
             GatekeepFilterChip(
                 selected = onLimit == OnLimitAction.limitWithExtensions,
                 onClick = { onLimitChange(OnLimitAction.limitWithExtensions) },
-                label = { Text(limitActionLabel(OnLimitAction.limitWithExtensions)) },
+                label = { GatekeepFilterChipLabel(limitActionLabel(OnLimitAction.limitWithExtensions)) },
             )
         }
         RuleDivider()
@@ -796,12 +799,12 @@ internal fun LimitActionRuleEditor(
             GatekeepFilterChip(
                 selected = onLimit == OnLimitAction.mandatoryBreak,
                 onClick = { onLimitChange(OnLimitAction.mandatoryBreak) },
-                label = { Text(limitActionLabel(OnLimitAction.mandatoryBreak)) },
+                label = { GatekeepFilterChipLabel(limitActionLabel(OnLimitAction.mandatoryBreak)) },
             )
             GatekeepFilterChip(
                 selected = onLimit == OnLimitAction.hardBlock,
                 onClick = { onLimitChange(OnLimitAction.hardBlock) },
-                label = { Text(limitActionLabel(OnLimitAction.hardBlock)) },
+                label = { GatekeepFilterChipLabel(limitActionLabel(OnLimitAction.hardBlock)) },
             )
         }
         if (onLimit == OnLimitAction.deterrentMath) {
@@ -815,7 +818,7 @@ internal fun LimitActionRuleEditor(
                     GatekeepFilterChip(
                         selected = difficulty == d,
                         onClick = { onDifficultyChange(d) },
-                        label = { Text(frictionDifficultyLabel(d)) },
+                        label = { GatekeepFilterChipLabel(frictionDifficultyLabel(d)) },
                     )
                 }
             }
@@ -857,7 +860,7 @@ internal fun SessionActionRuleEditor(
             GatekeepFilterChip(
                 selected = onSession == OnSessionLimitAction.notifyOnly,
                 onClick = { onSessionChange(OnSessionLimitAction.notifyOnly) },
-                label = { Text(sessionActionLabel(OnSessionLimitAction.notifyOnly)) },
+                label = { GatekeepFilterChipLabel(sessionActionLabel(OnSessionLimitAction.notifyOnly)) },
             )
         }
         RuleDivider()
@@ -866,12 +869,12 @@ internal fun SessionActionRuleEditor(
             GatekeepFilterChip(
                 selected = onSession == OnSessionLimitAction.deterrentWait,
                 onClick = { onSessionChange(OnSessionLimitAction.deterrentWait) },
-                label = { Text(sessionActionLabel(OnSessionLimitAction.deterrentWait)) },
+                label = { GatekeepFilterChipLabel(sessionActionLabel(OnSessionLimitAction.deterrentWait)) },
             )
             GatekeepFilterChip(
                 selected = onSession == OnSessionLimitAction.deterrentMath,
                 onClick = { onSessionChange(OnSessionLimitAction.deterrentMath) },
-                label = { Text(sessionActionLabel(OnSessionLimitAction.deterrentMath)) },
+                label = { GatekeepFilterChipLabel(sessionActionLabel(OnSessionLimitAction.deterrentMath)) },
             )
         }
         RuleDivider()
@@ -880,7 +883,7 @@ internal fun SessionActionRuleEditor(
             GatekeepFilterChip(
                 selected = onSession == OnSessionLimitAction.limitWithExtensions,
                 onClick = { onSessionChange(OnSessionLimitAction.limitWithExtensions) },
-                label = { Text(sessionActionLabel(OnSessionLimitAction.limitWithExtensions)) },
+                label = { GatekeepFilterChipLabel(sessionActionLabel(OnSessionLimitAction.limitWithExtensions)) },
             )
         }
         RuleDivider()
@@ -889,12 +892,12 @@ internal fun SessionActionRuleEditor(
             GatekeepFilterChip(
                 selected = onSession == OnSessionLimitAction.mandatoryBreak,
                 onClick = { onSessionChange(OnSessionLimitAction.mandatoryBreak) },
-                label = { Text(sessionActionLabel(OnSessionLimitAction.mandatoryBreak)) },
+                label = { GatekeepFilterChipLabel(sessionActionLabel(OnSessionLimitAction.mandatoryBreak)) },
             )
             GatekeepFilterChip(
                 selected = onSession == OnSessionLimitAction.hardBlock,
                 onClick = { onSessionChange(OnSessionLimitAction.hardBlock) },
-                label = { Text(sessionActionLabel(OnSessionLimitAction.hardBlock)) },
+                label = { GatekeepFilterChipLabel(sessionActionLabel(OnSessionLimitAction.hardBlock)) },
             )
         }
         if (onSession == OnSessionLimitAction.deterrentMath) {
@@ -908,7 +911,7 @@ internal fun SessionActionRuleEditor(
                     GatekeepFilterChip(
                         selected = difficulty == d,
                         onClick = { onDifficultyChange(d) },
-                        label = { Text(frictionDifficultyLabel(d)) },
+                        label = { GatekeepFilterChipLabel(frictionDifficultyLabel(d)) },
                     )
                 }
             }

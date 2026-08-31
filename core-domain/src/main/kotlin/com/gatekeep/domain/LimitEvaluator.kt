@@ -1,6 +1,7 @@
 package com.gatekeep.domain
 
 import com.gatekeep.domain.model.AppLimit
+import com.gatekeep.domain.model.LimitExtensionBonus
 import com.gatekeep.domain.model.UsageSnapshot
 import com.gatekeep.domain.model.WarningLevel
 
@@ -9,6 +10,7 @@ object LimitEvaluator {
     fun evaluate(
         limit: AppLimit?,
         usage: UsageSnapshot,
+        extensionBonus: LimitExtensionBonus = LimitExtensionBonus(),
     ): LimitCheckResult {
         if (limit == null || !limit.enabled) {
             return LimitCheckResult.Allowed(
@@ -19,9 +21,9 @@ object LimitEvaluator {
             )
         }
 
-        val dailyRemaining = limit.dailyLimitMs?.let { it - usage.dailyMs }
-        val hourlyRemaining = limit.hourlyLimitMs?.let { it - usage.hourlyMs }
-        val weeklyRemaining = limit.weeklyLimitMs?.let { it - usage.weeklyMs }
+        val dailyRemaining = limit.dailyLimitMs?.let { it + extensionBonus.dailyMs - usage.dailyMs }
+        val hourlyRemaining = limit.hourlyLimitMs?.let { it + extensionBonus.hourlyMs - usage.hourlyMs }
+        val weeklyRemaining = limit.weeklyLimitMs?.let { it + extensionBonus.weeklyMs - usage.weeklyMs }
 
         if (dailyRemaining != null && dailyRemaining <= 0) {
             return LimitCheckResult.Blocked(com.gatekeep.domain.model.BlockReason.dailyLimit)

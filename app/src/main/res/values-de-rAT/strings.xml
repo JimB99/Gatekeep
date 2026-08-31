@@ -111,7 +111,11 @@
     <string name="schedule_mode_allow">Erlauben</string>
     <string name="schedule_mode_block">Blockieren</string>
     <string name="schedule_mode_default">Standard</string>
-    <string name="schedule_mode_customize">Anpassen</string>
+    <string name="schedule_mode_customize">Eigen</string>
+    <string name="schedule_mode_allow_short">Erlauben</string>
+    <string name="schedule_mode_block_short">Sperren</string>
+    <string name="schedule_mode_default_short">Standard</string>
+    <string name="schedule_mode_customize_short">Eigen</string>
     <string name="duplicate_schedule">Duplizieren</string>
     <string name="delete_schedule">Löschen</string>
     <string name="delete_schedule_title">Zeitplan löschen?</string>

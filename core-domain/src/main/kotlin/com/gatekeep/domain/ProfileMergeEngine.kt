@@ -37,6 +37,33 @@ object ProfileMergeEngine {
         )
     }
 
+    fun mergeProfileAndAppLimit(profile: Profile, packageName: String, perAppLimit: AppLimit?): AppLimit {
+        val base = profile.toAppLimit(packageName)
+        if (perAppLimit == null) return base
+        return AppLimit(
+            profileId = base.profileId,
+            packageName = packageName,
+            dailyLimitMs = perAppLimit.dailyLimitMs ?: base.dailyLimitMs,
+            weeklyLimitMs = perAppLimit.weeklyLimitMs ?: base.weeklyLimitMs,
+            hourlyLimitMs = perAppLimit.hourlyLimitMs ?: base.hourlyLimitMs,
+            sessionLimitMs = perAppLimit.sessionLimitMs ?: base.sessionLimitMs,
+            breakDurationMs = perAppLimit.breakDurationMs ?: base.breakDurationMs,
+            enabled = perAppLimit.enabled,
+            frictionMethod = perAppLimit.frictionMethod ?: base.frictionMethod,
+            frictionDifficulty = perAppLimit.frictionDifficulty ?: base.frictionDifficulty,
+            extensionMsOnBypass = perAppLimit.extensionMsOnBypass,
+        )
+    }
+
+    fun sumUsageSnapshots(usages: List<com.gatekeep.domain.model.UsageSnapshot>): com.gatekeep.domain.model.UsageSnapshot {
+        if (usages.isEmpty()) return com.gatekeep.domain.model.UsageSnapshot()
+        return com.gatekeep.domain.model.UsageSnapshot(
+            dailyMs = usages.sumOf { it.dailyMs },
+            weeklyMs = usages.sumOf { it.weeklyMs },
+            hourlyMs = usages.sumOf { it.hourlyMs },
+        )
+    }
+
     fun mergedSchedulePolicy(
         profiles: List<Profile>,
         segments: List<ScheduleSegment>,

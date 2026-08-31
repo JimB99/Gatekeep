@@ -69,6 +69,7 @@ class BlockOverlayManager @Inject constructor(
     fun show(request: BlockOverlayRequest) {
         mainHandler.post {
             try {
+                if (!coordinator.get().shouldPresentBlockOverlay(request.packageName)) return@post
                 currentRequest = request
                 if (overlayView != null && frictionInProgress) return@post
                 if (overlayView != null) {
@@ -123,6 +124,15 @@ class BlockOverlayManager @Inject constructor(
         mainHandler.post {
             clearOverlayTimers()
             removeOverlayOnly()
+        }
+    }
+
+    fun reshowFromStoredRequest() {
+        mainHandler.post {
+            val request = currentRequest ?: return@post
+            if (!coordinator.get().shouldPresentBlockOverlay(request.packageName)) return@post
+            if (overlayView != null) return@post
+            createBlockOverlay(request)
         }
     }
 

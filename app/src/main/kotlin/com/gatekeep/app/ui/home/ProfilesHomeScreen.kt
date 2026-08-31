@@ -23,7 +23,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -165,26 +164,6 @@ fun ProfilesHomeScreen(
                                     checked = profile.isActive,
                                     onCheckedChange = { viewModel.toggleActive(profile.id, it) },
                                 )
-                            }
-                            summary?.apps?.forEach { app ->
-                                val progress = app.limitMs?.let {
-                                    if (it > 0) (app.usageMs.toFloat() / it).coerceIn(0f, 1f) else 0f
-                                } ?: 0f
-                                Column(modifier = Modifier.padding(top = 8.dp)) {
-                                    Text(
-                                        stringResource(
-                                            R.string.usage_format,
-                                            app.label,
-                                            formatDurationMinutes(app.usageMs),
-                                            formatDurationMinutes(app.limitMs),
-                                        ),
-                                    )
-                                    LinearProgressIndicator(
-                                        progress = { progress },
-                                        drawStopIndicator = {},
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
-                                }
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp),

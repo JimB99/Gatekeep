@@ -3,6 +3,7 @@ package com.gatekeep.domain
 import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.BlockReason
 import com.gatekeep.domain.model.FrictionMethod
+import com.gatekeep.domain.model.LimitExtensionBonus
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.Profile
@@ -61,6 +62,28 @@ class ProfileMergeEngineTest {
         )
         assertTrue(merged?.frictionMethod == FrictionMethod.math || merged?.frictionMethod == FrictionMethod.waitOneMin)
     }
+
+    @Test
+    fun `mergeProfileAndAppLimit prefers per-app caps`() {
+        val profile = Profile(id = 1, name = "P", isActive = true, dailyLimitMs = 3_600_000)
+        val perApp = AppLimit(1, "com.test", dailyLimitMs = 1_800_000, sessionLimitMs = 600_000, enabled = true)
+        val merged = ProfileMergeEngine.mergeProfileAndAppLimit(profile, "com.test", perApp)
+        assertEquals(1_800_000, merged.dailyLimitMs)
+        assertEquals(600_000, merged.sessionLimitMs)
+    }
+
+    @Test
+    fun `sumUsageSnapshots totals usage across apps`() {
+        val summed = ProfileMergeEngine.sumUsageSnapshots(
+            listOf(
+                UsageSnapshot(dailyMs = 100, hourlyMs = 10, weeklyMs = 1_000),
+                UsageSnapshot(dailyMs = 200, hourlyMs = 20, weeklyMs = 2_000),
+            ),
+        )
+        assertEquals(300, summed.dailyMs)
+        assertEquals(30, summed.hourlyMs)
+        assertEquals(3_000, summed.weeklyMs)
+    }
 }
 
 class RuleEngineTest {
@@ -81,7 +104,18 @@ class RuleEngineTest {
     }
 
     @Test
-    fun `blocks when daily limit exceeded`() {
+    fun `extension bonus allows extra daily usage`() {
+        val result = RuleEngine.evaluate(
+            baseContext(
+                usage = UsageSnapshot(dailyMs = 61 * 60_000L),
+                limitExtensionBonus = LimitExtensionBonus(dailyMs = 5 * 60_000L),
+            ),
+        )
+        assertTrue(result is RuleResult.Allowed)
+    }
+
+    @Test
+    fun `blocks when daily limit exceeded without bonus`() {
         val result = RuleEngine.evaluate(baseContext(usage = UsageSnapshot(dailyMs = 61 * 60_000L)))
         assertTrue(result is RuleResult.Blocked)
         assertEquals(BlockReason.dailyLimit, (result as RuleResult.Blocked).reason)
@@ -283,6 +317,7 @@ class RuleEngineTest {
         pauses: List<com.gatekeep.domain.model.Pause> = emptyList(),
         enforcementConfig: ProfileEnforcementConfig = profile.enforcementConfig(),
         sessionState: com.gatekeep.domain.model.SessionState? = null,
+        limitExtensionBonus: LimitExtensionBonus = LimitExtensionBonus(),
     ) = RuleEvaluationContext(
         nowEpochMs = now,
         packageName = "com.test.app",
@@ -294,6 +329,7 @@ class RuleEngineTest {
         pauses = pauses,
         resolvedSchedulePolicy = resolvedSchedulePolicy,
         enforcementConfig = enforcementConfig,
+        limitExtensionBonus = limitExtensionBonus,
     )
 }
 

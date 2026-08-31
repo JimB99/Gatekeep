@@ -116,7 +116,11 @@
     <string name="schedule_mode_allow">Allow</string>
     <string name="schedule_mode_block">Block</string>
     <string name="schedule_mode_default">Default</string>
-    <string name="schedule_mode_customize">Customize</string>
+    <string name="schedule_mode_customize">Custom</string>
+    <string name="schedule_mode_allow_short">Allow</string>
+    <string name="schedule_mode_block_short">Block</string>
+    <string name="schedule_mode_default_short">Default</string>
+    <string name="schedule_mode_customize_short">Custom</string>
     <string name="duplicate_schedule">Duplicate</string>
     <string name="delete_schedule">Delete</string>
     <string name="delete_schedule_title">Delete schedule?</string>

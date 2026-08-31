@@ -180,6 +180,30 @@ interface OverrideEventDao {
 
     @Query(
         """
+        SELECT COALESCE(SUM(extensionMs), 0) FROM override_events
+        WHERE profileId = :profileId AND packageName = :packageName
+        AND timestamp >= :sinceMs AND method = 'extension'
+        """,
+    )
+    suspend fun sumExtensionMsForPackageSince(
+        profileId: Long,
+        packageName: String,
+        sinceMs: Long,
+    ): Long
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(extensionMs), 0) FROM override_events
+        WHERE profileId = :profileId AND timestamp >= :sinceMs AND method = 'extension'
+        """,
+    )
+    suspend fun sumExtensionMsForProfileSince(
+        profileId: Long,
+        sinceMs: Long,
+    ): Long
+
+    @Query(
+        """
         SELECT * FROM override_events
         WHERE profileId = :profileId AND packageName = :packageName
         ORDER BY timestamp DESC LIMIT :limit

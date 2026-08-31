@@ -31,6 +31,8 @@ data class ExtensionPolicyDraft(
     val maxPerDay: Int?,
     val maxConsecutive: Int?,
     val showNoLimitToday: Boolean,
+    val showExtensionsInOverlay: Boolean = true,
+    val allowExtensionsInApp: Boolean = true,
 ) {
     fun resolvedOptionMinutes(): List<Int> {
         val presets = selectedPresets.sorted()
@@ -48,6 +50,8 @@ data class ExtensionPolicyDraft(
         showNoLimitToday = showNoLimitToday,
         customMinutes = customMinutesText.toIntOrNull()?.takeIf { it in 1..999 },
         customEnabled = customEnabled,
+        showExtensionsInOverlay = showExtensionsInOverlay,
+        allowExtensionsInApp = allowExtensionsInApp,
     )
 
     companion object {
@@ -62,6 +66,8 @@ data class ExtensionPolicyDraft(
                 maxPerDay = policy.maxExtensionsPerDay,
                 maxConsecutive = policy.maxConsecutiveExtensions,
                 showNoLimitToday = policy.showNoLimitToday,
+                showExtensionsInOverlay = policy.showExtensionsInOverlay,
+                allowExtensionsInApp = policy.allowExtensionsInApp,
             )
         }
     }
@@ -170,6 +176,32 @@ fun ExtensionPolicyEditor(
             )
             Text(
                 stringResource(R.string.show_no_limit_today),
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Switch(
+                checked = draft.showExtensionsInOverlay,
+                onCheckedChange = { onDraftChange(draft.copy(showExtensionsInOverlay = it)) },
+            )
+            Text(
+                stringResource(R.string.show_extensions_in_overlay),
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Switch(
+                checked = draft.allowExtensionsInApp,
+                onCheckedChange = { onDraftChange(draft.copy(allowExtensionsInApp = it)) },
+            )
+            Text(
+                stringResource(R.string.allow_extensions_in_app),
                 modifier = Modifier.padding(start = 8.dp),
             )
         }
