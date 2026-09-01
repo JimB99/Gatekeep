@@ -1,6 +1,7 @@
 package com.gatekeep.app.ui.components
 
 import android.widget.ImageView
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
@@ -15,17 +16,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -34,7 +30,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -49,11 +44,6 @@ private fun formatMinuteStepLabel(minutes: Int, positive: Boolean): String {
     } else {
         "$sign${minutes}m"
     }
-}
-
-private fun formatSecondStepLabel(seconds: Int, positive: Boolean): String {
-    val sign = if (positive) "+" else "-"
-    return "$sign${seconds}s"
 }
 
 @Composable
@@ -167,7 +157,11 @@ fun IntStepper(
     value: Int?,
     onValueChange: (Int?) -> Unit,
     modifier: Modifier = Modifier,
+    wheelMin: Int = 1,
+    wheelMax: Int = 99,
+    wheelEnabled: Boolean = true,
 ) {
+    var showWheel by remember { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxWidth()) {
         Text(label, style = MaterialTheme.typography.labelMedium)
         Row(
@@ -184,13 +178,32 @@ fun IntStepper(
             }
             Text(
                 text = value?.toString() ?: stringResource(R.string.extension_unlimited),
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clickable(enabled = wheelEnabled) {
+                        if (wheelEnabled) showWheel = true
+                    },
                 textAlign = TextAlign.Center,
             )
             HoldRepeatStepperButton("+") {
                 onValueChange((value ?: 0) + 1)
             }
         }
+    }
+
+    if (showWheel) {
+        IntegerOrUnlimitedWheelDialog(
+            title = label,
+            value = value,
+            onDismiss = { showWheel = false },
+            onConfirm = { selected ->
+                onValueChange(selected)
+                showWheel = false
+            },
+            minValue = wheelMin,
+            maxValue = wheelMax,
+        )
     }
 }
 
@@ -200,15 +213,8 @@ fun DurationPickerWithSeconds(
     totalSeconds: Int,
     onDurationChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    maxTotalSeconds: Int? = 3600,
 ) {
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    var showCustom by remember { mutableStateOf(false) }
-    var customHoursText by remember { mutableStateOf(hours.toString()) }
-    var customMinutesText by remember { mutableStateOf(minutes.toString()) }
-    var customSecondsText by remember { mutableStateOf(seconds.toString()) }
-
     val isSet = totalSeconds > 0
     val containerColor = if (isSet) {
         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f)
@@ -220,6 +226,7 @@ fun DurationPickerWithSeconds(
     } else {
         null
     }
+    var showCustom by remember { mutableStateOf(false) }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -227,87 +234,52 @@ fun DurationPickerWithSeconds(
         color = containerColor,
         border = border,
     ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (isSet) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            HoldRepeatStepperButton("-5m") {
-                onDurationChange((totalSeconds - 300).coerceAtLeast(0))
-            }
-            HoldRepeatStepperButton("-5s") {
-                onDurationChange((totalSeconds - 5).coerceAtLeast(0))
-            }
+        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
             Text(
-                when {
-                    hours > 0 -> "${hours}h ${minutes}m ${seconds}s"
-                    minutes > 0 -> "${minutes}m ${seconds}s"
-                    else -> "${seconds}s"
-                },
-                textAlign = TextAlign.Center,
-                fontWeight = if (isSet) FontWeight.SemiBold else FontWeight.Normal,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .clickable {
-                        customHoursText = hours.toString()
-                        customMinutesText = minutes.toString()
-                        customSecondsText = seconds.toString()
-                        showCustom = true
-                    },
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (isSet) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            HoldRepeatStepperButton("+5s") {
-                onDurationChange(totalSeconds + 5)
-            }
-            HoldRepeatStepperButton("+5m") {
-                onDurationChange(totalSeconds + 300)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                HoldRepeatStepperButton("-5m") {
+                    onDurationChange((totalSeconds - 300).coerceAtLeast(0))
+                }
+                HoldRepeatStepperButton("-5s") {
+                    onDurationChange((totalSeconds - 5).coerceAtLeast(0))
+                }
+                Text(
+                    formatDurationDisplaySeconds(totalSeconds),
+                    textAlign = TextAlign.Center,
+                    fontWeight = if (isSet) FontWeight.SemiBold else FontWeight.Normal,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clickable { showCustom = true },
+                )
+                HoldRepeatStepperButton("+5s") {
+                    onDurationChange(totalSeconds + 5)
+                }
+                HoldRepeatStepperButton("+5m") {
+                    onDurationChange(totalSeconds + 300)
+                }
             }
         }
     }
-    }
 
     if (showCustom) {
-        AlertDialog(
-            onDismissRequest = { showCustom = false },
-            title = { Text(stringResource(R.string.custom_duration)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = customHoursText,
-                        onValueChange = { customHoursText = it.filter { c -> c.isDigit() } },
-                        label = { Text(stringResource(R.string.hours)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    )
-                    OutlinedTextField(
-                        value = customMinutesText,
-                        onValueChange = { customMinutesText = it.filter { c -> c.isDigit() } },
-                        label = { Text(stringResource(R.string.minutes)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    )
-                    OutlinedTextField(
-                        value = customSecondsText,
-                        onValueChange = { customSecondsText = it.filter { c -> c.isDigit() } },
-                        label = { Text(stringResource(R.string.seconds)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    )
-                }
+        RollingDurationDialog(
+            initialTotalSeconds = totalSeconds,
+            onDismiss = { showCustom = false },
+            onConfirm = { seconds ->
+                onDurationChange(seconds)
+                showCustom = false
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    val h = customHoursText.toIntOrNull() ?: 0
-                    val m = (customMinutesText.toIntOrNull() ?: 0).coerceIn(0, 59)
-                    val s = (customSecondsText.toIntOrNull() ?: 0).coerceIn(0, 59)
-                    onDurationChange(h * 3600 + m * 60 + s)
-                    showCustom = false
-                }) { Text(stringResource(R.string.set)) }
-            },
-            dismissButton = { TextButton(onClick = { showCustom = false }) { Text(stringResource(R.string.cancel)) } },
+            title = stringResource(R.string.custom_duration),
+            maxTotalSeconds = maxTotalSeconds,
         )
     }
 }
@@ -325,23 +297,20 @@ fun DurationPicker(
     supportingText: String? = null,
     modifier: Modifier = Modifier,
 ) {
-    val totalMinutes = (totalMs / 60_000).toInt()
-    val hours = totalMinutes / 60
-    val minutes = totalMinutes % 60
+    val totalSeconds = (totalMs / 1000).toInt()
     var showCustom by remember { mutableStateOf(false) }
-    var customHoursText by remember { mutableStateOf(hours.toString()) }
-    var customMinutesText by remember { mutableStateOf(if (minutesOnly) totalMinutes.toString() else minutes.toString()) }
+    val maxTotalSeconds = if (minutesOnly) 59 * 60 + 59 else null
 
     fun applyDelta(deltaMinutes: Int) {
-        val newMin = if (minutesOnly) {
-            (totalMinutes + deltaMinutes).coerceIn(0, 59)
+        val newSeconds = if (minutesOnly) {
+            (totalSeconds + deltaMinutes * 60).coerceIn(0, maxTotalSeconds!!)
         } else {
-            (totalMinutes + deltaMinutes).coerceAtLeast(0)
+            (totalSeconds + deltaMinutes * 60).coerceAtLeast(0)
         }
-        onDurationChange(newMin * 60_000L)
+        onDurationChange(newSeconds.toLong() * 1000L)
     }
 
-    val displayText = if (minutesOnly) "${totalMinutes}m" else "${hours}h ${minutes}m"
+    val displayText = formatDurationDisplayMilliseconds(totalMs)
     val containerColor = when {
         isError -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.12f)
         isSet -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f)
@@ -359,98 +328,68 @@ fun DurationPicker(
         color = containerColor,
         border = border,
     ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            color = when {
-                isError -> MaterialTheme.colorScheme.error
-                isSet -> MaterialTheme.colorScheme.onSurface
-                else -> MaterialTheme.colorScheme.onSurfaceVariant
-            },
-        )
-        if (supportingText != null) {
+        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
             Text(
-                supportingText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp),
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = when {
+                    isError -> MaterialTheme.colorScheme.error
+                    isSet -> MaterialTheme.colorScheme.onSurface
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (coarseStepMinutes != null) {
-                HoldRepeatStepperButton(formatMinuteStepLabel(coarseStepMinutes, positive = false)) {
-                    applyDelta(-coarseStepMinutes)
+            if (supportingText != null) {
+                Text(
+                    supportingText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (coarseStepMinutes != null) {
+                    HoldRepeatStepperButton(formatMinuteStepLabel(coarseStepMinutes, positive = false)) {
+                        applyDelta(-coarseStepMinutes)
+                    }
                 }
-            }
-            HoldRepeatStepperButton(formatMinuteStepLabel(fineStepMinutes, positive = false)) {
-                applyDelta(-fineStepMinutes)
-            }
-            Text(
-                displayText,
-                textAlign = TextAlign.Center,
-                fontWeight = if (isSet) FontWeight.SemiBold else FontWeight.Normal,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .clickable {
-                        customHoursText = hours.toString()
-                        customMinutesText = if (minutesOnly) totalMinutes.toString() else minutes.toString()
-                        showCustom = true
-                    },
-            )
-            HoldRepeatStepperButton(formatMinuteStepLabel(fineStepMinutes, positive = true)) {
-                applyDelta(fineStepMinutes)
-            }
-            if (coarseStepMinutes != null) {
-                HoldRepeatStepperButton(formatMinuteStepLabel(coarseStepMinutes, positive = true)) {
-                    applyDelta(coarseStepMinutes)
+                HoldRepeatStepperButton(formatMinuteStepLabel(fineStepMinutes, positive = false)) {
+                    applyDelta(-fineStepMinutes)
+                }
+                Text(
+                    displayText,
+                    textAlign = TextAlign.Center,
+                    fontWeight = if (isSet) FontWeight.SemiBold else FontWeight.Normal,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clickable { showCustom = true },
+                )
+                HoldRepeatStepperButton(formatMinuteStepLabel(fineStepMinutes, positive = true)) {
+                    applyDelta(fineStepMinutes)
+                }
+                if (coarseStepMinutes != null) {
+                    HoldRepeatStepperButton(formatMinuteStepLabel(coarseStepMinutes, positive = true)) {
+                        applyDelta(coarseStepMinutes)
+                    }
                 }
             }
         }
-    }
     }
 
     if (showCustom) {
-        AlertDialog(
-            onDismissRequest = { showCustom = false },
-            title = { Text(stringResource(R.string.custom_duration)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (!minutesOnly) {
-                        OutlinedTextField(
-                            value = customHoursText,
-                            onValueChange = { customHoursText = it.filter { c -> c.isDigit() } },
-                            label = { Text(stringResource(R.string.hours)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        )
-                    }
-                    OutlinedTextField(
-                        value = customMinutesText,
-                        onValueChange = { customMinutesText = it.filter { c -> c.isDigit() } },
-                        label = { Text(stringResource(R.string.minutes)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    )
-                }
+        RollingDurationDialog(
+            initialTotalSeconds = totalSeconds,
+            onDismiss = { showCustom = false },
+            onConfirm = { seconds ->
+                onDurationChange(seconds.toLong() * 1000L)
+                showCustom = false
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (minutesOnly) {
-                        val m = (customMinutesText.toIntOrNull() ?: 0).coerceIn(0, 59)
-                        onDurationChange(m * 60_000L)
-                    } else {
-                        val h = customHoursText.toIntOrNull() ?: 0
-                        val m = customMinutesText.toIntOrNull() ?: 0
-                        onDurationChange((h * 60L + m.coerceIn(0, 59)) * 60_000L)
-                    }
-                    showCustom = false
-                }) { Text(stringResource(R.string.set)) }
-            },
-            dismissButton = { TextButton(onClick = { showCustom = false }) { Text(stringResource(R.string.cancel)) } },
+            title = stringResource(R.string.custom_duration),
+            maxTotalSeconds = maxTotalSeconds,
         )
     }
 }
@@ -467,8 +406,6 @@ fun TimeOfDayPicker(
     val hours = minuteOfDay / 60
     val minutes = minuteOfDay % 60
     var showCustom by remember { mutableStateOf(false) }
-    var customHoursText by remember { mutableStateOf(hours.toString()) }
-    var customMinutesText by remember { mutableStateOf(minutes.toString()) }
 
     fun applyDelta(delta: Int) {
         onTimeChange((minuteOfDay + delta).coerceIn(0, 24 * 60 - 1))
@@ -495,11 +432,7 @@ fun TimeOfDayPicker(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .clickable {
-                        customHoursText = hours.toString()
-                        customMinutesText = minutes.toString()
-                        showCustom = true
-                    },
+                    .clickable { showCustom = true },
             )
             HoldRepeatStepperButton(formatMinuteStepLabel(fineStepMinutes, positive = true)) {
                 applyDelta(fineStepMinutes)
@@ -513,34 +446,14 @@ fun TimeOfDayPicker(
     }
 
     if (showCustom) {
-        AlertDialog(
-            onDismissRequest = { showCustom = false },
-            title = { Text(stringResource(R.string.custom_time)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = customHoursText,
-                        onValueChange = { customHoursText = it.filter { c -> c.isDigit() } },
-                        label = { Text(stringResource(R.string.hour_range)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    )
-                    OutlinedTextField(
-                        value = customMinutesText,
-                        onValueChange = { customMinutesText = it.filter { c -> c.isDigit() } },
-                        label = { Text(stringResource(R.string.minute)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    )
-                }
+        TwentyFourHourClockDialog(
+            initialMinuteOfDay = minuteOfDay,
+            onDismiss = { showCustom = false },
+            onConfirm = { minute ->
+                onTimeChange(minute)
+                showCustom = false
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    val h = (customHoursText.toIntOrNull() ?: 0).coerceIn(0, 23)
-                    val m = (customMinutesText.toIntOrNull() ?: 0).coerceIn(0, 59)
-                    onTimeChange(h * 60 + m)
-                    showCustom = false
-                }) { Text(stringResource(R.string.set)) }
-            },
-            dismissButton = { TextButton(onClick = { showCustom = false }) { Text(stringResource(R.string.cancel)) } },
+            title = stringResource(R.string.custom_time),
         )
     }
 }

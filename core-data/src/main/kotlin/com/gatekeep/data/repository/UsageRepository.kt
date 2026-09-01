@@ -11,6 +11,7 @@ import com.gatekeep.data.local.entity.UsageAggregateEntity
 import com.gatekeep.data.local.entity.UsageSessionEntity
 import com.gatekeep.data.mapper.toDomain
 import com.gatekeep.data.mapper.toEntity
+import com.gatekeep.domain.model.OverrideMethod
 import com.gatekeep.domain.PauseManager
 import com.gatekeep.domain.UsageAggregator
 import com.gatekeep.domain.UsageSessionRecord
@@ -70,15 +71,19 @@ class UsageRepository(
     suspend fun getWeeklyUsage(profileId: Long, packageName: String, weekStart: Long): Long =
         usageAggregateDao.getTotal(profileId, packageName, UsagePeriod.week.name, weekStart)
 
-    suspend fun getSessionState(packageName: String): SessionState? =
-        sessionStateDao.get(packageName)?.toDomain()
+    suspend fun getSessionState(profileId: Long, packageName: String): SessionState? =
+        sessionStateDao.get(profileId, packageName)?.toDomain()
 
     suspend fun saveSessionState(state: SessionState, profileId: Long) {
         sessionStateDao.upsert(state.toEntity(profileId))
     }
 
-    suspend fun clearSessionState(packageName: String) {
-        sessionStateDao.delete(packageName)
+    suspend fun clearSessionState(profileId: Long, packageName: String) {
+        sessionStateDao.delete(profileId, packageName)
+    }
+
+    suspend fun clearSessionStatesForProfile(profileId: Long) {
+        sessionStateDao.deleteForProfile(profileId)
     }
 
     fun observeActivePauses(now: Long): Flow<List<Pause>> =
@@ -105,7 +110,7 @@ class UsageRepository(
     suspend fun logOverride(
         packageName: String,
         profileId: Long,
-        method: String,
+        method: OverrideMethod,
         extensionMs: Long,
     ) {
         overrideEventDao.insert(
@@ -113,7 +118,7 @@ class UsageRepository(
                 packageName = packageName,
                 profileId = profileId,
                 timestamp = System.currentTimeMillis(),
-                method = method,
+                method = method.storageValue,
                 extensionMs = extensionMs,
             ),
         )
@@ -121,6 +126,17 @@ class UsageRepository(
 
     suspend fun getOverrideCount(profileId: Long): Int =
         overrideEventDao.countForProfile(profileId)
+
+    suspend fun countExtensionOverridesToday(
+        profileId: Long,
+        packageName: String,
+        dayStartMs: Long,
+        sharedPool: Boolean,
+    ): Int = if (sharedPool) {
+        overrideEventDao.countExtensionOverridesForProfileToday(profileId, dayStartMs)
+    } else {
+        overrideEventDao.countExtensionOverridesForPackageToday(profileId, packageName, dayStartMs)
+    }
 
     suspend fun countOverridesForPackageToday(
         profileId: Long,
@@ -138,6 +154,13 @@ class UsageRepository(
         profileId: Long,
         sinceMs: Long,
     ): Long = overrideEventDao.sumExtensionMsForProfileSince(profileId, sinceMs)
+
+    suspend fun clearExtensionOverridesForProfileSince(profileId: Long, sinceMs: Long) {
+        overrideEventDao.deleteExtensionOverridesForProfileSince(profileId, sinceMs)
+    }
+
+    suspend fun getRecentOverridesForProfile(profileId: Long, limit: Int = 50) =
+        overrideEventDao.getRecent(profileId, limit)
 
     suspend fun getRecentOverridesForPackage(
         profileId: Long,
@@ -158,6 +181,21 @@ class UsageRepository(
             profileId = profileId,
             packageName = packageName,
             untilEpochMs = dayEndMs,
+        )
+    }
+
+    suspend fun addExtensionGracePause(
+        profileId: Long,
+        packageName: String?,
+        untilEpochMs: Long,
+        nowEpochMs: Long,
+    ) {
+        addPause(
+            type = PauseType.extensionGrace,
+            nowEpochMs = nowEpochMs,
+            profileId = profileId,
+            packageName = packageName,
+            untilEpochMs = untilEpochMs,
         )
     }
 

@@ -72,7 +72,7 @@ fun AppPickerScreen(
     val backGuard = rememberUnsavedChangesGuard(
         isDirty = isDirty,
         onNavigateBack = onBack,
-        onSave = ::saveChanges,
+        onSave = { viewModel.commitChangesAwait(profileId) },
         onDiscardChanges = ::discardChanges,
     )
 

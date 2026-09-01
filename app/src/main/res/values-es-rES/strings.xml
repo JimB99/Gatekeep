@@ -51,6 +51,16 @@
     <string name="timer">Temporizador</string>
     <string name="warnings">Avisos</string>
     <string name="weekly">Semanal</string>
+    <string name="limit_weekly_short">Semanal %1$s</string>
+    <string name="limit_daily_short">Diario %1$s</string>
+    <string name="limit_hourly_short">Por hora %1$s</string>
+    <string name="limit_session_short">Sesión %1$s</string>
+    <string name="limit_hourly_label">Por hora</string>
+    <string name="profile_current_usage">Uso actual</string>
+    <string name="profile_current_usage_subtitle">Uso, límites y extensiones</string>
+    <string name="extension_applied">Aplicado</string>
+    <string name="extension_reset_done">Extensiones restablecidas</string>
+    <string name="extension_one_hour">1 h</string>
     <string name="version_format">Versión %1$s</string>
     <string name="version_full_format">Versión %1$s (%2$d)</string>
     <string name="replay_onboarding">Repetir configuración inicial</string>
@@ -179,6 +189,7 @@
     <string name="max_extensions_per_day">Máx. extensiones por día (vacío = ilimitado)</string>
     <string name="max_consecutive_extensions">Máx. extensiones consecutivas (vacío = ilimitado)</string>
     <string name="show_no_limit_today">Mostrar botón \"Sin límite hoy\"</string>
+    <string name="extension_overlay_only_hint">Las opciones de superposición solo afectan la pantalla de bloqueo. Las extensiones en la app siempre están disponibles en Uso actual.</string>
     <string name="profile_pin_enabled_hint">El PIN está activado en Reglas → Al abrir una app → PIN.</string>
     <string name="profile_pin_disabled_hint">El PIN está desactivado. Actívalo en Reglas → Al abrir una app → PIN.</string>
     <string name="profile_pin_rules_hint">Guardar almacena el PIN. Activa o desactiva el PIN en Reglas.</string>
@@ -318,6 +329,15 @@
     <string name="duration_seconds">%1$ds</string>
     <string name="duration_infinity">∞</string>
     <string name="duration_zero_minutes">0m</string>
+    <string name="duration_invalid_minute_second">Minutos y segundos deben estar entre 00 y 59.</string>
+    <string name="duration_exceeds_maximum">La duración debe ser máximo %1$s.</string>
+    <string name="duration_exceeds_rolling_maximum">La entrada manual admite hasta %1$s. Usa los botones de paso para valores mayores.</string>
+    <string name="duration_keypad_clear">Borrar</string>
+    <string name="duration_keypad_display_a11y">Duración %1$s</string>
+    <string name="duration_keypad_digit_a11y">Dígito %1$s</string>
+    <string name="duration_keypad_double_zero_a11y">Doble cero</string>
+    <string name="duration_keypad_backspace_a11y">Retroceso</string>
+    <string name="duration_keypad_clear_a11y">Borrar duración</string>
     <string name="step_minus_5m">-5m</string>
     <string name="step_plus_5m">+5m</string>
 
@@ -369,4 +389,47 @@
     <string name="hud_weekly_format">Semanal %1$s / %2$s</string>
 
     <string name="widget_tap_to_open">Toca para abrir Gatekeep</string>
+
+    <string name="break_duration_session">Pausa tras límite de sesión</string>
+    <string name="customize_limits_off_hint">0 = desactivado para este horario. Los límites se copian de Predeterminado al abrir Personalizar.</string>
+    <string name="customize_rules_inherit">Heredar de Predeterminado</string>
+    <string name="extension_in_app_per_app_heading">Ampliar por app</string>
+    <string name="extension_in_app_profile_heading">Ampliar uso compartido</string>
+    <string name="extension_surface_both">Ambos</string>
+    <string name="extension_surface_in_app">En la app</string>
+    <string name="extension_surface_label">Mostrar extensiones</string>
+    <string name="extension_surface_none">Ninguno</string>
+    <string name="extension_surface_none_hint">Extensiones desactivadas. La regla pasa a solo notificar.</string>
+    <string name="extension_surface_overlay">Superposición</string>
+    <string name="hourly_limit_resets">Se reinicia al inicio de cada hora.</string>
+    <string name="limit_break_duration">Pausa tras límite de uso</string>
+    <string name="limit_usage_scope_label">Contar uso</string>
+    <string name="limit_usage_scope_per_app">Por app</string>
+    <string name="limit_usage_scope_per_app_hint">Cada app monitorizada tiene su propio contador con los mismos límites.</string>
+    <string name="limit_usage_scope_shared">Compartido</string>
+    <string name="limit_usage_scope_shared_hint">El uso de todas las apps monitorizadas cuenta para un pool compartido.</string>
+    <string name="limit_wait_duration">Espera antes de omitir el límite de uso</string>
+    <string name="limits_hierarchy_error">Semanal debe ser al menos diario, diario al menos por hora, y por hora al menos sesión.</string>
+    <string name="limits_hierarchy_hint">Semanal ≥ diario ≥ por hora ≥ sesión</string>
+    <string name="no_limit_today_short">Sin límite hoy</string>
+    <string name="pause_apply">Aplicar</string>
+    <string name="pause_reset_action">Restablecer pausas</string>
+    <string name="pause_reset_done">Pausas restablecidas</string>
+    <string name="pause_reset_help">Finaliza todas las pausas activas de este perfil.</string>
+    <string name="pause_reset_title">Restablecer pausas activas</string>
+    <string name="pin_not_set">Sin PIN</string>
+    <string name="profile_apps_tracked">%1$d apps monitorizadas</string>
+    <string name="profile_limits_none">Sin límites configurados</string>
+    <string name="profile_schedule_always">Solo política predeterminada</string>
+    <string name="profile_schedule_windows">%1$d horarios</string>
+    <string name="save_schedule">Guardar horario</string>
+    <string name="schedule_active">Horario activo</string>
+    <string name="more_options">Más opciones</string>
+    <string name="effective_policy_now">Política actual</string>
+    <string name="schedule_segment_copy_format">%1$s (copia)</string>
+    <string name="extension_history">Historial de extensiones</string>
+    <string name="extension_history_subtitle">Extensiones y anulaciones recientes</string>
+    <string name="hud_app_label_content_description">App supervisada</string>
+    <string name="hud_time_content_description">Tiempo restante</string>
+    <string name="week_timeline">Vista semanal</string>
 </resources>

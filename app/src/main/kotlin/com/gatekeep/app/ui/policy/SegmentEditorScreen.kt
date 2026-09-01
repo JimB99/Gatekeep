@@ -225,7 +225,7 @@ fun SegmentEditorScreen(
     val backGuard = rememberUnsavedChangesGuard(
         isDirty = isDirty,
         onNavigateBack = onBack,
-        onSave = ::save,
+        onSave = { persistSegment() },
         onDiscardChanges = ::discardChanges,
     )
 
@@ -250,7 +250,7 @@ fun SegmentEditorScreen(
                 actions = {
                     if (activeSegmentId != null) {
                         IconButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = null)
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_options))
                         }
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                             DropdownMenuItem(

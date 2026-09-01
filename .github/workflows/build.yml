@@ -28,6 +28,15 @@ jobs:
       - name: Run domain tests
         run: ./gradlew :core-domain:test
 
+      - name: Run data tests
+        run: ./gradlew :core-data:test
+
+      - name: Run app unit tests
+        run: ./gradlew :app:testDebugUnitTest
+
+      - name: Lint debug build
+        run: ./gradlew :app:lintDebug
+
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug
 

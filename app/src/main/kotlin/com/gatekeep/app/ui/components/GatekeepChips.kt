@@ -44,8 +44,8 @@ fun GatekeepFilterChipLabel(
     Text(
         text = text,
         modifier = modifier,
-        maxLines = 1,
-        softWrap = false,
+        maxLines = 2,
+        softWrap = true,
         overflow = TextOverflow.Ellipsis,
     )
 }

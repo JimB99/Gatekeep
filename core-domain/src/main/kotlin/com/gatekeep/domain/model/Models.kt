@@ -9,6 +9,7 @@ enum class PauseType {
     focusMode,
     focusBlock,
     emergencyBypass,
+    extensionGrace,
 }
 
 enum class OnOpenAction {
@@ -85,6 +86,13 @@ enum class LimitUsageScope {
     sharedPool,
 }
 
+enum class ExtensionSurfaceMode {
+    none,
+    inApp,
+    overlay,
+    both,
+}
+
 data class ExtensionPolicy(
     val optionMinutes: List<Int> = listOf(1, 5, 10),
     val maxExtensionsPerDay: Int? = null,
@@ -92,9 +100,14 @@ data class ExtensionPolicy(
     val showNoLimitToday: Boolean = true,
     val customMinutes: Int? = null,
     val customEnabled: Boolean = false,
-    val showExtensionsInOverlay: Boolean = true,
-    val allowExtensionsInApp: Boolean = true,
-)
+    val surfaceMode: ExtensionSurfaceMode = ExtensionSurfaceMode.both,
+) {
+    val showExtensionsInOverlay: Boolean
+        get() = surfaceMode == ExtensionSurfaceMode.overlay || surfaceMode == ExtensionSurfaceMode.both
+
+    val allowExtensionsInApp: Boolean
+        get() = surfaceMode == ExtensionSurfaceMode.inApp || surfaceMode == ExtensionSurfaceMode.both
+}
 
 /** Extra limit budget from logged extension overrides (daily/hourly/weekly). */
 data class LimitExtensionBonus(
@@ -118,6 +131,7 @@ data class ProfileEnforcementConfig(
 )
 
 enum class FrictionMethod {
+    none,
     math,
     waitOneMin,
     holdButton,
@@ -261,6 +275,7 @@ data class SessionState(
     val frictionStartedAtEpochMs: Long? = null,
     val pendingWaitUntilEpochMs: Long? = null,
     val sessionLimitNotified: Boolean = false,
+    val consecutiveExtensionCount: Int = 0,
 )
 
 data class RuleEvaluationContext(

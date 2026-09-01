@@ -43,6 +43,16 @@ data class ProfileBackupData(
     val noScheduleMatchOnOpenAction: String? = null,
     val noScheduleMatchOnLimitAction: String? = null,
     val noScheduleMatchOnSessionLimitAction: String? = null,
+    val dailyLimitMs: Long? = null,
+    val hourlyLimitMs: Long? = null,
+    val weeklyLimitMs: Long? = null,
+    val sessionLimitMs: Long? = null,
+    val breakDurationMs: Long? = null,
+    val limitBreakDurationMs: Long? = null,
+    val openWaitDurationSeconds: Int = 60,
+    val sessionWaitDurationSeconds: Int = 60,
+    val limitWaitDurationSeconds: Int = 60,
+    val limitUsageScope: String = "perApp",
 )
 
 @Serializable
@@ -95,7 +105,7 @@ data class ScheduleWindowBackup(
 
 @Serializable
 data class GatekeepBackup(
-    val version: Int = 2,
+    val version: Int = 3,
     val profiles: List<ProfileBackup>,
 )
 
@@ -139,6 +149,16 @@ object BackupManager {
             noScheduleMatchOnOpenAction = profile.noScheduleMatchOnOpenAction,
             noScheduleMatchOnLimitAction = profile.noScheduleMatchOnLimitAction,
             noScheduleMatchOnSessionLimitAction = profile.noScheduleMatchOnSessionLimitAction,
+            dailyLimitMs = profile.dailyLimitMs,
+            hourlyLimitMs = profile.hourlyLimitMs,
+            weeklyLimitMs = profile.weeklyLimitMs,
+            sessionLimitMs = profile.sessionLimitMs,
+            breakDurationMs = profile.breakDurationMs,
+            limitBreakDurationMs = profile.limitBreakDurationMs,
+            openWaitDurationSeconds = profile.openWaitDurationSeconds,
+            sessionWaitDurationSeconds = profile.sessionWaitDurationSeconds,
+            limitWaitDurationSeconds = profile.limitWaitDurationSeconds,
+            limitUsageScope = profile.limitUsageScope,
         ),
         monitoredApps = apps.map {
             MonitoredAppBackup(it.packageName, it.label, it.category, it.isWhitelistedEssential)

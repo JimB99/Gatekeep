@@ -161,4 +161,58 @@ object GatekeepMigrations {
             )
         }
     }
+
+    val MIGRATION_11_12 = object : Migration(11, 12) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS session_state_new (
+                    profileId INTEGER NOT NULL,
+                    packageName TEXT NOT NULL,
+                    sessionStartEpochMs INTEGER NOT NULL,
+                    breakUntilEpochMs INTEGER,
+                    excludedMs INTEGER NOT NULL DEFAULT 0,
+                    frictionStartedAtEpochMs INTEGER,
+                    pendingWaitUntilEpochMs INTEGER,
+                    sessionLimitNotified INTEGER NOT NULL DEFAULT 0,
+                    consecutiveExtensionCount INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(profileId, packageName)
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                INSERT INTO session_state_new (
+                    profileId, packageName, sessionStartEpochMs, breakUntilEpochMs,
+                    excludedMs, frictionStartedAtEpochMs, pendingWaitUntilEpochMs,
+                    sessionLimitNotified, consecutiveExtensionCount
+                )
+                SELECT
+                    profileId, packageName, sessionStartEpochMs, breakUntilEpochMs,
+                    excludedMs, frictionStartedAtEpochMs, pendingWaitUntilEpochMs,
+                    sessionLimitNotified, 0
+                FROM session_state
+                """.trimIndent(),
+            )
+            db.execSQL("DROP TABLE session_state")
+            db.execSQL("ALTER TABLE session_state_new RENAME TO session_state")
+        }
+    }
+
+    val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS index_override_events_profile_package_method_timestamp
+                ON override_events(profileId, packageName, method, timestamp)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS index_override_events_profile_method_timestamp
+                ON override_events(profileId, method, timestamp)
+                """.trimIndent(),
+            )
+        }
+    }
 }

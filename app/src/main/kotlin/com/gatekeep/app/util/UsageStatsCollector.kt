@@ -4,6 +4,7 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import com.gatekeep.domain.TimeBoundaries
 import com.gatekeep.domain.UsageBucketAggregator
 import com.gatekeep.domain.model.UsageSnapshot
 import java.time.Instant
@@ -170,24 +171,22 @@ class UsageStatsCollector(private val context: Context) {
         foregroundMsInRange(startMs, endMs, packageNames)
 
     fun dayStartEpochMs(nowMs: Long = System.currentTimeMillis(), zoneId: ZoneId = ZoneId.systemDefault()): Long =
-        ZonedDateTime.ofInstant(Instant.ofEpochMilli(nowMs), zoneId)
-            .toLocalDate().atStartOfDay(zoneId).toInstant().toEpochMilli()
+        TimeBoundaries.dayStartEpochMs(nowMs, zoneId)
 
     fun hourStartEpochMs(nowMs: Long = System.currentTimeMillis(), zoneId: ZoneId = ZoneId.systemDefault()): Long =
-        ZonedDateTime.ofInstant(Instant.ofEpochMilli(nowMs), zoneId)
-            .withMinute(0).withSecond(0).withNano(0).toInstant().toEpochMilli()
+        TimeBoundaries.hourStartEpochMs(nowMs, zoneId)
 
-    fun weekStartEpochMs(nowMs: Long = System.currentTimeMillis(), zoneId: ZoneId = ZoneId.systemDefault()): Long {
-        val zdt = ZonedDateTime.ofInstant(Instant.ofEpochMilli(nowMs), zoneId)
-        return zdt.with(WeekFields.ISO.dayOfWeek(), 1)
-            .toLocalDate().atStartOfDay(zoneId).toInstant().toEpochMilli()
-    }
+    fun weekStartEpochMs(
+        nowMs: Long = System.currentTimeMillis(),
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        weekFields: WeekFields = WeekFields.ISO,
+    ): Long = TimeBoundaries.weekBounds(nowMs, zoneId, weekFields).startMs
 
     fun monthStartEpochMs(year: Int, month: Int, zoneId: ZoneId = ZoneId.systemDefault()): Long =
-        LocalDate.of(year, month, 1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+        TimeBoundaries.monthBounds(year, month, zoneId).startMs
 
     fun yearStartEpochMs(year: Int, zoneId: ZoneId = ZoneId.systemDefault()): Long =
-        LocalDate.of(year, 1, 1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+        TimeBoundaries.yearBounds(year, zoneId).startMs
 
     private fun isExcludedPackage(packageName: String): Boolean =
         packageName == context.packageName ||

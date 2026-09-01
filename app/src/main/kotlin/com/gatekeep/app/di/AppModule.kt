@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.room.Room
 import com.gatekeep.data.local.GatekeepDatabase
 import com.gatekeep.data.local.GatekeepMigrations
+import com.gatekeep.app.enforcement.CountdownController
+import com.gatekeep.app.enforcement.ExtensionGrantUseCase
+import com.gatekeep.app.enforcement.SessionLifecycleService
 import com.gatekeep.app.util.EnforcementLog
 import com.gatekeep.app.util.UsageStatsCollector
 import com.gatekeep.data.repository.ProfileRepository
@@ -34,6 +37,8 @@ object AppModule {
                 GatekeepMigrations.MIGRATION_8_9,
                 GatekeepMigrations.MIGRATION_9_10,
                 GatekeepMigrations.MIGRATION_10_11,
+                GatekeepMigrations.MIGRATION_11_12,
+                GatekeepMigrations.MIGRATION_12_13,
             )
             .build()
         enforcementLog.clearStaleMigrationErrors()
@@ -50,6 +55,10 @@ object AppModule {
             db.scheduleSegmentDao(),
             db.scheduleWindowDao(),
             db.pauseDao(),
+            db.usageSessionDao(),
+            db.usageAggregateDao(),
+            db.overrideEventDao(),
+            db.sessionStateDao(),
         )
 
     @Provides
@@ -72,6 +81,20 @@ object AppModule {
     @Singleton
     fun provideUsageStatsCollector(@ApplicationContext context: Context): UsageStatsCollector =
         UsageStatsCollector(context)
+
+    @Provides
+    @Singleton
+    fun provideExtensionGrantUseCase(usageRepository: UsageRepository): ExtensionGrantUseCase =
+        ExtensionGrantUseCase(usageRepository)
+
+    @Provides
+    @Singleton
+    fun provideSessionLifecycleService(usageRepository: UsageRepository): SessionLifecycleService =
+        SessionLifecycleService(usageRepository)
+
+    @Provides
+    @Singleton
+    fun provideCountdownController(): CountdownController = CountdownController()
 
     @Provides
     @Singleton

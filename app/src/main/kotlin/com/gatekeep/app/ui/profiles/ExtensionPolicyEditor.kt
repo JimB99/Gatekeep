@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.gatekeep.app.ui.profiles
 
 import androidx.compose.foundation.layout.Arrangement
@@ -8,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,10 +20,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.gatekeep.app.R
 import com.gatekeep.app.ui.components.GatekeepFilterChip
+import com.gatekeep.app.ui.components.GatekeepFilterChipRow
 import com.gatekeep.app.ui.components.IntStepper
 import com.gatekeep.domain.model.ExtensionPolicy
+import com.gatekeep.domain.model.ExtensionSurfaceMode
 
-private val PRESET_MINUTES = listOf(1, 5, 10, 15)
+private val PRESET_MINUTES = listOf(1, 5, 15, 60)
+private const val MAX_EXTENSIONS_WHEEL_MAX = 99
 
 data class ExtensionPolicyDraft(
     val selectedPresets: Set<Int>,
@@ -31,8 +35,7 @@ data class ExtensionPolicyDraft(
     val maxPerDay: Int?,
     val maxConsecutive: Int?,
     val showNoLimitToday: Boolean,
-    val showExtensionsInOverlay: Boolean = true,
-    val allowExtensionsInApp: Boolean = true,
+    val surfaceMode: ExtensionSurfaceMode = ExtensionSurfaceMode.both,
 ) {
     fun resolvedOptionMinutes(): List<Int> {
         val presets = selectedPresets.sorted()
@@ -50,24 +53,28 @@ data class ExtensionPolicyDraft(
         showNoLimitToday = showNoLimitToday,
         customMinutes = customMinutesText.toIntOrNull()?.takeIf { it in 1..999 },
         customEnabled = customEnabled,
-        showExtensionsInOverlay = showExtensionsInOverlay,
-        allowExtensionsInApp = allowExtensionsInApp,
+        surfaceMode = surfaceMode,
     )
 
     companion object {
         fun fromPolicy(policy: ExtensionPolicy): ExtensionPolicyDraft {
-            val presets = policy.optionMinutes.filter { it in PRESET_MINUTES }.toSet()
+            val legacyPresets = setOf(1, 5, 10, 15, 60)
+            val presets = policy.optionMinutes.filter { it in legacyPresets }.toSet()
             val storedCustom = policy.customMinutes
-                ?: policy.optionMinutes.filter { it !in PRESET_MINUTES }.firstOrNull()
+                ?: policy.optionMinutes.filter { it !in legacyPresets }.firstOrNull()
+            val migratedPresets = when {
+                presets.isNotEmpty() -> presets
+                policy.optionMinutes.contains(10) -> presets + 10
+                else -> setOf(1, 5, 15)
+            }.map { if (it == 10) 15 else it }.toSet()
             return ExtensionPolicyDraft(
-                selectedPresets = presets.ifEmpty { setOf(1, 5, 10) },
+                selectedPresets = migratedPresets.ifEmpty { setOf(1, 5, 15) },
                 customEnabled = policy.customEnabled,
                 customMinutesText = storedCustom?.toString() ?: "",
                 maxPerDay = policy.maxExtensionsPerDay,
                 maxConsecutive = policy.maxConsecutiveExtensions,
                 showNoLimitToday = policy.showNoLimitToday,
-                showExtensionsInOverlay = policy.showExtensionsInOverlay,
-                allowExtensionsInApp = policy.allowExtensionsInApp,
+                surfaceMode = policy.surfaceMode,
             )
         }
     }
@@ -84,11 +91,7 @@ fun ExtensionPolicyEditor(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(stringResource(R.string.extension_minutes_label), style = MaterialTheme.typography.labelMedium)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        GatekeepFilterChipRow {
             PRESET_MINUTES.forEach { minutes ->
                 GatekeepFilterChip(
                     selected = minutes in draft.selectedPresets,
@@ -101,7 +104,7 @@ fun ExtensionPolicyEditor(
                         val finalPresets = updated.ifEmpty { setOf(minutes) }
                         onDraftChange(draft.copy(selectedPresets = finalPresets))
                     },
-                    label = { Text("${minutes}m", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    label = { Text(formatPresetLabel(minutes), maxLines = 2) },
                 )
             }
             GatekeepFilterChip(
@@ -112,8 +115,7 @@ fun ExtensionPolicyEditor(
                 label = {
                     Text(
                         stringResource(R.string.extension_custom_short),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        maxLines = 2,
                     )
                 },
             )
@@ -132,7 +134,25 @@ fun ExtensionPolicyEditor(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             )
         }
-        val preview = draft.resolvedOptionMinutes().joinToString(", ") { "${it}m" }
+        Text(
+            stringResource(R.string.extension_overlay_only_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        GatekeepFilterChip(
+            selected = draft.showNoLimitToday,
+            onClick = {
+                onDraftChange(draft.copy(showNoLimitToday = !draft.showNoLimitToday))
+            },
+            label = {
+                Text(
+                    stringResource(R.string.show_no_limit_today),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+        )
+        val preview = draft.resolvedOptionMinutes().joinToString(", ") { formatPresetLabel(it) }
         Text(
             stringResource(R.string.extension_overlay_preview, preview),
             style = MaterialTheme.typography.bodySmall,
@@ -148,6 +168,7 @@ fun ExtensionPolicyEditor(
                 }
                 onDraftChange(draft.copy(maxPerDay = newMaxPerDay, maxConsecutive = cappedConsecutive))
             },
+            wheelMax = MAX_EXTENSIONS_WHEEL_MAX,
         )
         IntStepper(
             label = stringResource(R.string.max_consecutive_extensions),
@@ -165,45 +186,10 @@ fun ExtensionPolicyEditor(
                 }
                 onDraftChange(draft.copy(maxPerDay = bumpedDaily, maxConsecutive = capped))
             },
+            wheelMax = MAX_EXTENSIONS_WHEEL_MAX,
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Switch(
-                checked = draft.showNoLimitToday,
-                onCheckedChange = { onDraftChange(draft.copy(showNoLimitToday = it)) },
-            )
-            Text(
-                stringResource(R.string.show_no_limit_today),
-                modifier = Modifier.padding(start = 8.dp),
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Switch(
-                checked = draft.showExtensionsInOverlay,
-                onCheckedChange = { onDraftChange(draft.copy(showExtensionsInOverlay = it)) },
-            )
-            Text(
-                stringResource(R.string.show_extensions_in_overlay),
-                modifier = Modifier.padding(start = 8.dp),
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Switch(
-                checked = draft.allowExtensionsInApp,
-                onCheckedChange = { onDraftChange(draft.copy(allowExtensionsInApp = it)) },
-            )
-            Text(
-                stringResource(R.string.allow_extensions_in_app),
-                modifier = Modifier.padding(start = 8.dp),
-            )
-        }
     }
 }
+
+private fun formatPresetLabel(minutes: Int): String =
+    if (minutes >= 60 && minutes % 60 == 0) "${minutes / 60}h" else "${minutes}m"

@@ -92,7 +92,7 @@ fun ScheduleEditorScreen(
     val backGuard = rememberUnsavedChangesGuard(
         isDirty = editorState.isDirty,
         onNavigateBack = onBack,
-        onSave = ::saveSchedule,
+        onSave = { viewModel.commitScheduleAwait(profileId) },
         onDiscardChanges = ::discardChanges,
     )
 
@@ -220,7 +220,7 @@ fun ScheduleEditorScreen(
             }
             SaveChangesButton(
                 visible = editorState.isDirty,
-                onClick = ::saveSchedule,
+                onClick = { scope.launch { viewModel.commitScheduleAwait(profileId) } },
                 label = stringResource(R.string.save_schedule),
             )
         }

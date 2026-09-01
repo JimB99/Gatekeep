@@ -21,7 +21,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -164,12 +166,12 @@ fun PolicyOverrideLimitsScreen(
         onSessionLimitAction = base.onSessionLimitAction,
     )
 
-    fun saveLimits() {
+    suspend fun saveLimits() {
         if (!hierarchyValidation.valid) return
         val p = profile ?: return
         when (scope) {
             is PolicyOverrideScope.NoScheduleMatch -> {
-                viewModel.saveProfile(
+                viewModel.saveProfileAwait(
                     p.copy(
                         noScheduleMatchMode = SchedulePolicyMode.customize,
                         noScheduleMatchOverrides = currentOverrides(),
@@ -177,7 +179,7 @@ fun PolicyOverrideLimitsScreen(
                 )
             }
             is PolicyOverrideScope.Segment -> {
-                viewModel.updateSegmentOverrides(scope.segmentId) { overrides ->
+                viewModel.updateSegmentOverridesAwait(scope.segmentId) { overrides ->
                     overrides.copy(
                         dailyLimitMs = dailyMs,
                         hourlyLimitMs = hourlyMs,
@@ -196,7 +198,7 @@ fun PolicyOverrideLimitsScreen(
     val backGuard = rememberUnsavedChangesGuard(
         isDirty = isDirty,
         onNavigateBack = onBack,
-        onSave = ::saveLimits,
+        onSave = { saveLimits() },
         onDiscardChanges = onBack,
     )
 
@@ -273,7 +275,11 @@ fun PolicyOverrideLimitsScreen(
                     color = androidx.compose.material3.MaterialTheme.colorScheme.error,
                 )
             }
-            SaveChangesButton(visible = isDirty, onClick = ::saveLimits)
+            val customizeScope = rememberCoroutineScope()
+            SaveChangesButton(
+                visible = isDirty,
+                onClick = { customizeScope.launch { saveLimits() } },
+            )
         }
     }
 }

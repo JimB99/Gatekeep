@@ -26,6 +26,18 @@ import java.time.ZonedDateTime
 class ProfileMergeEngineTest {
 
     @Test
+    fun `merged limit is order independent`() {
+        val limitsA = listOf(
+            AppLimit(1, "com.test", dailyLimitMs = 3600_000, enabled = true),
+            AppLimit(2, "com.test", dailyLimitMs = 1800_000, enabled = true),
+        )
+        val limitsB = limitsA.reversed()
+        val mergedA = ProfileMergeEngine.mergedLimitForApp(limitsA, "com.test")
+        val mergedB = ProfileMergeEngine.mergedLimitForApp(limitsB, "com.test")
+        assertEquals(mergedA?.dailyLimitMs, mergedB?.dailyLimitMs)
+    }
+
+    @Test
     fun `merged limit picks strictest caps`() {
         val merged = ProfileMergeEngine.mergedLimitForApp(
             listOf(

@@ -3,6 +3,7 @@ package com.gatekeep.app.util
 import android.content.Context
 import com.gatekeep.app.R
 import com.gatekeep.domain.ExtensionDenialReason
+import com.gatekeep.domain.model.BlockPresentationReason
 import com.gatekeep.domain.model.BlockReason
 import com.gatekeep.domain.model.FrictionMethod
 
@@ -56,12 +57,18 @@ object BlockMessageResolver {
                 context.getString(R.string.extension_denied_consecutive)
         }
 
-    fun reasonLabel(context: Context, reasonKey: String): String = when (reasonKey) {
-        "outsideSchedule" -> context.getString(R.string.block_outside_schedule)
-        "scheduleBlock" -> context.getString(R.string.block_schedule_block)
-        "openGate" -> context.getString(R.string.block_open_gate)
-        "profilePin" -> context.getString(R.string.enter_profile_pin)
-        "extensionDenied" -> context.getString(R.string.extension_denied_title)
-        else -> reasonKey
+    fun reasonLabel(context: Context, reason: BlockPresentationReason): String = when (reason) {
+        BlockPresentationReason.outsideSchedule -> context.getString(R.string.block_outside_schedule)
+        BlockPresentationReason.scheduleBlock -> context.getString(R.string.block_schedule_block)
+        BlockPresentationReason.openGate -> context.getString(R.string.block_open_gate)
+        BlockPresentationReason.profilePin -> context.getString(R.string.enter_profile_pin)
+        BlockPresentationReason.extensionDenied -> context.getString(R.string.extension_denied_title)
+        BlockPresentationReason.focusMode -> context.getString(R.string.block_focus_mode)
+        BlockPresentationReason.onBreak -> context.getString(R.string.block_take_break)
+        BlockPresentationReason.sessionLimit -> context.getString(R.string.block_session_limit)
+        BlockPresentationReason.dailyLimit -> context.getString(R.string.block_daily_limit)
+        BlockPresentationReason.hourlyLimit -> context.getString(R.string.block_hourly_limit)
+        BlockPresentationReason.weeklyLimit -> context.getString(R.string.block_weekly_limit)
+        else -> context.getString(R.string.block_generic)
     }
 }

@@ -27,12 +27,18 @@ import com.gatekeep.data.repository.UsageRepository
 import com.gatekeep.domain.AppCategories
 import com.gatekeep.domain.StatsPeriodKind
 import com.gatekeep.domain.StatsPeriodLogic
-import com.gatekeep.domain.ProfileMergeEngine
+import com.gatekeep.data.local.entity.OverrideEventEntity
+import com.gatekeep.domain.EffectiveLimitDisplay
+import com.gatekeep.domain.PolicyTimelineResolver
 import com.gatekeep.domain.SchedulePolicyResolver
+import com.gatekeep.domain.ProfileMergeEngine
+import com.gatekeep.domain.SessionTracker
+import com.gatekeep.domain.TimeBoundaries
 import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.MonitoredApp
 import com.gatekeep.app.ui.pause.DurationChoice
+import com.gatekeep.domain.model.Pause
 import com.gatekeep.domain.model.PauseType
 import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.ScheduleSegment
@@ -152,6 +158,8 @@ class ProfilesHomeViewModel @Inject constructor(
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
+    private val usageRepository: UsageRepository,
+    private val usageStatsCollector: UsageStatsCollector,
     private val pinStorage: PinStorage,
     private val enforcementCoordinator: com.gatekeep.app.enforcement.EnforcementCoordinator,
     @ApplicationContext private val context: Context,
@@ -170,6 +178,13 @@ class ProfileViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val monitoredApps = _profileId
+        .flatMapLatest { id ->
+            if (id == null) flowOf(emptyList())
+            else profileRepository.observeMonitoredApps(id)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val scheduleWindows = _profileId
         .flatMapLatest { id ->
             if (id == null) flowOf(emptyList())
@@ -183,6 +198,38 @@ class ProfileViewModel @Inject constructor(
             else profileRepository.observeScheduleSegments(id)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _extensionHistory = MutableStateFlow<List<OverrideEventEntity>>(emptyList())
+    val extensionHistory = _extensionHistory.asStateFlow()
+
+    private val _effectivePolicy = MutableStateFlow<PolicyTimelineResolver.EffectivePolicySnapshot?>(null)
+    val effectivePolicy = _effectivePolicy.asStateFlow()
+
+    fun refreshExtensionHistory(profileId: Long) {
+        viewModelScope.launch {
+            _extensionHistory.value = usageRepository.getRecentOverridesForProfile(profileId)
+        }
+    }
+
+    fun refreshEffectivePolicy(profileId: Long) {
+        viewModelScope.launch {
+            val profile = profileRepository.observeProfiles().first().find { it.id == profileId } ?: return@launch
+            val now = System.currentTimeMillis()
+            val pauses = usageRepository.observeActivePauses(now).first()
+            val segments = profileRepository.observeScheduleSegments(profileId).first()
+            val windows = profileRepository.observeScheduleWindows(profileId).first()
+            val policy = SchedulePolicyResolver.resolveForProfile(
+                profile = profile,
+                segments = segments,
+                windows = windows,
+                packageName = "",
+                nowEpochMs = now,
+            )
+            _effectivePolicy.value = PolicyTimelineResolver.snapshot(
+                profile, policy, segments, pauses, now,
+            )
+        }
+    }
 
     fun bindProfile(profileId: Long) {
         _profileId.value = profileId
@@ -225,24 +272,281 @@ class ProfileViewModel @Inject constructor(
 
     fun saveProfile(profile: Profile, message: String = context.getString(R.string.saved)) {
         viewModelScope.launch {
-            profileRepository.updateProfile(profile)
-            _saveMessage.value = message
+            saveProfileAwait(profile, message)
         }
+    }
+
+    suspend fun saveProfileAwait(
+        profile: Profile,
+        message: String = context.getString(R.string.saved),
+    ) {
+        profileRepository.updateProfile(profile)
+        _saveMessage.value = message
+    }
+
+    suspend fun updateProfileAwait(profile: Profile) {
+        profileRepository.updateProfile(profile)
+    }
+
+    suspend fun updateSegmentOverridesAwait(
+        segmentId: Long,
+        transform: (com.gatekeep.domain.model.SchedulePolicyOverrides) ->
+            com.gatekeep.domain.model.SchedulePolicyOverrides,
+    ) {
+        val segment = profileRepository.getScheduleSegment(segmentId) ?: return
+        profileRepository.updateScheduleSegment(
+            segment.copy(
+                mode = com.gatekeep.domain.model.SchedulePolicyMode.customize,
+                overrides = transform(segment.overrides),
+            ),
+        )
     }
 
     fun clearSaveMessage() {
         _saveMessage.value = null
     }
 
-    fun grantExtensionInApp(packageNames: List<String>, minutes: Int) {
-        packageNames.forEach { pkg ->
-            enforcementCoordinator.grantExtensionMinutes(pkg, minutes)
+    fun grantExtensionInApp(profileId: Long, packageNames: List<String>, minutes: Int) {
+        viewModelScope.launch {
+            grantExtensionInAppAwait(profileId, packageNames, minutes)
         }
     }
 
-    fun grantNoLimitTodayInApp(packageNames: List<String>) {
+    suspend fun grantExtensionInAppAwait(profileId: Long, packageNames: List<String>, minutes: Int) {
+        val profile = profileRepository.observeProfiles().first().find { it.id == profileId }
+        if (profile == null || packageNames.isEmpty()) return
+        if (profile.limitUsageScope == com.gatekeep.domain.model.LimitUsageScope.sharedPool) {
+            enforcementCoordinator.grantExtensionForProfileAwait(
+                profileId,
+                packageNames.first(),
+                minutes,
+            )
+        } else {
+            packageNames.forEach { pkg ->
+                enforcementCoordinator.grantExtensionForProfileAwait(profileId, pkg, minutes)
+            }
+        }
+        refreshCurrentUsage(profileId)
+    }
+
+    fun grantNoLimitTodayInApp(profileId: Long, packageNames: List<String>) {
+        viewModelScope.launch {
+            grantNoLimitTodayInAppAwait(profileId, packageNames)
+        }
+    }
+
+    suspend fun grantNoLimitTodayInAppAwait(profileId: Long, packageNames: List<String>) {
+        if (packageNames.isEmpty()) return
         packageNames.forEach { pkg ->
-            enforcementCoordinator.grantNoLimitToday(pkg)
+            enforcementCoordinator.grantNoLimitTodayForProfileAwait(profileId, pkg, fromInApp = true)
+        }
+        refreshCurrentUsage(profileId)
+    }
+
+    fun resetExtensionsForProfile(profileId: Long) {
+        viewModelScope.launch { resetExtensionsForProfileAwait(profileId) }
+    }
+
+    suspend fun resetExtensionsForProfileAwait(profileId: Long) {
+        val dayStart = usageStatsCollector.dayStartEpochMs()
+        usageRepository.clearAllowPauses(listOf(profileId))
+        usageRepository.clearExtensionOverridesForProfileSince(profileId, dayStart)
+        profileRepository.observeMonitoredApps(profileId).first().forEach { app ->
+            usageRepository.clearSessionState(profileId, app.packageName)
+        }
+        refreshCurrentUsage(profileId)
+    }
+
+    enum class CurrentUsageLimitKind {
+        weekly,
+        daily,
+        hourly,
+        session,
+    }
+
+    data class CurrentUsageLimitRow(
+        val kind: CurrentUsageLimitKind,
+        val usageMs: Long,
+        val effectiveLimitMs: Long?,
+        val noLimitToday: Boolean,
+    )
+
+    data class CurrentUsageAppRow(
+        val packageName: String,
+        val label: String,
+        val limits: List<CurrentUsageLimitRow>,
+    )
+
+    data class CurrentUsageState(
+        val isSharedPool: Boolean,
+        val sharedLimits: List<CurrentUsageLimitRow>,
+        val perApp: List<CurrentUsageAppRow>,
+    )
+
+    private val _currentUsage = MutableStateFlow<CurrentUsageState?>(null)
+    val currentUsage = _currentUsage.asStateFlow()
+
+    fun refreshCurrentUsage(profileId: Long) {
+        viewModelScope.launch { loadCurrentUsage(profileId) }
+    }
+
+    private suspend fun loadCurrentUsage(profileId: Long) {
+        val profile = profileRepository.observeProfiles().first().find { it.id == profileId } ?: return
+        val apps = profileRepository.observeMonitoredApps(profileId).first()
+        if (apps.isEmpty()) {
+            _currentUsage.value = CurrentUsageState(
+                isSharedPool = profile.limitUsageScope == com.gatekeep.domain.model.LimitUsageScope.sharedPool,
+                sharedLimits = emptyList(),
+                perApp = emptyList(),
+            )
+            return
+        }
+        val now = System.currentTimeMillis()
+        val pauses = usageRepository.observeActivePauses(now).first()
+        val dayStart = usageStatsCollector.dayStartEpochMs(now)
+        val hourStart = usageStatsCollector.hourStartEpochMs(now)
+        val weekStart = usageStatsCollector.weekStartEpochMs(now)
+        val sharedPool = profile.limitUsageScope == com.gatekeep.domain.model.LimitUsageScope.sharedPool
+
+        suspend fun buildRows(
+            packageName: String,
+            limit: AppLimit,
+            usage: com.gatekeep.domain.model.UsageSnapshot,
+            sessionState: com.gatekeep.domain.model.SessionState?,
+        ): List<CurrentUsageLimitRow> {
+            val dailyBonus = if (sharedPool) {
+                usageRepository.sumExtensionMsForProfileSince(profileId, dayStart)
+            } else {
+                usageRepository.sumExtensionMsForPackageSince(profileId, packageName, dayStart)
+            }
+            val hourlyBonus = if (sharedPool) {
+                usageRepository.sumExtensionMsForProfileSince(profileId, hourStart)
+            } else {
+                usageRepository.sumExtensionMsForPackageSince(profileId, packageName, hourStart)
+            }
+            val weeklyBonus = if (sharedPool) {
+                usageRepository.sumExtensionMsForProfileSince(profileId, weekStart)
+            } else {
+                usageRepository.sumExtensionMsForPackageSince(profileId, packageName, weekStart)
+            }
+            val graceRemaining = graceRemainingMs(pauses, profileId, packageName, now, sharedPool)
+            val noLimitToday = isNoLimitTodayActive(pauses, profileId, packageName, now, sharedPool)
+            val sessionUsage = SessionTracker.sessionDurationMs(sessionState, now)
+
+            return buildList {
+                limit.weeklyLimitMs?.let { base ->
+                    add(
+                        CurrentUsageLimitRow(
+                            kind = CurrentUsageLimitKind.weekly,
+                            usageMs = usage.weeklyMs,
+                            effectiveLimitMs = EffectiveLimitDisplay.effectiveLimitMs(
+                                base, usage.weeklyMs, weeklyBonus, graceRemaining, noLimitToday,
+                            ),
+                            noLimitToday = noLimitToday,
+                        ),
+                    )
+                }
+                limit.dailyLimitMs?.let { base ->
+                    add(
+                        CurrentUsageLimitRow(
+                            kind = CurrentUsageLimitKind.daily,
+                            usageMs = usage.dailyMs,
+                            effectiveLimitMs = EffectiveLimitDisplay.effectiveLimitMs(
+                                base, usage.dailyMs, dailyBonus, graceRemaining, noLimitToday,
+                            ),
+                            noLimitToday = noLimitToday,
+                        ),
+                    )
+                }
+                limit.hourlyLimitMs?.let { base ->
+                    add(
+                        CurrentUsageLimitRow(
+                            kind = CurrentUsageLimitKind.hourly,
+                            usageMs = usage.hourlyMs,
+                            effectiveLimitMs = EffectiveLimitDisplay.effectiveLimitMs(
+                                base, usage.hourlyMs, hourlyBonus, graceRemaining, noLimitToday,
+                            ),
+                            noLimitToday = noLimitToday,
+                        ),
+                    )
+                }
+                limit.sessionLimitMs?.let { base ->
+                    add(
+                        CurrentUsageLimitRow(
+                            kind = CurrentUsageLimitKind.session,
+                            usageMs = sessionUsage,
+                            effectiveLimitMs = EffectiveLimitDisplay.effectiveLimitMs(
+                                base, sessionUsage, 0L, graceRemaining, noLimitToday,
+                            ),
+                            noLimitToday = noLimitToday,
+                        ),
+                    )
+                }
+            }
+        }
+
+        if (sharedPool) {
+            val snapshots = apps.map { usageStatsCollector.getUsageSnapshot(it.packageName, now) }
+            val usage = ProfileMergeEngine.sumUsageSnapshots(snapshots)
+            val baseLimit = profile.toAppLimit(apps.first().packageName)
+            val sharedLimits = buildRows(apps.first().packageName, baseLimit, usage, null)
+            _currentUsage.value = CurrentUsageState(
+                isSharedPool = true,
+                sharedLimits = sharedLimits,
+                perApp = emptyList(),
+            )
+        } else {
+            val perApp = apps.map { app ->
+                val perAppLimit = profileRepository.getLimit(profileId, app.packageName)
+                val limit = ProfileMergeEngine.mergeProfileAndAppLimit(profile, app.packageName, perAppLimit)
+                val usage = usageStatsCollector.getUsageSnapshot(app.packageName, now)
+                val session = usageRepository.getSessionState(profileId, app.packageName)
+                CurrentUsageAppRow(
+                    packageName = app.packageName,
+                    label = app.label,
+                    limits = buildRows(app.packageName, limit, usage, session),
+                )
+            }
+            _currentUsage.value = CurrentUsageState(
+                isSharedPool = false,
+                sharedLimits = emptyList(),
+                perApp = perApp,
+            )
+        }
+    }
+
+    private fun graceRemainingMs(
+        pauses: List<Pause>,
+        profileId: Long,
+        packageName: String,
+        now: Long,
+        sharedPool: Boolean,
+    ): Long? {
+        val active = pauses.filter {
+            it.untilEpochMs > now && it.type == PauseType.extensionGrace
+        }
+        val pause = if (sharedPool) {
+            active.firstOrNull { it.profileId == profileId && it.packageName == null }
+        } else {
+            active.firstOrNull { it.profileId == profileId && it.packageName == packageName }
+        }
+        return pause?.let { (it.untilEpochMs - now).coerceAtLeast(0) }
+    }
+
+    private fun isNoLimitTodayActive(
+        pauses: List<Pause>,
+        profileId: Long,
+        packageName: String,
+        now: Long,
+        sharedPool: Boolean,
+    ): Boolean {
+        val active = pauses.filter {
+            it.untilEpochMs > now && it.type == PauseType.noLimitToday
+        }
+        return if (sharedPool) {
+            active.any { it.profileId == profileId && it.packageName == null }
+        } else {
+            active.any { it.profileId == profileId && it.packageName == packageName }
         }
     }
 
@@ -257,7 +561,12 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun duplicateSegment(segmentId: Long) {
-        viewModelScope.launch { profileRepository.duplicateScheduleSegment(segmentId) }
+        viewModelScope.launch {
+            val segment = profileRepository.getScheduleSegment(segmentId) ?: return@launch
+            val baseLabel = segment.label ?: context.getString(R.string.schedule)
+            val copyLabel = context.getString(R.string.schedule_segment_copy_format, baseLabel)
+            profileRepository.duplicateScheduleSegment(segmentId, copyLabel)
+        }
     }
 
     fun deleteSegment(segmentId: Long) {
@@ -396,26 +705,28 @@ class AppPickerViewModel @Inject constructor(
     }
 
     fun commitChanges(profileId: Long) {
-        viewModelScope.launch {
-            val saved = savedMonitored.value
-            val draft = draftMonitored.value
-            val installedByPackage = installedApps.value.associateBy { it.packageName }
-            (draft - saved).forEach { packageName ->
-                val app = installedByPackage[packageName] ?: return@forEach
-                profileRepository.addMonitoredApp(
-                    MonitoredApp(
-                        profileId = profileId,
-                        packageName = app.packageName,
-                        label = app.label,
-                        category = AppCategories.categoryForPackage(app.packageName),
-                    ),
-                )
-            }
-            (saved - draft).forEach { packageName ->
-                profileRepository.removeMonitoredApp(profileId, packageName)
-            }
-            savedMonitored.value = draft
+        viewModelScope.launch { commitChangesAwait(profileId) }
+    }
+
+    suspend fun commitChangesAwait(profileId: Long) {
+        val saved = savedMonitored.value
+        val draft = draftMonitored.value
+        val installedByPackage = installedApps.value.associateBy { it.packageName }
+        (draft - saved).forEach { packageName ->
+            val app = installedByPackage[packageName] ?: return@forEach
+            profileRepository.addMonitoredApp(
+                MonitoredApp(
+                    profileId = profileId,
+                    packageName = app.packageName,
+                    label = app.label,
+                    category = AppCategories.categoryForPackage(app.packageName),
+                ),
+            )
         }
+        (saved - draft).forEach { packageName ->
+            profileRepository.removeMonitoredApp(profileId, packageName)
+        }
+        savedMonitored.value = draft
     }
 }
 
@@ -524,27 +835,29 @@ class ScheduleViewModel @Inject constructor(
     }
 
     fun commitSchedule(profileId: Long) {
-        viewModelScope.launch {
-            val state = _editorState.value
-            val savedKeys = state.savedWindows.map { it.contentKey() }.toSet()
-            val draftKeys = state.draftWindows.map { it.contentKey() }.toSet()
+        viewModelScope.launch { commitScheduleAwait(profileId) }
+    }
 
-            state.savedWindows
-                .filter { it.contentKey() !in draftKeys }
-                .forEach { profileRepository.deleteScheduleWindow(it.id) }
+    suspend fun commitScheduleAwait(profileId: Long) {
+        val state = _editorState.value
+        val savedKeys = state.savedWindows.map { it.contentKey() }.toSet()
+        val draftKeys = state.draftWindows.map { it.contentKey() }.toSet()
 
-            state.draftWindows
-                .filter { it.contentKey() !in savedKeys }
-                .forEach { window ->
-                    profileRepository.addScheduleWindow(
-                        window.copy(id = 0, profileId = profileId),
-                    )
-                }
+        state.savedWindows
+            .filter { it.contentKey() !in draftKeys }
+            .forEach { profileRepository.deleteScheduleWindow(it.id) }
 
-            _editorState.value = state.copy(
-                savedWindows = state.draftWindows,
-            )
-        }
+        state.draftWindows
+            .filter { it.contentKey() !in savedKeys }
+            .forEach { window ->
+                profileRepository.addScheduleWindow(
+                    window.copy(id = 0, profileId = profileId),
+                )
+            }
+
+        _editorState.value = state.copy(
+            savedWindows = state.draftWindows,
+        )
     }
 
     private fun windowKeys(windows: List<ScheduleWindow>): Set<String> =
@@ -587,7 +900,7 @@ class PauseViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.gatekeep.data.repository.AppSettings())
 
     fun dayEndEpochMs(now: Long = System.currentTimeMillis()): Long =
-        usageStatsCollector.dayStartEpochMs(now) + 86_400_000L
+        TimeBoundaries.dayBounds(now).endExclusiveMs
 
     fun pauseForTargets(
         type: PauseType,

@@ -12,17 +12,27 @@ import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
 import com.gatekeep.domain.EnforcementPollInterval
+import com.gatekeep.domain.ExtensionGrantEngine
+import com.gatekeep.domain.ExtensionGrantSource
+import com.gatekeep.domain.ExtensionDenialReason
 import com.gatekeep.domain.ExtensionPolicyEvaluator
+import com.gatekeep.domain.ExtensionRequestEvaluator
+import com.gatekeep.domain.PauseManager
 import com.gatekeep.domain.ProfileMergeEngine
 import com.gatekeep.domain.RuleEngine
 import com.gatekeep.domain.SessionTracker
+import com.gatekeep.domain.TimeBoundaries
+import com.gatekeep.domain.model.BlockPresentationReason
+import com.gatekeep.domain.model.OverrideMethod
 import com.gatekeep.domain.model.LimitExtensionBonus
 import com.gatekeep.domain.model.LimitUsageScope
 import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.BlockReason
 import com.gatekeep.domain.model.FrictionDifficulty
 import com.gatekeep.domain.model.FrictionMethod
+import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
+import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.RuleEvaluationContext
 import com.gatekeep.domain.model.RuleResult
@@ -65,6 +75,7 @@ class EnforcementCoordinator @Inject constructor(
     private val enforcementLog: EnforcementLog,
     private val profileUnlockCache: ProfileUnlockCache,
     private val screenStateMonitor: ScreenStateMonitor,
+    private val extensionGrantUseCase: ExtensionGrantUseCase,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -99,7 +110,6 @@ class EnforcementCoordinator @Inject constructor(
     private var countdownPackageName: String? = null
     private var enforcementLoopRunnable: Runnable? = null
     private var showCountdownNotification = false
-    private var consecutiveExtensionCount = 0
     private var openGatePassedPackage: String? = null
     private var blockEnteredAtMs: Long = 0
     private val warnedPackagesToday = mutableSetOf<String>()
@@ -109,6 +119,8 @@ class EnforcementCoordinator @Inject constructor(
     private val notifiedLimitKeys = mutableSetOf<String>()
     private val evaluateMutex = Mutex()
     private var activeExtensionPolicy: com.gatekeep.domain.model.ExtensionPolicy? = null
+    private var lastBlockReason: BlockReason? = null
+    private var lastBlockProfileId: Long? = null
     private val lastForegroundEvaluationAtMs = mutableMapOf<String, Long>()
     private var foregroundPollRunnable: Runnable? = null
 
@@ -194,9 +206,6 @@ class EnforcementCoordinator @Inject constructor(
             sessionStartedForPackage = null
         }
 
-        if (packageName != blockedPackage) {
-            consecutiveExtensionCount = 0
-        }
         if (packageName != openGatePassedPackage) {
             openGatePassedPackage = null
         }
@@ -297,7 +306,6 @@ class EnforcementCoordinator @Inject constructor(
 
     private fun clearBlockState() {
         blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
-        consecutiveExtensionCount = 0
         stopCountdownTicker()
         blockOverlay.clearFrictionState()
         mainHandler.post { blockOverlay.removeAfterResolution() }
@@ -308,7 +316,7 @@ class EnforcementCoordinator @Inject constructor(
             try {
                 val profiles = profileRepository.observeActiveProfiles().first()
                 val profileId = profiles.firstOrNull()?.id ?: return@launch
-                val state = usageRepository.getSessionState(packageName) ?: return@launch
+                val state = usageRepository.getSessionState(profileId, packageName) ?: return@launch
                 val now = System.currentTimeMillis()
                 val completed = SessionTracker.completeExpiredBreak(state, now)
                 if (completed != state) {
@@ -358,28 +366,64 @@ class EnforcementCoordinator @Inject constructor(
 
     fun grantExtensionMinutes(packageName: String, minutes: Int) {
         scope.launch {
-            try {
-                val profiles = profileRepository.observeActiveProfiles().first()
-                val profile = profiles.firstOrNull() ?: return@launch
-                val profileId = profile.id
-                val policy = activeExtensionPolicy ?: profile.limitExtensionPolicy
-                val dayStart = usageStatsCollector.dayStartEpochMs()
-                val overridesToday = usageRepository.countOverridesForPackageToday(
-                    profileId, packageName, dayStart,
-                )
-                val decision = ExtensionPolicyEvaluator.evaluateExtension(
-                    policy = policy,
-                    requestedMinutes = minutes,
-                    overridesToday = overridesToday,
-                    consecutiveInSession = consecutiveExtensionCount,
-                )
-                when (decision) {
-                    is ExtensionPolicyEvaluator.ExtensionDecision.Denied -> {
+            val profileId = lastBlockProfileId
+                ?: profileRepository.observeActiveProfiles().first().firstOrNull()?.id
+            if (profileId == null) return@launch
+            grantExtensionForProfileInternal(
+                profileId = profileId,
+                packageName = packageName,
+                minutes = minutes,
+                source = ExtensionGrantSource.overlay,
+                blockedReason = lastBlockReason,
+            )
+        }
+    }
+
+    fun grantExtensionForProfile(profileId: Long, packageName: String, minutes: Int) {
+        scope.launch {
+            grantExtensionForProfileAwait(profileId, packageName, minutes)
+        }
+    }
+
+    suspend fun grantExtensionForProfileAwait(profileId: Long, packageName: String, minutes: Int) {
+        grantExtensionForProfileInternal(
+            profileId = profileId,
+            packageName = packageName,
+            minutes = minutes,
+            source = ExtensionGrantSource.inApp,
+            blockedReason = null,
+        )
+    }
+
+    private suspend fun grantExtensionForProfileInternal(
+        profileId: Long,
+        packageName: String,
+        minutes: Int,
+        source: ExtensionGrantSource,
+        blockedReason: BlockReason?,
+    ) {
+        try {
+            val profile = profileRepository.observeProfiles().first().find { it.id == profileId }
+                ?: return
+            val dayStart = usageStatsCollector.dayStartEpochMs()
+            val consecutive = consecutiveExtensionsFor(profileId, packageName)
+            val decision = extensionGrantUseCase.evaluate(
+                profile = profile,
+                packageName = packageName,
+                minutes = minutes,
+                source = source,
+                blockedReason = blockedReason,
+                dayStartMs = dayStart,
+                consecutiveInSession = consecutive,
+            )
+            when (decision) {
+                is ExtensionPolicyEvaluator.ExtensionDecision.Denied -> {
+                    if (source == ExtensionGrantSource.overlay) {
                         val denialMessage = BlockMessageResolver.extensionDenied(localizedContext, decision.reason)
                         val request = buildBlockRequest(
                             packageName = packageName,
                             message = denialMessage,
-                            reason = "extensionDenied",
+                            reason = BlockPresentationReason.extensionDenied,
                             profile = profile,
                             blocked = RuleResult.Blocked(
                                 reason = BlockReason.dailyLimit,
@@ -391,47 +435,69 @@ class EnforcementCoordinator @Inject constructor(
                         val generation = blockGeneration
                         presentBlockOverlay(request, generation)
                     }
-                    is ExtensionPolicyEvaluator.ExtensionDecision.Allowed -> {
-                        applyExtension(packageName, profileId, decision.minutes * 60_000L)
-                        consecutiveExtensionCount++
-                    }
-                    is ExtensionPolicyEvaluator.ExtensionDecision.NoLimitToday -> {
-                        grantNoLimitToday(packageName)
-                    }
                 }
-            } catch (e: Exception) {
-                enforcementLog.logError("Grant extension failed", e)
+                is ExtensionPolicyEvaluator.ExtensionDecision.Allowed -> {
+                    applyExtensionGrant(
+                        profile = profile,
+                        packageName = packageName,
+                        minutes = decision.minutes,
+                        source = source,
+                        blockedReason = blockedReason,
+                    )
+                    incrementConsecutiveExtensions(profileId, packageName)
+                }
+                is ExtensionPolicyEvaluator.ExtensionDecision.NoLimitToday -> {
+                    grantNoLimitTodayForProfile(profileId, packageName)
+                }
             }
+        } catch (e: Exception) {
+            enforcementLog.logError("Grant extension failed", e)
         }
     }
 
     fun grantNoLimitToday(packageName: String) {
         scope.launch {
-            try {
-                val profiles = profileRepository.observeActiveProfiles().first()
-                val profile = profiles.firstOrNull() ?: return@launch
-                val profileId = profile.id
-                val now = System.currentTimeMillis()
-                val dayStart = usageStatsCollector.dayStartEpochMs(now)
-                val overridesToday = usageRepository.countOverridesForPackageToday(
-                    profileId, packageName, dayStart,
-                )
-                val decision = ExtensionPolicyEvaluator.evaluateExtension(
-                    policy = activeExtensionPolicy ?: profile.limitExtensionPolicy,
-                    requestedMinutes = 0,
-                    overridesToday = overridesToday,
-                    consecutiveInSession = consecutiveExtensionCount,
-                    isNoLimitTodayRequest = true,
-                )
-                if (decision is ExtensionPolicyEvaluator.ExtensionDecision.Denied) return@launch
-                val dayEnd = dayStart + 86_400_000L
-                usageRepository.addNoLimitTodayPause(profileId, packageName, dayEnd, now)
-                usageRepository.logOverride(packageName, profileId, "noLimitToday", 0L)
-                clearBlockState()
-                evaluate(packageName)
-            } catch (e: Exception) {
-                enforcementLog.logError("No limit today failed", e)
-            }
+            val profileId = lastBlockProfileId
+                ?: profileRepository.observeActiveProfiles().first().firstOrNull()?.id
+            if (profileId == null) return@launch
+            grantNoLimitTodayForProfile(profileId, packageName)
+        }
+    }
+
+    fun grantNoLimitTodayForProfile(profileId: Long, packageName: String, fromInApp: Boolean = false) {
+        scope.launch {
+            grantNoLimitTodayForProfileAwait(profileId, packageName, fromInApp)
+        }
+    }
+
+    suspend fun grantNoLimitTodayForProfileAwait(
+        profileId: Long,
+        packageName: String,
+        fromInApp: Boolean = false,
+    ) {
+        try {
+            val profile = profileRepository.observeProfiles().first().find { it.id == profileId }
+                ?: return
+            val now = System.currentTimeMillis()
+            val dayStart = usageStatsCollector.dayStartEpochMs(now)
+            val decision = extensionGrantUseCase.evaluate(
+                profile = profile,
+                packageName = packageName,
+                minutes = 0,
+                source = if (fromInApp) ExtensionGrantSource.inApp else ExtensionGrantSource.overlay,
+                blockedReason = lastBlockReason,
+                dayStartMs = dayStart,
+                consecutiveInSession = consecutiveExtensionsFor(profileId, packageName),
+                isNoLimitToday = true,
+            )
+            if (decision is ExtensionPolicyEvaluator.ExtensionDecision.Denied) return
+            val dayEnd = TimeBoundaries.dayBounds(now).endExclusiveMs
+            usageRepository.addNoLimitTodayPause(profileId, packageName, dayEnd, now)
+            usageRepository.logOverride(packageName, profileId, OverrideMethod.noLimitToday, 0L)
+            clearBlockState()
+            evaluate(packageName)
+        } catch (e: Exception) {
+            enforcementLog.logError("No limit today failed", e)
         }
     }
 
@@ -448,17 +514,43 @@ class EnforcementCoordinator @Inject constructor(
         }
     }
 
-    private suspend fun applyExtension(packageName: String, profileId: Long, extensionMs: Long) {
+    private suspend fun applyExtensionGrant(
+        profile: Profile,
+        packageName: String,
+        minutes: Int,
+        source: ExtensionGrantSource,
+        blockedReason: BlockReason?,
+    ) {
+        val now = System.currentTimeMillis()
+        val plan = ExtensionGrantEngine.planGrant(
+            profileId = profile.id,
+            packageName = packageName,
+            minutes = minutes,
+            nowEpochMs = now,
+            limitUsageScope = profile.limitUsageScope,
+            blockedReason = blockedReason,
+            source = source,
+        )
         blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
         blockOverlay.clearFrictionState()
-        recordFrictionEnd(packageName, profileId)
-        usageRepository.logOverride(packageName, profileId, "extension", extensionMs)
-        val session = usageRepository.getSessionState(packageName)
-            ?: SessionTracker.startSession(packageName, System.currentTimeMillis())
-        val cleared = SessionTracker.clearBreak(session)
-        val extended = SessionTracker.addExcludedTime(cleared, extensionMs)
-        usageRepository.saveSessionState(extended, profileId)
-        sessionStartedForPackage = packageName
+        recordFrictionEnd(packageName, profile.id)
+        usageRepository.logOverride(packageName, profile.id, OverrideMethod.extension, plan.extensionMs)
+        if (plan.graceUntilEpochMs != null && plan.graceProfileId != null) {
+            usageRepository.addExtensionGracePause(
+                profileId = plan.graceProfileId!!,
+                packageName = plan.gracePackageName,
+                untilEpochMs = plan.graceUntilEpochMs!!,
+                nowEpochMs = now,
+            )
+        }
+        if (plan.sessionExcludedMsDelta > 0) {
+            val session = usageRepository.getSessionState(profile.id, packageName)
+                ?: SessionTracker.startSession(packageName, now)
+            var updated = SessionTracker.clearBreak(session)
+            updated = SessionTracker.addExcludedTime(updated, plan.sessionExcludedMsDelta)
+            usageRepository.saveSessionState(updated, profile.id)
+            sessionStartedForPackage = packageName
+        }
         blockOverlay.removeAfterResolution()
         evaluate(packageName)
     }
@@ -480,7 +572,6 @@ class EnforcementCoordinator @Inject constructor(
         if (blockPresentationState.presentation is BlockPresentation.Visible) {
             blockPresentationState = BlockPresentationReducer.onHideForOtherApp(blockPresentationState)
         }
-        consecutiveExtensionCount = 0
         blockOverlay.clearFrictionState()
         syncOverlayVisibility()
     }
@@ -558,7 +649,7 @@ class EnforcementCoordinator @Inject constructor(
 
     private suspend fun applyScreenOffExclusion(screenOffDurationMs: Long) {
         val pkg = currentForegroundPackage ?: return
-        val state = usageRepository.getSessionState(pkg) ?: return
+        val state = usageRepository.getSessionState(previousProfileId, pkg) ?: return
         if (previousProfileId <= 0) return
         usageRepository.saveSessionState(
             SessionTracker.addExcludedTime(state, screenOffDurationMs),
@@ -601,7 +692,7 @@ class EnforcementCoordinator @Inject constructor(
                 usageRepository.recordSession(prev, previousProfileId, previousSessionStartMs, now)
             }
         }
-        val oldState = usageRepository.getSessionState(prev)
+        val oldState = usageRepository.getSessionState(previousProfileId, prev)
         if (oldState != null && previousProfileId > 0) {
             val now = System.currentTimeMillis()
             val onBreak = oldState.breakUntilEpochMs?.let { now < it } == true
@@ -685,7 +776,7 @@ class EnforcementCoordinator @Inject constructor(
             return
         }
 
-        val primaryProfile = matchingProfiles.first()
+        val primaryProfile = matchingProfiles.minBy { it.id }
 
         val resolvedSchedulePolicy = ProfileMergeEngine.mergedSchedulePolicy(
             profiles = matchingProfiles,
@@ -740,7 +831,7 @@ class EnforcementCoordinator @Inject constructor(
             sharedPool = primaryProfile.limitUsageScope == LimitUsageScope.sharedPool,
         )
 
-        val sessionStateRaw = usageRepository.getSessionState(packageName)
+        val sessionStateRaw = usageRepository.getSessionState(primaryProfile.id, packageName)
         previousProfileId = primaryProfile.id
 
         val sessionState = ensureSessionStarted(
@@ -817,12 +908,25 @@ class EnforcementCoordinator @Inject constructor(
         when (result) {
             is RuleResult.Allowed -> {
                 previousSessionStartMs = sessionForEval.sessionStartEpochMs
-                val remainingSessionMs = mergedLimit?.let { limit ->
-                    when (val sessionCheck = SessionTracker.evaluateSession(limit, sessionForEval, now)) {
-                        is SessionTracker.SessionCheckResult.Allowed -> sessionCheck.remainingSessionMs
-                        else -> result.remainingSessionMs
-                    }
-                } ?: result.remainingSessionMs
+                val pauseAllowsUsage = PauseManager.isPaused(
+                    pauses = pauses,
+                    profileId = primaryProfile.id,
+                    packageName = packageName,
+                    nowEpochMs = now,
+                ) is PauseManager.PauseCheck.Paused
+                val remainingSessionMs = if (pauseAllowsUsage) {
+                    null
+                } else {
+                    mergedLimit?.let { limit ->
+                        when (val sessionCheck = SessionTracker.evaluateSession(limit, sessionForEval, now)) {
+                            is SessionTracker.SessionCheckResult.Allowed -> sessionCheck.remainingSessionMs
+                            else -> result.remainingSessionMs
+                        }
+                    } ?: result.remainingSessionMs
+                }
+                val countdownDailyMs = if (pauseAllowsUsage) null else result.remainingDailyMs
+                val countdownHourlyMs = if (pauseAllowsUsage) null else result.remainingHourlyMs
+                val countdownWeeklyMs = if (pauseAllowsUsage) null else result.remainingWeeklyMs
                 maybeShowWarning(packageName, appLabel, result.warningLevel, settings.warningAlertsEnabled, now)
                 if (result.notifyLimitReached) {
                     val notifyReason = result.notifyLimitReason ?: BlockReason.dailyLimit
@@ -870,17 +974,17 @@ class EnforcementCoordinator @Inject constructor(
                     val dailyLimit = mergedLimit?.dailyLimitMs
                     val hourlyLimit = mergedLimit?.hourlyLimitMs
                     val weeklyLimit = mergedLimit?.weeklyLimitMs
-                    val remainingDaily = result.remainingDailyMs
+                    val remainingDaily = countdownDailyMs
                     val usedToday = if (dailyLimit != null && remainingDaily != null) {
                         (dailyLimit - remainingDaily).coerceAtLeast(0)
                     } else null
                     startEnforcementLoop(
                         appLabel = appLabel,
                         packageName = packageName,
-                        remainingDailyMs = result.remainingDailyMs,
+                        remainingDailyMs = countdownDailyMs,
                         remainingSessionMs = remainingSessionMs,
-                        remainingHourlyMs = result.remainingHourlyMs,
-                        remainingWeeklyMs = result.remainingWeeklyMs,
+                        remainingHourlyMs = countdownHourlyMs,
+                        remainingWeeklyMs = countdownWeeklyMs,
                         dailyLimitMs = dailyLimit,
                         hourlyLimitMs = hourlyLimit,
                         weeklyLimitMs = weeklyLimit,
@@ -891,10 +995,10 @@ class EnforcementCoordinator @Inject constructor(
                     startEnforcementLoop(
                         appLabel = appLabel,
                         packageName = packageName,
-                        remainingDailyMs = result.remainingDailyMs,
+                        remainingDailyMs = countdownDailyMs,
                         remainingSessionMs = remainingSessionMs,
-                        remainingHourlyMs = result.remainingHourlyMs,
-                        remainingWeeklyMs = result.remainingWeeklyMs,
+                        remainingHourlyMs = countdownHourlyMs,
+                        remainingWeeklyMs = countdownWeeklyMs,
                         dailyLimitMs = mergedLimit?.dailyLimitMs,
                         hourlyLimitMs = mergedLimit?.hourlyLimitMs,
                         weeklyLimitMs = mergedLimit?.weeklyLimitMs,
@@ -915,7 +1019,7 @@ class EnforcementCoordinator @Inject constructor(
                 persistBreakIfNeeded(packageName, primaryProfile.id, result.breakUntilEpochMs, sessionForEval)
                 val blockMessage = BlockMessageResolver.blockMessage(localizedContext, result.reason, appLabel)
                 showBlocked(
-                    packageName, blockMessage, result.reason.name,
+                    packageName, blockMessage, BlockPresentationReason.fromBlockReason(result.reason),
                     result.breakUntilEpochMs, primaryProfile, mergedLimit, result,
                 )
             }
@@ -963,13 +1067,13 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private suspend fun recordFrictionStart(packageName: String, profileId: Long) {
-        val state = usageRepository.getSessionState(packageName)
+        val state = usageRepository.getSessionState(profileId, packageName)
             ?: SessionTracker.startSession(packageName, System.currentTimeMillis())
         usageRepository.saveSessionState(SessionTracker.startFriction(state, System.currentTimeMillis()), profileId)
     }
 
     private suspend fun recordFrictionEnd(packageName: String, profileId: Long) {
-        val state = usageRepository.getSessionState(packageName) ?: return
+        val state = usageRepository.getSessionState(profileId, packageName) ?: return
         usageRepository.saveSessionState(SessionTracker.endFriction(state, System.currentTimeMillis()), profileId)
     }
 
@@ -985,7 +1089,7 @@ class EnforcementCoordinator @Inject constructor(
             BlockOverlayRequest(
                 packageName = packageName,
                 message = BlockMessageResolver.openDeterrentMessage(localizedContext, deterrent.method),
-                reason = "openGate",
+                reason = BlockPresentationReason.openGate,
                 bypassAllowed = true,
                 frictionMethod = deterrent.method,
                 difficulty = profile.defaultFrictionDifficulty,
@@ -1186,7 +1290,7 @@ class EnforcementCoordinator @Inject constructor(
             BlockOverlayRequest(
                 packageName = packageName,
                 message = message,
-                reason = "profilePin",
+                reason = BlockPresentationReason.profilePin,
                 bypassAllowed = true,
                 frictionMethod = FrictionMethod.password,
                 difficulty = profile.defaultFrictionDifficulty,
@@ -1204,13 +1308,15 @@ class EnforcementCoordinator @Inject constructor(
     private suspend fun showBlocked(
         packageName: String,
         message: String,
-        reason: String,
+        reason: BlockPresentationReason,
         breakUntilMs: Long?,
         profile: Profile,
         limit: AppLimit?,
         blocked: RuleResult.Blocked,
     ) {
         if (blockOverlay.isFrictionInProgress()) return
+        lastBlockReason = blocked.reason
+        lastBlockProfileId = profile.id
         enterBlockState(packageName)
         val generation = blockGeneration
         val request = buildBlockRequest(
@@ -1229,21 +1335,34 @@ class EnforcementCoordinator @Inject constructor(
     private suspend fun buildBlockRequest(
         packageName: String,
         message: String,
-        reason: String,
+        reason: BlockPresentationReason,
         profile: Profile,
         blocked: RuleResult.Blocked,
         breakUntilMs: Long? = blocked.breakUntilEpochMs,
         useExtensions: Boolean = blocked.bypassAllowed &&
             blocked.sessionDeterrent == null &&
-            reason != "scheduleBlock" &&
-            reason != "extensionDenied",
+            reason.allowsExtensionButtons,
     ): BlockOverlayRequest {
-        val friction = blocked.sessionDeterrent ?: profile.defaultFrictionMethod
         val policy = when (blocked.reason) {
-            BlockReason.sessionLimit -> profile.sessionExtensionPolicy
+            BlockReason.sessionLimit, BlockReason.onBreak -> profile.sessionExtensionPolicy
             else -> profile.limitExtensionPolicy
         }
         activeExtensionPolicy = policy
+        val extensionActionActive = when (blocked.reason) {
+            BlockReason.sessionLimit, BlockReason.onBreak ->
+                profile.onSessionLimitAction == OnSessionLimitAction.limitWithExtensions
+            BlockReason.dailyLimit, BlockReason.hourlyLimit, BlockReason.weeklyLimit ->
+                profile.onLimitAction == OnLimitAction.limitWithExtensions
+            else -> false
+        }
+        val useOverlayExtensions = useExtensions &&
+            extensionActionActive &&
+            policy.optionMinutes.isNotEmpty()
+        val friction = when {
+            blocked.sessionDeterrent != null -> blocked.sessionDeterrent!!
+            extensionActionActive && blocked.bypassAllowed -> FrictionMethod.none
+            else -> profile.defaultFrictionMethod
+        }
         val waitSeconds = when {
             blocked.sessionDeterrent == FrictionMethod.waitOneMin &&
                 blocked.reason in setOf(
@@ -1252,17 +1371,18 @@ class EnforcementCoordinator @Inject constructor(
                     BlockReason.weeklyLimit,
                 ) -> profile.limitWaitDurationSeconds
             blocked.sessionDeterrent == FrictionMethod.waitOneMin -> profile.sessionWaitDurationSeconds
-            reason == "openGate" -> profile.openWaitDurationSeconds
+            reason.isOpenGateFlow -> profile.openWaitDurationSeconds
             else -> profile.sessionWaitDurationSeconds
         }
         val waitWallClock = when {
-            blocked.sessionDeterrent == FrictionMethod.waitOneMin -> reason != "openGate"
-            reason == "openGate" && friction == FrictionMethod.waitOneMin -> false
+            blocked.sessionDeterrent == FrictionMethod.waitOneMin -> !reason.isOpenGateFlow
+            reason.isOpenGateFlow && friction == FrictionMethod.waitOneMin -> false
             else -> false
         }
         val dayStart = usageStatsCollector.dayStartEpochMs()
-        val usedToday = usageRepository.countOverridesForPackageToday(
+        val usedToday = usageRepository.countExtensionOverridesToday(
             profile.id, packageName, dayStart,
+            sharedPool = profile.limitUsageScope == LimitUsageScope.sharedPool,
         )
         val maxConsecutive = ExtensionPolicyEvaluator.effectiveConsecutiveCap(policy)
         return BlockOverlayRequest(
@@ -1275,15 +1395,13 @@ class EnforcementCoordinator @Inject constructor(
             difficulty = profile.defaultFrictionDifficulty,
             waitDurationSeconds = waitSeconds,
             waitWallClock = waitWallClock,
-            extensionOptionMinutes = if (useExtensions) policy.optionMinutes else emptyList(),
-            showNoLimitToday = useExtensions && policy.showNoLimitToday,
-            useExtensionButtons = useExtensions &&
-                policy.showExtensionsInOverlay &&
-                policy.optionMinutes.isNotEmpty(),
+            extensionOptionMinutes = if (useOverlayExtensions) policy.optionMinutes else emptyList(),
+            showNoLimitToday = useOverlayExtensions && policy.showNoLimitToday,
+            useExtensionButtons = useOverlayExtensions,
             profilePasswordHash = profile.passwordHash,
             extensionsUsedToday = usedToday,
             maxExtensionsPerDay = policy.maxExtensionsPerDay,
-            consecutiveExtensionsUsed = consecutiveExtensionCount,
+            consecutiveExtensionsUsed = consecutiveExtensionsFor(profile.id, packageName),
             maxConsecutiveExtensions = maxConsecutive,
         )
     }
@@ -1293,7 +1411,7 @@ class EnforcementCoordinator @Inject constructor(
             try {
                 val profiles = profileRepository.observeActiveProfiles().first()
                 val profileId = profiles.firstOrNull()?.id ?: return@launch
-                val state = usageRepository.getSessionState(packageName)
+                val state = usageRepository.getSessionState(profileId, packageName)
                     ?: SessionTracker.startSession(packageName, System.currentTimeMillis())
                 usageRepository.saveSessionState(
                     SessionTracker.setPendingWait(state, waitUntilEpochMs),
@@ -1310,7 +1428,7 @@ class EnforcementCoordinator @Inject constructor(
             try {
                 val profiles = profileRepository.observeActiveProfiles().first()
                 val profileId = profiles.firstOrNull()?.id ?: return@launch
-                val state = usageRepository.getSessionState(packageName) ?: return@launch
+                val state = usageRepository.getSessionState(profileId, packageName) ?: return@launch
                 usageRepository.saveSessionState(SessionTracker.clearPendingWait(state), profileId)
             } catch (e: Exception) {
                 enforcementLog.logError("Clear wait failed", e)
@@ -1337,7 +1455,7 @@ class EnforcementCoordinator @Inject constructor(
             message = BlockMessageResolver.blockMessage(
                 localizedContext, BlockReason.sessionLimit, appLabel,
             ),
-            reason = BlockReason.sessionLimit.name,
+            reason = BlockPresentationReason.fromBlockReason(BlockReason.sessionLimit),
             profile = profile,
             blocked = blocked,
         ).copy(
@@ -1444,6 +1562,18 @@ class EnforcementCoordinator @Inject constructor(
                 weeklyMs = usageRepository.sumExtensionMsForPackageSince(profileId, packageName, weekStart),
             )
         }
+    }
+
+    private suspend fun consecutiveExtensionsFor(profileId: Long, packageName: String): Int =
+        usageRepository.getSessionState(profileId, packageName)?.consecutiveExtensionCount ?: 0
+
+    private suspend fun incrementConsecutiveExtensions(profileId: Long, packageName: String) {
+        val state = usageRepository.getSessionState(profileId, packageName)
+            ?: SessionTracker.startSession(packageName, System.currentTimeMillis())
+        usageRepository.saveSessionState(
+            SessionTracker.incrementConsecutiveExtensions(state),
+            profileId,
+        )
     }
 
     companion object {

@@ -36,7 +36,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -59,12 +61,14 @@ import com.gatekeep.app.ui.profiles.sessionActionLabel
 import com.gatekeep.app.ui.schedule.formatGroupedDays
 import com.gatekeep.app.ui.schedule.formatScheduleTimeRange
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
+import com.gatekeep.domain.PolicyTimelineResolver
 import com.gatekeep.domain.CustomizeOverrides
 import com.gatekeep.domain.ScheduleWindowGrouper
 import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.SchedulePolicyMode
 import com.gatekeep.domain.model.ScheduleSegment
 import com.gatekeep.domain.model.ScheduleWindow
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,9 +89,11 @@ fun ProfilePolicyScreen(
     val profile = profiles.find { it.id == profileId }
     val segments by viewModel.scheduleSegments.collectAsState()
     val windows by viewModel.scheduleWindows.collectAsState()
+    val effectivePolicy by viewModel.effectivePolicy.collectAsState()
+    val appSettings by viewModel.appSettings.collectAsState()
     var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab) }
     var defaultTabDirty by remember { mutableStateOf(false) }
-    var defaultTabSave by remember { mutableStateOf<() -> Unit>({}) }
+    var defaultTabSave by remember { mutableStateOf<suspend () -> Unit>({}) }
     var defaultTabDiscard by remember { mutableStateOf<() -> Unit>({}) }
 
     LaunchedEffect(initialTab) {
@@ -96,6 +102,7 @@ fun ProfilePolicyScreen(
 
     LaunchedEffect(profileId) {
         viewModel.bindProfile(profileId)
+        viewModel.refreshEffectivePolicy(profileId)
     }
 
     val backGuard = rememberUnsavedChangesGuard(
@@ -139,13 +146,14 @@ fun ProfilePolicyScreen(
             when (selectedTab) {
                 0 -> PolicyDefaultTab(
                     profile = profile,
+                    effectivePolicy = effectivePolicy,
                     onNavigateLimits = onNavigateLimits,
                     onNavigateRulesOpen = onNavigateRulesOpen,
                     onNavigateRulesLimit = onNavigateRulesLimit,
                     onNavigateRulesSession = onNavigateRulesSession,
                     onNavigateNoMatchLimits = onNavigateNoMatchLimits,
                     onNavigateNoMatchRules = onNavigateNoMatchRules,
-                    onSaveProfile = { viewModel.saveProfile(it) },
+                    onSaveProfile = { viewModel.saveProfileAwait(it) },
                     onDirtyChange = { defaultTabDirty = it },
                     onSetupHandlers = { save, discard ->
                         defaultTabSave = save
@@ -156,6 +164,7 @@ fun ProfilePolicyScreen(
                     segments = segments,
                     windows = windows,
                     profile = profile,
+                    locale = Locale.forLanguageTag(appSettings.languageTag.ifBlank { "en" }),
                     onAddSchedule = { onNavigateSegmentEditor(null) },
                     onEditSegment = { onNavigateSegmentEditor(it) },
                     onToggleActive = { id, active -> viewModel.toggleSegmentActive(id, active) },
@@ -170,16 +179,18 @@ fun ProfilePolicyScreen(
 @Composable
 private fun PolicyDefaultTab(
     profile: Profile?,
+    effectivePolicy: PolicyTimelineResolver.EffectivePolicySnapshot?,
     onNavigateLimits: () -> Unit,
     onNavigateRulesOpen: () -> Unit,
     onNavigateRulesLimit: () -> Unit,
     onNavigateRulesSession: () -> Unit,
     onNavigateNoMatchLimits: () -> Unit,
     onNavigateNoMatchRules: () -> Unit,
-    onSaveProfile: (Profile) -> Unit,
+    onSaveProfile: suspend (Profile) -> Unit,
     onDirtyChange: (Boolean) -> Unit,
-    onSetupHandlers: (save: () -> Unit, discard: () -> Unit) -> Unit = { _, _ -> },
+    onSetupHandlers: (save: suspend () -> Unit, discard: () -> Unit) -> Unit = { _, _ -> },
 ) {
+    val noMatchSaveScope = rememberCoroutineScope()
     var noMatchMode by remember(profile?.id) {
         mutableStateOf(profile?.noScheduleMatchMode ?: SchedulePolicyMode.default)
     }
@@ -202,7 +213,7 @@ private fun PolicyDefaultTab(
         onDirtyChange(isDirty)
     }
 
-    fun saveNoMatch() {
+    suspend fun saveNoMatch() {
         profile?.let { p ->
             val overrides = if (noMatchMode == SchedulePolicyMode.customize &&
                 !CustomizeOverrides.hasAnyLimitValue(p.noScheduleMatchOverrides)
@@ -226,7 +237,7 @@ private fun PolicyDefaultTab(
     }
 
     SideEffect {
-        onSetupHandlers(::saveNoMatch, ::discardNoMatch)
+        onSetupHandlers({ saveNoMatch() }, ::discardNoMatch)
     }
 
     Column(
@@ -235,6 +246,30 @@ private fun PolicyDefaultTab(
             .verticalScroll(rememberScrollState()),
     ) {
         profile?.let { p ->
+            effectivePolicy?.let { snapshot ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            stringResource(R.string.effective_policy_now),
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            schedulePolicyModeLabel(SchedulePolicyMode.valueOf(snapshot.modeLabel)),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        snapshot.activeSegmentLabel?.let { label ->
+                            Text(label, style = MaterialTheme.typography.bodySmall)
+                        }
+                        snapshot.nextChangeLabel?.let { next ->
+                            Text(next, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -291,7 +326,10 @@ private fun PolicyDefaultTab(
                     }
                 }
                 if (isDirty) {
-                    SaveChangesButton(visible = true, onClick = ::saveNoMatch)
+                    SaveChangesButton(
+                        visible = true,
+                        onClick = { noMatchSaveScope.launch { saveNoMatch() } },
+                    )
                 }
                 if (noMatchMode == SchedulePolicyMode.customize) {
                     RuleNavRow(
@@ -315,6 +353,7 @@ private fun PolicySchedulesTab(
     segments: List<ScheduleSegment>,
     windows: List<ScheduleWindow>,
     profile: Profile?,
+    locale: Locale,
     onAddSchedule: () -> Unit,
     onEditSegment: (Long) -> Unit,
     onToggleActive: (Long, Boolean) -> Unit,
@@ -336,6 +375,13 @@ private fun PolicySchedulesTab(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+        WeekTimelineView(
+            segments = segments,
+            windows = windows,
+            locale = locale,
+            onSegmentSelected = onEditSegment,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
         LazyColumn(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp),

@@ -48,7 +48,11 @@ object SchedulePolicyResolver {
                 source = PolicySource.noScheduleMatch,
             )
         } else {
-            val winning = matching.maxBy { modePriority[it.mode] ?: 0 }
+            val winning = matching.minWith(
+                compareByDescending<ScheduleSegment> { modePriority[it.mode] ?: 0 }
+                    .thenBy { it.sortOrder }
+                    .thenBy { it.id },
+            )
             val overrides = when (winning.mode) {
                 SchedulePolicyMode.customize -> winning.overrides
                 SchedulePolicyMode.default -> SchedulePolicyOverrides()

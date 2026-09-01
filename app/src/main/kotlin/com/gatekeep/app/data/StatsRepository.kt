@@ -8,6 +8,8 @@ import com.gatekeep.app.util.UsageStatsCollector
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.UsageRepository
 import com.gatekeep.domain.StreakCalculator
+import com.gatekeep.domain.TimeBoundaries
+import com.gatekeep.domain.TimeRange
 import com.gatekeep.domain.model.LimitUsageScope
 import com.gatekeep.domain.TrackedAppMerge
 import com.gatekeep.domain.UsageBucketAggregator
@@ -138,10 +140,14 @@ class StatsRepository @Inject constructor(
         val packages = profileRepository.observeMonitoredApps(profileId).first().map { it.packageName }.toSet()
         if (packages.isEmpty()) return StreakInfo(0, 0, null)
         val now = System.currentTimeMillis()
+        val todayStart = usageStatsCollector.dayStartEpochMs(now)
         val underBudget = (6 downTo 0).map { daysAgo ->
-            val dayStart = usageStatsCollector.dayStartEpochMs(now - daysAgo * 86_400_000L)
-            val dayEnd = dayStart + 86_400_000L
-            val used = usageStatsCollector.totalUsageForPackages(packages, dayStart, minOf(dayEnd, now))
+            val dayBounds = TimeBoundaries.dayOffsetsFrom(todayStart, -daysAgo, zoneId)
+            val used = usageStatsCollector.totalUsageForPackages(
+                packages,
+                dayBounds.startMs,
+                minOf(dayBounds.endExclusiveMs, now),
+            )
             used <= dailyCap
         }
         return StreakCalculator.calculate(underBudget)
@@ -186,62 +192,56 @@ class StatsRepository @Inject constructor(
         val now = System.currentTimeMillis()
         return when (range) {
             is StatsTimeRange.SingleDay -> {
-                val start = usageStatsCollector.dayStartEpochMs(range.dayEpochMs)
-                val end = start + 86_400_000L
-                val now = System.currentTimeMillis()
-                val buckets = (0 until 24).map { hour ->
-                    val slotStart = start + hour * 3_600_000L
-                    val slotEnd = if (hour == 23) end else start + (hour + 1) * 3_600_000L
-                    val effectiveEnd = if (slotStart < now) minOf(slotEnd, now) else slotStart
+                val dayStart = usageStatsCollector.dayStartEpochMs(range.dayEpochMs)
+                val dayBounds = TimeBoundaries.dayBounds(range.dayEpochMs, zoneId)
+                val nowMs = System.currentTimeMillis()
+                val buckets = TimeBoundaries.iterateHoursInDay(dayStart, zoneId).mapIndexed { hour, slot ->
+                    val effectiveEnd = if (slot.startMs < nowMs) minOf(slot.endExclusiveMs, nowMs) else slot.startMs
                     ChartBucket(
                         label = "%02d".format(hour),
                         usageMs = 0L,
-                        startMs = slotStart,
-                        endMs = effectiveEnd.coerceAtLeast(slotStart),
+                        startMs = slot.startMs,
+                        endMs = effectiveEnd.coerceAtLeast(slot.startMs),
                     )
                 }
-                RangeBounds(start, minOf(end, now), buckets)
+                RangeBounds(dayBounds.startMs, minOf(dayBounds.endExclusiveMs, nowMs), buckets)
             }
             is StatsTimeRange.Week -> {
-                val weekFields = WeekFields.ISO
+                val weekFields = WeekFields.of(appLocale)
                 val startDate = LocalDate.of(range.year, 1, 1)
                     .with(weekFields.weekOfWeekBasedYear(), range.weekOfYear.toLong())
                     .with(weekFields.dayOfWeek(), 1)
-                val start = startDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
-                val end = minOf(start + 7 * 86_400_000L, now)
-                val buckets = (0 until 7).mapNotNull { offset ->
-                    val dayStart = start + offset * 86_400_000L
-                    if (dayStart >= end) return@mapNotNull null
-                    val dayEnd = minOf(dayStart + 86_400_000L, end)
-                    val zdt = ZonedDateTime.ofInstant(Instant.ofEpochMilli(dayStart), zoneId)
+                val anchorMs = startDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
+                val weekBounds = TimeBoundaries.weekBounds(anchorMs, zoneId, weekFields)
+                val end = minOf(weekBounds.endExclusiveMs, now)
+                val buckets = TimeBoundaries.iterateDaysInRange(
+                    TimeRange(weekBounds.startMs, end),
+                    zoneId,
+                ).map { day ->
+                    val zdt = ZonedDateTime.ofInstant(Instant.ofEpochMilli(day.startMs), zoneId)
                     val dayName = zdt.dayOfWeek.getDisplayName(TextStyle.SHORT, appLocale)
                     val dayNum = zdt.dayOfMonth.toString()
                     ChartBucket(
                         label = dayName,
                         usageMs = 0L,
-                        startMs = dayStart,
-                        endMs = dayEnd,
+                        startMs = day.startMs,
+                        endMs = day.endExclusiveMs,
                         subLabel = dayNum,
                     )
                 }
-                RangeBounds(start, end, buckets)
+                RangeBounds(weekBounds.startMs, end, buckets)
             }
             is StatsTimeRange.Month -> {
-                val start = usageStatsCollector.monthStartEpochMs(range.year, range.month)
-                val nextMonth = if (range.month == 12) {
-                    usageStatsCollector.monthStartEpochMs(range.year + 1, 1)
-                } else {
-                    usageStatsCollector.monthStartEpochMs(range.year, range.month + 1)
+                val monthBounds = TimeBoundaries.monthBounds(range.year, range.month, zoneId)
+                val end = minOf(monthBounds.endExclusiveMs, now)
+                val buckets = TimeBoundaries.iterateDaysInRange(
+                    TimeRange(monthBounds.startMs, end),
+                    zoneId,
+                ).map { day ->
+                    val dayNum = ZonedDateTime.ofInstant(Instant.ofEpochMilli(day.startMs), zoneId).dayOfMonth
+                    ChartBucket("$dayNum", 0L, day.startMs, day.endExclusiveMs)
                 }
-                val end = minOf(nextMonth, now)
-                val daysInMonth = ((end - start) / 86_400_000L).toInt().coerceAtLeast(1)
-                val buckets = (0 until daysInMonth).map { dayOffset ->
-                    val dayStart = start + dayOffset * 86_400_000L
-                    val dayEnd = minOf(dayStart + 86_400_000L, end)
-                    val dayNum = ZonedDateTime.ofInstant(Instant.ofEpochMilli(dayStart), zoneId).dayOfMonth
-                    ChartBucket("$dayNum", 0L, dayStart, dayEnd)
-                }
-                RangeBounds(start, end, buckets)
+                RangeBounds(monthBounds.startMs, end, buckets)
             }
             is StatsTimeRange.Year -> {
                 val start = usageStatsCollector.yearStartEpochMs(range.year)

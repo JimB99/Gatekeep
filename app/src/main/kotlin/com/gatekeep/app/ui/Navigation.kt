@@ -18,6 +18,8 @@ import com.gatekeep.app.ui.policy.PolicyOverrideRulesHubScreen
 import com.gatekeep.app.ui.policy.PolicyOverrideScope
 import com.gatekeep.app.ui.policy.ProfilePolicyScreen
 import com.gatekeep.app.ui.policy.SegmentEditorScreen
+import com.gatekeep.app.ui.profiles.ExtensionHistoryScreen
+import com.gatekeep.app.ui.profiles.ProfileCurrentUsageScreen
 import com.gatekeep.app.ui.profiles.ProfileHubScreen
 import com.gatekeep.app.ui.profiles.ProfileLimitsScreen
 import com.gatekeep.app.ui.profiles.ProfilePinScreen
@@ -58,6 +60,8 @@ object Routes {
     const val PROFILE_RULES_OPEN = "profile/{profileId}/rules/open"
     const val PROFILE_RULES_LIMIT = "profile/{profileId}/rules/limit"
     const val PROFILE_RULES_SESSION = "profile/{profileId}/rules/session"
+    const val PROFILE_EXTENSION_HISTORY = "profile/{profileId}/extension-history"
+    const val PROFILE_CURRENT_USAGE = "profile/{profileId}/current-usage"
     const val PROFILE_PIN = "profile/{profileId}/pin"
     const val APP_PICKER = "apps/{profileId}"
     const val SCHEDULE = "schedule/{profileId}"
@@ -98,6 +102,8 @@ object Routes {
     fun profileRulesOpen(id: Long) = "profile/$id/rules/open"
     fun profileRulesLimit(id: Long) = "profile/$id/rules/limit"
     fun profileRulesSession(id: Long) = "profile/$id/rules/session"
+    fun profileCurrentUsage(id: Long) = "profile/$id/current-usage"
+    fun profileExtensionHistory(id: Long) = "profile/$id/extension-history"
     fun profilePin(id: Long) = "profile/$id/pin"
     fun appPicker(profileId: Long) = "apps/$profileId"
     fun schedule(profileId: Long) = "schedule/$profileId"
@@ -140,8 +146,30 @@ fun GatekeepNavHost(
                 profileId = profileId,
                 onBack = { navController.popBackStack() },
                 onEditApps = { navController.navigate(Routes.appPicker(profileId)) },
+                onEditCurrentUsage = { navController.navigate(Routes.profileCurrentUsage(profileId)) },
                 onEditPolicy = { navController.navigate(Routes.profilePolicy(profileId)) },
                 onEditPin = { navController.navigate(Routes.profilePin(profileId)) },
+                onExtensionHistory = { navController.navigate(Routes.profileExtensionHistory(profileId)) },
+            )
+        }
+        composable(
+            route = Routes.PROFILE_EXTENSION_HISTORY,
+            arguments = listOf(navArgument("profileId") { type = NavType.LongType }),
+        ) { entry ->
+            val profileId = entry.arguments?.getLong("profileId") ?: return@composable
+            ExtensionHistoryScreen(
+                profileId = profileId,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            route = Routes.PROFILE_CURRENT_USAGE,
+            arguments = listOf(navArgument("profileId") { type = NavType.LongType }),
+        ) { entry ->
+            val profileId = entry.arguments?.getLong("profileId") ?: return@composable
+            ProfileCurrentUsageScreen(
+                profileId = profileId,
+                onBack = { navController.popBackStack() },
             )
         }
         composable(

@@ -166,4 +166,22 @@ class SchedulePolicyResolverTest {
 
     private fun mondayAt(hour: Int, zoneId: ZoneId): Long =
         ZonedDateTime.of(2025, 1, 6, hour, 0, 0, 0, zoneId).toInstant().toEpochMilli()
+
+    @Test
+    fun `equal mode schedules resolve by sortOrder then id`() {
+        val firstSeg = ScheduleSegment(id = 10, profileId = 1, mode = SchedulePolicyMode.allow, sortOrder = 2)
+        val secondSeg = ScheduleSegment(id = 5, profileId = 1, mode = SchedulePolicyMode.allow, sortOrder = 1)
+        val windows = listOf(
+            ScheduleWindow(profileId = 1, segmentId = 10, dayOfWeek = 1, startMinute = 9 * 60, endMinute = 17 * 60),
+            ScheduleWindow(profileId = 1, segmentId = 5, dayOfWeek = 1, startMinute = 9 * 60, endMinute = 17 * 60),
+        )
+        val policy = SchedulePolicyResolver.resolveForProfile(
+            profile = profile,
+            segments = listOf(firstSeg, secondSeg),
+            windows = windows,
+            packageName = "com.test",
+            nowEpochMs = mondayAt(10, ZoneId.of("UTC")),
+        )
+        assertEquals(5L, policy.activeSegmentId)
+    }
 }

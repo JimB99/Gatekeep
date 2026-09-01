@@ -1,12 +1,13 @@
 package com.gatekeep.app.enforcement
 
+import com.gatekeep.domain.model.BlockPresentationReason
 import com.gatekeep.domain.model.FrictionDifficulty
 import com.gatekeep.domain.model.FrictionMethod
 
 data class BlockOverlayRequest(
     val packageName: String,
     val message: String,
-    val reason: String,
+    val reason: BlockPresentationReason,
     val breakUntilMs: Long? = null,
     val bypassAllowed: Boolean = true,
     val frictionMethod: FrictionMethod = FrictionMethod.math,

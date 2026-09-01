@@ -4,6 +4,9 @@ import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.ProfileEnforcementConfig
+import com.gatekeep.domain.model.OnLimitAction
+import com.gatekeep.domain.model.OnOpenAction
+import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.ResolvedSchedulePolicy
 import com.gatekeep.domain.model.SchedulePolicyMode
 import com.gatekeep.domain.model.ScheduleSegment
@@ -71,7 +74,7 @@ object ProfileMergeEngine {
         packageName: String,
         nowEpochMs: Long,
     ): ResolvedSchedulePolicy {
-        val perProfile = profiles.map { profile ->
+        val perProfile = profiles.sortedBy { it.id }.map { profile ->
             SchedulePolicyResolver.resolveForProfile(
                 profile = profile,
                 segments = segments,
@@ -106,7 +109,44 @@ object ProfileMergeEngine {
     private fun mergeEnforcementConfigs(configs: List<ProfileEnforcementConfig>): ProfileEnforcementConfig? {
         if (configs.isEmpty()) return null
         if (configs.size == 1) return configs.first()
-        return configs.first()
+        return ProfileEnforcementConfig(
+            onOpenAction = configs.map { it.onOpenAction }.minBy { onOpenStrictness(it) },
+            onLimitAction = configs.map { it.onLimitAction }.maxBy { onLimitStrictness(it) },
+            onSessionLimitAction = configs.map { it.onSessionLimitAction }.maxBy { onSessionStrictness(it) },
+            deterrentDifficulty = configs.maxBy { it.deterrentDifficulty.ordinal }.deterrentDifficulty,
+            openWaitDurationSeconds = configs.maxOf { it.openWaitDurationSeconds },
+            sessionWaitDurationSeconds = configs.maxOf { it.sessionWaitDurationSeconds },
+            limitWaitDurationSeconds = configs.maxOf { it.limitWaitDurationSeconds },
+            sessionBreakDurationMs = configs.mapNotNull { it.sessionBreakDurationMs }.maxOrNull(),
+            limitBreakDurationMs = configs.mapNotNull { it.limitBreakDurationMs }.maxOrNull(),
+            limitExtensionPolicy = configs.first().limitExtensionPolicy,
+            sessionExtensionPolicy = configs.first().sessionExtensionPolicy,
+        )
+    }
+
+    private fun onOpenStrictness(action: OnOpenAction): Int = when (action) {
+        OnOpenAction.none -> 0
+        OnOpenAction.deterrentWait -> 1
+        OnOpenAction.deterrentMath -> 2
+        OnOpenAction.pinGate -> 3
+    }
+
+    private fun onLimitStrictness(action: OnLimitAction): Int = when (action) {
+        OnLimitAction.notifyOnly -> 0
+        OnLimitAction.limitWithExtensions -> 1
+        OnLimitAction.deterrentWait -> 2
+        OnLimitAction.deterrentMath -> 3
+        OnLimitAction.mandatoryBreak -> 4
+        OnLimitAction.hardBlock -> 5
+    }
+
+    private fun onSessionStrictness(action: OnSessionLimitAction): Int = when (action) {
+        OnSessionLimitAction.notifyOnly -> 0
+        OnSessionLimitAction.limitWithExtensions -> 1
+        OnSessionLimitAction.deterrentWait -> 2
+        OnSessionLimitAction.deterrentMath -> 3
+        OnSessionLimitAction.mandatoryBreak -> 4
+        OnSessionLimitAction.hardBlock -> 5
     }
 
     fun mergeUsageSnapshots(usages: List<com.gatekeep.domain.model.UsageSnapshot>): com.gatekeep.domain.model.UsageSnapshot {

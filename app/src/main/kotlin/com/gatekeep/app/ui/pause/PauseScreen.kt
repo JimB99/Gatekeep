@@ -11,7 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,10 +23,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.R
 import com.gatekeep.app.ui.components.GatekeepFilterChip
+import com.gatekeep.app.ui.components.TwentyFourHourClockDialog
 import com.gatekeep.app.ui.viewmodel.PauseViewModel
 import com.gatekeep.domain.model.PauseType
 import kotlinx.coroutines.launch
@@ -278,30 +276,29 @@ fun PauseScreen(
     }
 
     if (showTimePicker && selectedDateMs != null) {
-        val timeState = rememberTimePickerState()
-        AlertDialog(
-            onDismissRequest = { showTimePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    val cal = Calendar.getInstance().apply {
-                        timeInMillis = selectedDateMs!!
-                        set(Calendar.HOUR_OF_DAY, timeState.hour)
-                        set(Calendar.MINUTE, timeState.minute)
-                        set(Calendar.SECOND, 0)
-                    }
-                    val choice = DurationChoice.UntilDateTime(cal.timeInMillis)
-                    when (pickerTarget) {
-                        PickerTarget.Pause -> pauseDraftChoice = choice
-                        PickerTarget.Focus -> focusDraftChoice = choice
-                    }
-                    showTimePicker = false
-                    selectedDateMs = null
-                }) { Text(stringResource(R.string.confirm)) }
+        val initialMinuteOfDay = Calendar.getInstance().let {
+            it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE)
+        }
+        TwentyFourHourClockDialog(
+            initialMinuteOfDay = initialMinuteOfDay,
+            onDismiss = { showTimePicker = false },
+            onConfirm = { minuteOfDay ->
+                val cal = Calendar.getInstance().apply {
+                    timeInMillis = selectedDateMs!!
+                    set(Calendar.HOUR_OF_DAY, minuteOfDay / 60)
+                    set(Calendar.MINUTE, minuteOfDay % 60)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                val choice = DurationChoice.UntilDateTime(cal.timeInMillis)
+                when (pickerTarget) {
+                    PickerTarget.Pause -> pauseDraftChoice = choice
+                    PickerTarget.Focus -> focusDraftChoice = choice
+                }
+                showTimePicker = false
+                selectedDateMs = null
             },
-            dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text(stringResource(R.string.cancel)) }
-            },
-            text = { TimePicker(state = timeState) },
+            title = stringResource(R.string.custom_time),
         )
     }
 }

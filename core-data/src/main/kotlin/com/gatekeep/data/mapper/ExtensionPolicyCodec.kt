@@ -1,6 +1,7 @@
 package com.gatekeep.data.mapper
 
 import com.gatekeep.domain.model.ExtensionPolicy
+import com.gatekeep.domain.model.ExtensionSurfaceMode
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -13,6 +14,7 @@ private data class ExtensionPolicyDto(
     val showNoLimitToday: Boolean = true,
     val customMinutes: Int? = null,
     val customEnabled: Boolean? = null,
+    val surfaceMode: String? = null,
     val showExtensionsInOverlay: Boolean? = null,
     val allowExtensionsInApp: Boolean? = null,
 )
@@ -28,10 +30,24 @@ fun encodeExtensionPolicy(policy: ExtensionPolicy): String =
             showNoLimitToday = policy.showNoLimitToday,
             customMinutes = policy.customMinutes,
             customEnabled = policy.customEnabled,
-            showExtensionsInOverlay = policy.showExtensionsInOverlay,
-            allowExtensionsInApp = policy.allowExtensionsInApp,
+            surfaceMode = policy.surfaceMode.name,
         ),
     )
+
+private fun decodeSurfaceMode(dto: ExtensionPolicyDto): ExtensionSurfaceMode {
+    if (!dto.surfaceMode.isNullOrBlank()) {
+        return runCatching { ExtensionSurfaceMode.valueOf(dto.surfaceMode) }
+            .getOrDefault(ExtensionSurfaceMode.both)
+    }
+    val overlay = dto.showExtensionsInOverlay ?: true
+    val inApp = dto.allowExtensionsInApp ?: true
+    return when {
+        overlay && inApp -> ExtensionSurfaceMode.both
+        overlay -> ExtensionSurfaceMode.overlay
+        inApp -> ExtensionSurfaceMode.inApp
+        else -> ExtensionSurfaceMode.none
+    }
+}
 
 fun decodeExtensionPolicy(json: String?): ExtensionPolicy {
     if (json.isNullOrBlank()) return ExtensionPolicy()
@@ -47,8 +63,7 @@ fun decodeExtensionPolicy(json: String?): ExtensionPolicy {
             showNoLimitToday = dto.showNoLimitToday,
             customMinutes = dto.customMinutes,
             customEnabled = customEnabled,
-            showExtensionsInOverlay = dto.showExtensionsInOverlay ?: true,
-            allowExtensionsInApp = dto.allowExtensionsInApp ?: true,
+            surfaceMode = decodeSurfaceMode(dto),
         )
     }.getOrDefault(ExtensionPolicy())
 }

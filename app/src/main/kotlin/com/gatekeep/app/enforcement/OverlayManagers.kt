@@ -21,10 +21,12 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.gatekeep.app.R
 import com.gatekeep.app.util.EnforcementLog
+import com.gatekeep.app.util.BlockMessageResolver
 import com.gatekeep.app.util.PasswordHasher
 import com.gatekeep.app.util.formatDurationMs
 import com.gatekeep.app.util.withAppLocale
 import com.gatekeep.domain.FrictionChallenge
+import com.gatekeep.domain.model.BlockPresentationReason
 import com.gatekeep.domain.model.FrictionDifficulty
 import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.MathChallenge
@@ -97,7 +99,7 @@ class BlockOverlayManager @Inject constructor(
                 val countdown = view.findViewById<TextView>(R.id.wait_countdown)
                 countdown.visibility = View.VISIBLE
                 var remaining = delaySeconds
-                countdown.text = "${remaining}s"
+                countdown.text = localizedContext.getString(R.string.countdown_seconds_format, remaining)
                 val stopwatch = screenStateMonitor.createStopwatch()
                 addOverlay(view, focusable = false)
                 waitRunnable = object : Runnable {
@@ -108,7 +110,7 @@ class BlockOverlayManager @Inject constructor(
                             removeOverlayOnly()
                             onComplete()
                         } else {
-                            countdown.text = "${remaining}s"
+                            countdown.text = localizedContext.getString(R.string.countdown_seconds_format, remaining)
                             mainHandler.postDelayed(this, 1000)
                         }
                     }
@@ -235,11 +237,13 @@ class BlockOverlayManager @Inject constructor(
                     setPadding((12 * density).toInt(), vPadding, (12 * density).toInt(), vPadding)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                     layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT,
                     ).apply {
                         marginStart = hMargin
                         marginEnd = hMargin
+                        topMargin = vPadding / 2
+                        bottomMargin = vPadding / 2
                     }
                     setOnClickListener {
                         coordinator.get().grantExtensionMinutes(request.packageName, minutes)
@@ -271,19 +275,23 @@ class BlockOverlayManager @Inject constructor(
             showFriction(view, request.frictionMethod, challenge, request)
         } else {
             extensionContainer.visibility = View.GONE
-            continueBtn.visibility = View.VISIBLE
-            continueBtn.setOnClickListener {
-                showFriction(
-                    view,
-                    request.frictionMethod,
-                    challenge,
-                    request,
-                )
+            if (request.frictionMethod == FrictionMethod.none) {
+                continueBtn.visibility = View.GONE
+            } else {
+                continueBtn.visibility = View.VISIBLE
+                continueBtn.setOnClickListener {
+                    showFriction(
+                        view,
+                        request.frictionMethod,
+                        challenge,
+                        request,
+                    )
+                }
             }
         }
 
         val hasProfilePin = !request.profilePasswordHash.isNullOrBlank()
-        if (request.reason == "profilePin" && hasProfilePin) {
+        if (request.reason == BlockPresentationReason.profilePin && hasProfilePin) {
             frictionInProgress = true
             continueBtn.visibility = View.GONE
             showPasswordFriction(view, request)
@@ -304,6 +312,10 @@ class BlockOverlayManager @Inject constructor(
         view.findViewById<Button>(R.id.block_continue_btn).visibility = View.GONE
 
         when (method) {
+            FrictionMethod.none -> {
+                container.visibility = View.GONE
+                frictionInProgress = false
+            }
             FrictionMethod.math -> {
                 val mathChallenge = challenge ?: FrictionChallenge.generate(request.difficulty)
                     .also { currentChallenge = it }
@@ -353,12 +365,15 @@ class BlockOverlayManager @Inject constructor(
                             }
                             onFrictionSuccess(request)
                         } else {
-                            countdown.text = "${remainingSec}s"
+                            countdown.text = localizedContext.getString(R.string.countdown_seconds_format, remainingSec)
                             mainHandler.postDelayed(this, 1000)
                         }
                     }
                 }
-                countdown.text = "${request.waitDurationSeconds}s"
+                countdown.text = localizedContext.getString(
+                    R.string.countdown_seconds_format,
+                    request.waitDurationSeconds,
+                )
                 mainHandler.postDelayed(waitRunnable!!, 1000)
             }
             else -> {
@@ -479,7 +494,7 @@ class BlockOverlayManager @Inject constructor(
         }, 200)
     }
 
-    private fun updateBlock(message: String, reason: String, breakUntilMs: Long?) {
+    private fun updateBlock(message: String, reason: BlockPresentationReason, breakUntilMs: Long?) {
         if (frictionInProgress) return
         overlayView?.let { updateBlockView(it, message, reason, breakUntilMs) }
         startBreakTicker(breakUntilMs)
@@ -543,9 +558,9 @@ class BlockOverlayManager @Inject constructor(
         quotaView.visibility = View.VISIBLE
     }
 
-    private fun updateBlockView(view: View, message: String, reason: String, breakUntilMs: Long?) {
+    private fun updateBlockView(view: View, message: String, reason: BlockPresentationReason, breakUntilMs: Long?) {
         view.findViewById<TextView>(R.id.block_message).text = message
-        view.findViewById<TextView>(R.id.block_reason).text = reason
+        view.findViewById<TextView>(R.id.block_reason).text = BlockMessageResolver.reasonLabel(localizedContext, reason)
         val breakText = view.findViewById<TextView>(R.id.block_break_text)
         if (breakUntilMs != null) {
             breakText.visibility = View.VISIBLE

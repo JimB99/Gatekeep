@@ -49,6 +49,7 @@ object PauseManager {
             PauseType.untilDatetime -> error("untilDatetime requires explicit untilEpochMs")
             PauseType.noLimitToday -> error("noLimitToday requires explicit untilEpochMs")
             PauseType.focusBlock -> error("focusBlock requires explicit untilEpochMs")
+            PauseType.extensionGrace -> error("extensionGrace requires explicit untilEpochMs")
         }
         return Pause(
             profileId = profileId,

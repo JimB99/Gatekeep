@@ -10,8 +10,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.gatekeep.app.R
@@ -42,10 +44,11 @@ class UnsavedChangesGuardState internal constructor(
 fun rememberUnsavedChangesGuard(
     isDirty: Boolean,
     onNavigateBack: () -> Unit,
-    onSave: () -> Unit,
+    onSave: suspend () -> Unit,
     onDiscardChanges: () -> Unit,
 ): UnsavedChangesGuardState {
     var showDialog by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val isDirtyState = rememberUpdatedState(isDirty)
     val onNavigateBackState = rememberUpdatedState(onNavigateBack)
     val onSaveState = rememberUpdatedState(onSave)
@@ -73,8 +76,10 @@ fun rememberUnsavedChangesGuard(
             confirmButton = {
                 TextButton(onClick = {
                     showDialog = false
-                    onSaveState.value()
-                    onNavigateBackState.value()
+                    scope.launch {
+                        onSaveState.value()
+                        onNavigateBackState.value()
+                    }
                 }) { Text(stringResource(R.string.save)) }
             },
             dismissButton = {

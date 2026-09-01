@@ -13,8 +13,9 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
+        android:contentDescription="@string/hud_app_label_content_description"
         android:ellipsize="end"
-        android:maxLines="1"
+        android:maxLines="2"
         android:textColor="#FFFFFF"
         android:textSize="12sp" />
 
@@ -22,6 +23,7 @@
         android:id="@+id/hud_time_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:contentDescription="@string/hud_time_content_description"
         android:textColor="#FFFFFF"
         android:textSize="11sp" />
 

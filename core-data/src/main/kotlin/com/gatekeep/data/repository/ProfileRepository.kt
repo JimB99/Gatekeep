@@ -1,11 +1,16 @@
 package com.gatekeep.data.repository
 
+import androidx.room.Transaction
 import com.gatekeep.data.local.dao.AppLimitDao
 import com.gatekeep.data.local.dao.MonitoredAppDao
+import com.gatekeep.data.local.dao.OverrideEventDao
 import com.gatekeep.data.local.dao.PauseDao
 import com.gatekeep.data.local.dao.ProfileDao
 import com.gatekeep.data.local.dao.ScheduleSegmentDao
 import com.gatekeep.data.local.dao.ScheduleWindowDao
+import com.gatekeep.data.local.dao.SessionStateDao
+import com.gatekeep.data.local.dao.UsageAggregateDao
+import com.gatekeep.data.local.dao.UsageSessionDao
 import com.gatekeep.data.mapper.toDomain
 import com.gatekeep.data.mapper.toEntity
 import com.gatekeep.domain.model.AppLimit
@@ -24,6 +29,10 @@ class ProfileRepository(
     private val scheduleSegmentDao: ScheduleSegmentDao,
     private val scheduleWindowDao: ScheduleWindowDao,
     private val pauseDao: PauseDao,
+    private val usageSessionDao: UsageSessionDao,
+    private val usageAggregateDao: UsageAggregateDao,
+    private val overrideEventDao: OverrideEventDao,
+    private val sessionStateDao: SessionStateDao,
 ) {
     fun observeProfiles(): Flow<List<Profile>> =
         profileDao.observeAll().map { list -> list.map { it.toDomain() } }
@@ -47,7 +56,17 @@ class ProfileRepository(
         profileDao.setProfileActive(id, true)
     }
 
+    @Transaction
     suspend fun deleteProfile(id: Long) {
+        scheduleWindowDao.deleteForProfile(id)
+        scheduleSegmentDao.deleteForProfile(id)
+        monitoredAppDao.deleteForProfile(id)
+        appLimitDao.deleteForProfile(id)
+        pauseDao.deleteForProfile(id)
+        usageSessionDao.deleteForProfile(id)
+        usageAggregateDao.deleteForProfile(id)
+        overrideEventDao.deleteForProfile(id)
+        sessionStateDao.deleteForProfile(id)
         profileDao.delete(id)
     }
 
@@ -121,13 +140,13 @@ class ProfileRepository(
         scheduleSegmentDao.update(segment.copy(isActive = active))
     }
 
-    suspend fun duplicateScheduleSegment(segmentId: Long): Long? {
+    suspend fun duplicateScheduleSegment(segmentId: Long, copyLabel: String? = null): Long? {
         val segment = scheduleSegmentDao.getById(segmentId)?.toDomain() ?: return null
         val windows = scheduleWindowDao.observeForProfile(segment.profileId).first()
             .filter { it.segmentId == segmentId }
             .map { it.toDomain() }
 
-        val newLabel = segment.label?.let { "$it (copy)" }
+        val newLabel = copyLabel ?: segment.label?.let { "$it (copy)" }
         val newSegmentId = scheduleSegmentDao.insert(
             segment.copy(
                 id = 0,

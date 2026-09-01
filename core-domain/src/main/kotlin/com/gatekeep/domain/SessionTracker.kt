@@ -124,6 +124,12 @@ object SessionTracker {
     fun markSessionLimitNotified(session: SessionState): SessionState =
         session.copy(sessionLimitNotified = true)
 
+    fun incrementConsecutiveExtensions(session: SessionState): SessionState =
+        session.copy(consecutiveExtensionCount = session.consecutiveExtensionCount + 1)
+
+    fun resetConsecutiveExtensions(session: SessionState): SessionState =
+        session.copy(consecutiveExtensionCount = 0)
+
     sealed class SessionCheckResult {
         data class Allowed(val remainingSessionMs: Long?) : SessionCheckResult()
         data class OnBreak(val breakUntilEpochMs: Long, val remainingMs: Long) : SessionCheckResult()

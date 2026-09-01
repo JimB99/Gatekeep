@@ -51,6 +51,16 @@
     <string name="timer">Timer</string>
     <string name="warnings">Warnungen</string>
     <string name="weekly">Wöchentlich</string>
+    <string name="limit_weekly_short">Wöchentlich %1$s</string>
+    <string name="limit_daily_short">Täglich %1$s</string>
+    <string name="limit_hourly_short">Stündlich %1$s</string>
+    <string name="limit_session_short">Sitzung %1$s</string>
+    <string name="limit_hourly_label">Stündlich</string>
+    <string name="profile_current_usage">Aktuelle Nutzung</string>
+    <string name="profile_current_usage_subtitle">Nutzung, Limits und Verlängerungen</string>
+    <string name="extension_applied">Angewendet</string>
+    <string name="extension_reset_done">Verlängerungen zurückgesetzt</string>
+    <string name="extension_one_hour">1 Std.</string>
     <string name="version_format">Version %1$s</string>
     <string name="version_full_format">Version %1$s (%2$d)</string>
     <string name="replay_onboarding">Einrichtung wiederholen</string>
@@ -179,6 +189,7 @@
     <string name="max_extensions_per_day">Max. Verlängerungen pro Tag (leer = unbegrenzt)</string>
     <string name="max_consecutive_extensions">Max. aufeinanderfolgende Verlängerungen (leer = unbegrenzt)</string>
     <string name="show_no_limit_today">Schaltfläche „Heute kein Limit“ anzeigen</string>
+    <string name="extension_overlay_only_hint">Overlay-Optionen betreffen nur die Sperroberfläche. In-App-Verlängerungen sind immer unter Aktuelle Nutzung verfügbar.</string>
     <string name="profile_pin_enabled_hint">PIN ist aktiviert über Regeln → Beim Öffnen einer App → PIN.</string>
     <string name="profile_pin_disabled_hint">PIN ist aus. Aktiviere sie unter Regeln → Beim Öffnen einer App → PIN.</string>
     <string name="profile_pin_rules_hint">Speichern legt die PIN ab. PIN unter Regeln aktivieren oder deaktivieren.</string>
@@ -318,6 +329,15 @@
     <string name="duration_seconds">%1$ds</string>
     <string name="duration_infinity">∞</string>
     <string name="duration_zero_minutes">0m</string>
+    <string name="duration_invalid_minute_second">Minuten und Sekunden müssen zwischen 00 und 59 liegen.</string>
+    <string name="duration_exceeds_maximum">Dauer darf maximal %1$s sein.</string>
+    <string name="duration_exceeds_rolling_maximum">Manuelle Eingabe bis %1$s. Für größere Werte die Schritt-Buttons verwenden.</string>
+    <string name="duration_keypad_clear">Löschen</string>
+    <string name="duration_keypad_display_a11y">Dauer %1$s</string>
+    <string name="duration_keypad_digit_a11y">Ziffer %1$s</string>
+    <string name="duration_keypad_double_zero_a11y">Doppelnull</string>
+    <string name="duration_keypad_backspace_a11y">Rücktaste</string>
+    <string name="duration_keypad_clear_a11y">Dauer löschen</string>
     <string name="step_minus_5m">-5m</string>
     <string name="step_plus_5m">+5m</string>
 
@@ -369,4 +389,47 @@
     <string name="hud_weekly_format">Wöchentlich %1$s / %2$s</string>
 
     <string name="widget_tap_to_open">Tippen, um Gatekeep zu öffnen</string>
+
+    <string name="break_duration_session">Pause nach Sitzungslimit</string>
+    <string name="customize_limits_off_hint">0 = aus für diesen Zeitplan. Limits werden beim ersten Öffnen von Anpassen aus Standard übernommen.</string>
+    <string name="customize_rules_inherit">Von Standard übernehmen</string>
+    <string name="extension_in_app_per_app_heading">Pro App verlängern</string>
+    <string name="extension_in_app_profile_heading">Gemeinsame Nutzung verlängern</string>
+    <string name="extension_surface_both">Beides</string>
+    <string name="extension_surface_in_app">In der App</string>
+    <string name="extension_surface_label">Verlängerungen anzeigen</string>
+    <string name="extension_surface_none">Keine</string>
+    <string name="extension_surface_none_hint">Verlängerungen deaktiviert. Regel wechselt zu nur benachrichtigen.</string>
+    <string name="extension_surface_overlay">Overlay</string>
+    <string name="hourly_limit_resets">Setzt zu Beginn jeder Stunde zurück.</string>
+    <string name="limit_break_duration">Pause nach Nutzungslimit</string>
+    <string name="limit_usage_scope_label">Nutzung zählen</string>
+    <string name="limit_usage_scope_per_app">Pro App</string>
+    <string name="limit_usage_scope_per_app_hint">Jede überwachte App hat einen eigenen Zähler für dieselben Limitwerte.</string>
+    <string name="limit_usage_scope_shared">Gemeinsam</string>
+    <string name="limit_usage_scope_shared_hint">Nutzung aller überwachten Apps zählt zu einem gemeinsamen Pool.</string>
+    <string name="limit_wait_duration">Warten vor Umgehung des Nutzungslimits</string>
+    <string name="limits_hierarchy_error">Wöchentlich muss mindestens täglich, täglich mindestens stündlich und stündlich mindestens Sitzung sein.</string>
+    <string name="limits_hierarchy_hint">Wöchentlich ≥ täglich ≥ stündlich ≥ Sitzung</string>
+    <string name="no_limit_today_short">Heute kein Limit</string>
+    <string name="pause_apply">Anwenden</string>
+    <string name="pause_reset_action">Pausen zurücksetzen</string>
+    <string name="pause_reset_done">Pausen zurückgesetzt</string>
+    <string name="pause_reset_help">Beendet alle aktiven Pausen für dieses Profil.</string>
+    <string name="pause_reset_title">Aktive Pausen zurücksetzen</string>
+    <string name="pin_not_set">Keine PIN gesetzt</string>
+    <string name="profile_apps_tracked">%1$d Apps überwacht</string>
+    <string name="profile_limits_none">Keine Limits gesetzt</string>
+    <string name="profile_schedule_always">Nur Standardrichtlinie</string>
+    <string name="profile_schedule_windows">%1$d Zeitpläne</string>
+    <string name="save_schedule">Zeitplan speichern</string>
+    <string name="schedule_active">Zeitplan aktiv</string>
+    <string name="more_options">Weitere Optionen</string>
+    <string name="effective_policy_now">Aktuelle Richtlinie</string>
+    <string name="schedule_segment_copy_format">%1$s (Kopie)</string>
+    <string name="extension_history">Verlängerungsverlauf</string>
+    <string name="extension_history_subtitle">Letzte Verlängerungen und Ausnahmen</string>
+    <string name="hud_app_label_content_description">Überwachte App</string>
+    <string name="hud_time_content_description">Verbleibende Zeit</string>
+    <string name="week_timeline">Wochenübersicht</string>
 </resources>

@@ -39,6 +39,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,7 +64,7 @@ import com.gatekeep.app.util.formatDurationMinutes
 import com.gatekeep.domain.model.LimitUsageScope
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
-import com.gatekeep.domain.model.ExtensionPolicy
+import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.Profile
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,8 +73,10 @@ fun ProfileHubScreen(
     profileId: Long,
     onBack: () -> Unit,
     onEditApps: () -> Unit,
+    onEditCurrentUsage: () -> Unit,
     onEditPolicy: () -> Unit,
     onEditPin: () -> Unit,
+    onExtensionHistory: () -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val profiles by viewModel.profiles.collectAsState()
@@ -95,17 +99,18 @@ fun ProfileHubScreen(
 
     val nameDirty = profileName.trim() != savedName.trim()
 
-    fun saveName() {
+    suspend fun saveName() {
         profile?.copy(name = profileName.trim())?.let {
-            viewModel.updateProfile(it)
+            viewModel.updateProfileAwait(it)
             savedName = profileName.trim()
         }
     }
 
+    val nameScope = rememberCoroutineScope()
     val backGuard = rememberUnsavedChangesGuard(
         isDirty = nameDirty,
         onNavigateBack = onBack,
-        onSave = ::saveName,
+        onSave = { saveName() },
         onDiscardChanges = { profileName = savedName },
     )
 
@@ -171,7 +176,7 @@ fun ProfileHubScreen(
             )
             if (nameDirty) {
                 Button(
-                    onClick = ::saveName,
+                    onClick = { nameScope.launch { saveName() } },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = profileName.isNotBlank(),
                 ) { Text(stringResource(R.string.save_name)) }
@@ -206,9 +211,19 @@ fun ProfileHubScreen(
                 iconPackages = monitoredPackages,
             )
             ProfileNavRow(
+                title = stringResource(R.string.profile_current_usage),
+                subtitle = stringResource(R.string.profile_current_usage_subtitle),
+                onClick = onEditCurrentUsage,
+            )
+            ProfileNavRow(
                 title = stringResource(R.string.policy),
                 subtitle = profilePolicySubtitle(profile, scheduleSegments.size),
                 onClick = onEditPolicy,
+            )
+            ProfileNavRow(
+                title = stringResource(R.string.extension_history),
+                subtitle = stringResource(R.string.extension_history_subtitle),
+                onClick = onExtensionHistory,
             )
             ProfileNavRow(
                 title = stringResource(R.string.profile_pin),
@@ -219,23 +234,6 @@ fun ProfileHubScreen(
                 },
                 onClick = onEditPin,
             )
-
-            if (
-                profile != null &&
-                profile.onLimitAction == OnLimitAction.limitWithExtensions &&
-                profile.limitExtensionPolicy.allowExtensionsInApp &&
-                monitoredPackages.isNotEmpty()
-            ) {
-                InAppExtensionCard(
-                    policy = profile.limitExtensionPolicy,
-                    onExtendMinutes = { minutes ->
-                        viewModel.grantExtensionInApp(monitoredPackages, minutes)
-                    },
-                    onNoLimitToday = {
-                        viewModel.grantNoLimitTodayInApp(monitoredPackages)
-                    },
-                )
-            }
 
             Card(
                 modifier = Modifier.fillMaxWidth().clickable { showDeleteConfirm = true },
@@ -249,45 +247,6 @@ fun ProfileHubScreen(
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.error,
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun InAppExtensionCard(
-    policy: ExtensionPolicy,
-    onExtendMinutes: (Int) -> Unit,
-    onNoLimitToday: () -> Unit,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                stringResource(R.string.extension_in_app_heading),
-                fontWeight = FontWeight.Medium,
-            )
-            GatekeepFilterChipRow {
-                policy.optionMinutes.forEach { minutes ->
-                    GatekeepFilterChip(
-                        selected = false,
-                        onClick = { onExtendMinutes(minutes) },
-                        label = {
-                            Text(
-                                stringResource(R.string.extension_minutes_format, minutes),
-                            )
-                        },
-                    )
-                }
-                if (policy.showNoLimitToday) {
-                    GatekeepFilterChip(
-                        selected = false,
-                        onClick = onNoLimitToday,
-                        label = { Text(stringResource(R.string.no_limit_today_short)) },
-                    )
-                }
             }
         }
     }
@@ -387,7 +346,7 @@ fun ProfileLimitsScreen(
     val hierarchyError = stringResource(R.string.limits_hierarchy_error)
     val hierarchyHint = stringResource(R.string.limits_hierarchy_hint)
 
-    fun saveLimits() {
+    suspend fun saveLimits() {
         if (!hierarchyValidation.valid) return
         profile?.copy(
             dailyLimitMs = draftToSavedMs(dailyMs),
@@ -396,7 +355,7 @@ fun ProfileLimitsScreen(
             weeklyLimitMs = draftToSavedMs(weeklyMs),
             limitUsageScope = usageScope,
         )?.let { updated ->
-            viewModel.saveProfile(updated)
+            viewModel.saveProfileAwait(updated)
             savedDailyMs = dailyMs
             savedSessionMs = sessionMs
             savedHourlyMs = hourlyMs
@@ -413,10 +372,11 @@ fun ProfileLimitsScreen(
         usageScope = savedUsageScope
     }
 
+    val limitsScope = rememberCoroutineScope()
     val backGuard = rememberUnsavedChangesGuard(
         isDirty = isDirty,
         onNavigateBack = onBack,
-        onSave = ::saveLimits,
+        onSave = { saveLimits() },
         onDiscardChanges = ::discardChanges,
     )
 
@@ -526,7 +486,7 @@ fun ProfileLimitsScreen(
             }
             SaveChangesButton(
                 visible = isDirty,
-                onClick = ::saveLimits,
+                onClick = { limitsScope.launch { saveLimits() } },
                 label = stringResource(R.string.save_limits),
             )
         }
@@ -567,12 +527,12 @@ fun ProfilePinScreen(
 
     val pinDirty = pin != savedPin
 
-    fun savePin() {
+    suspend fun savePin() {
         profile?.let { p ->
             val trimmed = pin.trim()
             if (trimmed.isNotBlank()) {
                 viewModel.saveProfilePin(p.id, trimmed)
-                viewModel.saveProfile(
+                viewModel.saveProfileAwait(
                     p.copy(
                         passwordHash = PasswordHasher.hash(trimmed),
                         lockEnabled = pinEnabled,
@@ -581,7 +541,7 @@ fun ProfilePinScreen(
                 savedPin = trimmed
             } else {
                 viewModel.clearProfilePin(p.id)
-                viewModel.saveProfile(p.copy(passwordHash = null, lockEnabled = false))
+                viewModel.saveProfileAwait(p.copy(passwordHash = null, lockEnabled = false))
                 savedPin = ""
             }
         }
@@ -590,7 +550,7 @@ fun ProfilePinScreen(
     val backGuard = rememberUnsavedChangesGuard(
         isDirty = pinDirty,
         onNavigateBack = onBack,
-        onSave = ::savePin,
+        onSave = { savePin() },
         onDiscardChanges = { pin = savedPin },
     )
 

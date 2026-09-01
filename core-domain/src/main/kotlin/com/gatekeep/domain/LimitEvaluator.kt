@@ -36,9 +36,9 @@ object LimitEvaluator {
         }
 
         val warning = when {
-            isNearLimit(limit.dailyLimitMs, usage.dailyMs) ||
-                isNearLimit(limit.hourlyLimitMs, usage.hourlyMs) ||
-                isNearLimit(limit.weeklyLimitMs, usage.weeklyMs) -> WarningLevel.eightyPercent
+            isNearLimit(limit.dailyLimitMs, usage.dailyMs, extensionBonus.dailyMs) ||
+                isNearLimit(limit.hourlyLimitMs, usage.hourlyMs, extensionBonus.hourlyMs) ||
+                isNearLimit(limit.weeklyLimitMs, usage.weeklyMs, extensionBonus.weeklyMs) -> WarningLevel.eightyPercent
             else -> WarningLevel.none
         }
 
@@ -50,9 +50,11 @@ object LimitEvaluator {
         )
     }
 
-    private fun isNearLimit(limitMs: Long?, usedMs: Long): Boolean {
+    private fun isNearLimit(limitMs: Long?, usedMs: Long, bonusMs: Long = 0L): Boolean {
         if (limitMs == null || limitMs <= 0) return false
-        return usedMs.toDouble() / limitMs >= 0.8
+        val effectiveLimit = limitMs + bonusMs
+        if (effectiveLimit <= 0) return false
+        return usedMs.toDouble() / effectiveLimit >= 0.8
     }
 
     sealed class LimitCheckResult {

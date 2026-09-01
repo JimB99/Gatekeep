@@ -54,6 +54,9 @@ interface MonitoredAppDao {
     @Query("DELETE FROM monitored_apps WHERE profileId = :profileId AND packageName = :packageName")
     suspend fun delete(profileId: Long, packageName: String)
 
+    @Query("DELETE FROM monitored_apps WHERE profileId = :profileId")
+    suspend fun deleteForProfile(profileId: Long)
+
     @Query("SELECT * FROM monitored_apps WHERE profileId = :profileId AND packageName = :packageName")
     suspend fun get(profileId: Long, packageName: String): MonitoredAppEntity?
 }
@@ -68,6 +71,9 @@ interface AppLimitDao {
 
     @Upsert
     suspend fun upsert(limit: AppLimitEntity)
+
+    @Query("DELETE FROM app_limits WHERE profileId = :profileId")
+    suspend fun deleteForProfile(profileId: Long)
 }
 
 @Dao
@@ -89,6 +95,9 @@ interface ScheduleWindowDao {
 
     @Query("DELETE FROM schedule_windows WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("DELETE FROM schedule_windows WHERE profileId = :profileId")
+    suspend fun deleteForProfile(profileId: Long)
 }
 
 @Dao
@@ -120,6 +129,9 @@ interface PauseDao {
         "DELETE FROM pauses WHERE type NOT IN ('focusBlock', 'focusMode', 'emergencyBypass') AND profileId = :profileId",
     )
     suspend fun deleteAllowPausesForProfile(profileId: Long)
+
+    @Query("DELETE FROM pauses WHERE profileId = :profileId")
+    suspend fun deleteForProfile(profileId: Long)
 }
 
 @Dao
@@ -132,6 +144,9 @@ interface UsageSessionDao {
 
     @Query("SELECT * FROM usage_sessions WHERE profileId = :profileId ORDER BY startEpochMs DESC LIMIT :limit")
     suspend fun getRecent(profileId: Long, limit: Int): List<UsageSessionEntity>
+
+    @Query("DELETE FROM usage_sessions WHERE profileId = :profileId")
+    suspend fun deleteForProfile(profileId: Long)
 }
 
 @Dao
@@ -156,6 +171,9 @@ interface UsageAggregateDao {
         """,
     )
     suspend fun getTotal(profileId: Long, packageName: String, period: String, periodStart: Long): Long
+
+    @Query("DELETE FROM usage_aggregates WHERE profileId = :profileId")
+    suspend fun deleteForProfile(profileId: Long)
 }
 
 @Dao
@@ -165,6 +183,30 @@ interface OverrideEventDao {
 
     @Query("SELECT COUNT(*) FROM override_events WHERE profileId = :profileId")
     suspend fun countForProfile(profileId: Long): Int
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM override_events
+        WHERE profileId = :profileId AND packageName = :packageName
+        AND timestamp >= :dayStartMs AND method = 'extension'
+        """,
+    )
+    suspend fun countExtensionOverridesForPackageToday(
+        profileId: Long,
+        packageName: String,
+        dayStartMs: Long,
+    ): Int
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM override_events
+        WHERE profileId = :profileId AND timestamp >= :dayStartMs AND method = 'extension'
+        """,
+    )
+    suspend fun countExtensionOverridesForProfileToday(
+        profileId: Long,
+        dayStartMs: Long,
+    ): Int
 
     @Query(
         """
@@ -204,6 +246,14 @@ interface OverrideEventDao {
 
     @Query(
         """
+        DELETE FROM override_events
+        WHERE profileId = :profileId AND timestamp >= :sinceMs AND method = 'extension'
+        """,
+    )
+    suspend fun deleteExtensionOverridesForProfileSince(profileId: Long, sinceMs: Long)
+
+    @Query(
+        """
         SELECT * FROM override_events
         WHERE profileId = :profileId AND packageName = :packageName
         ORDER BY timestamp DESC LIMIT :limit
@@ -217,16 +267,22 @@ interface OverrideEventDao {
 
     @Query("SELECT * FROM override_events WHERE profileId = :profileId ORDER BY timestamp DESC LIMIT :limit")
     suspend fun getRecent(profileId: Long, limit: Int): List<OverrideEventEntity>
+
+    @Query("DELETE FROM override_events WHERE profileId = :profileId")
+    suspend fun deleteForProfile(profileId: Long)
 }
 
 @Dao
 interface SessionStateDao {
-    @Query("SELECT * FROM session_state WHERE packageName = :packageName")
-    suspend fun get(packageName: String): SessionStateEntity?
+    @Query("SELECT * FROM session_state WHERE profileId = :profileId AND packageName = :packageName")
+    suspend fun get(profileId: Long, packageName: String): SessionStateEntity?
 
     @Upsert
     suspend fun upsert(state: SessionStateEntity)
 
-    @Query("DELETE FROM session_state WHERE packageName = :packageName")
-    suspend fun delete(packageName: String)
+    @Query("DELETE FROM session_state WHERE profileId = :profileId AND packageName = :packageName")
+    suspend fun delete(profileId: Long, packageName: String)
+
+    @Query("DELETE FROM session_state WHERE profileId = :profileId")
+    suspend fun deleteForProfile(profileId: Long)
 }

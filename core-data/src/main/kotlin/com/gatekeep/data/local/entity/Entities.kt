@@ -161,14 +161,18 @@ data class OverrideEventEntity(
     val extensionMs: Long,
 )
 
-@Entity(tableName = "session_state")
+@Entity(
+    tableName = "session_state",
+    primaryKeys = ["profileId", "packageName"],
+)
 data class SessionStateEntity(
-    @PrimaryKey val packageName: String,
     val profileId: Long,
+    val packageName: String,
     val sessionStartEpochMs: Long,
     val breakUntilEpochMs: Long? = null,
     val excludedMs: Long = 0,
     val frictionStartedAtEpochMs: Long? = null,
     val pendingWaitUntilEpochMs: Long? = null,
     val sessionLimitNotified: Boolean = false,
+    val consecutiveExtensionCount: Int = 0,
 )

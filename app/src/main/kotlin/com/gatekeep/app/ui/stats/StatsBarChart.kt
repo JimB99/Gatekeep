@@ -1,6 +1,8 @@
 package com.gatekeep.app.ui.stats
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -101,10 +103,15 @@ fun StatsBarChart(
     }
 
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val chartContentWidth = maxWidth - axisWidth - chartGap
+        val minBarSlotWidth = 28.dp
+        val chartContentWidth = maxOf(maxWidth - axisWidth - chartGap, minBarSlotWidth * buckets.size)
         val barSlotWidthDp = chartContentWidth / buckets.size.coerceAtLeast(1)
 
-        Row(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+        ) {
             Box(
                 modifier = Modifier
                     .width(axisWidth)

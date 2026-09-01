@@ -59,6 +59,12 @@
     <string name="limit_daily_short">Daily %1$s</string>
     <string name="limit_hourly_short">Hourly %1$s</string>
     <string name="limit_session_short">Session %1$s</string>
+    <string name="limit_hourly_label">Hourly</string>
+    <string name="profile_current_usage">Current usage</string>
+    <string name="profile_current_usage_subtitle">Usage, limits, and extensions</string>
+    <string name="extension_applied">Applied</string>
+    <string name="extension_reset_done">Extensions reset</string>
+    <string name="extension_one_hour">1h</string>
     <string name="no_pin">No PIN</string>
     <string name="timer">Timer</string>
     <string name="warnings">Warnings</string>
@@ -188,9 +194,14 @@
     <string name="extension_custom_short">Custom</string>
     <string name="extension_custom_minutes">Custom minutes</string>
     <string name="extension_overlay_preview">Overlay buttons: %1$s</string>
-    <string name="show_extensions_in_overlay">Show extensions on block overlay</string>
-    <string name="allow_extensions_in_app">Allow extensions in profile screen</string>
-    <string name="extension_in_app_heading">Extend time</string>
+    <string name="extension_surface_label">Show extensions</string>
+    <string name="extension_surface_none">None</string>
+    <string name="extension_surface_in_app">In app</string>
+    <string name="extension_surface_overlay">Overlay</string>
+    <string name="extension_surface_both">Both</string>
+    <string name="extension_surface_none_hint">Extensions disabled. Rule switches to notify only.</string>
+    <string name="extension_in_app_profile_heading">Extend shared usage</string>
+    <string name="extension_in_app_per_app_heading">Extend per app</string>
     <string name="no_limit_today_short">No limit today</string>
     <string name="limit_usage_scope_label">Count usage</string>
     <string name="limit_usage_scope_per_app">Per app</string>
@@ -210,6 +221,7 @@
     <string name="max_extensions_per_day">Max extensions per day (empty = unlimited)</string>
     <string name="max_consecutive_extensions">Max consecutive extensions (empty = unlimited)</string>
     <string name="show_no_limit_today">Show \"No limit today\" button</string>
+    <string name="extension_overlay_only_hint">Overlay options below only affect the blocking overlay. In-app extensions are always available from Current usage.</string>
     <string name="profile_pin_enabled_hint">PIN is enabled via Rules → When opening an app → PIN.</string>
     <string name="profile_pin_disabled_hint">PIN is off. Enable it in Rules → When opening an app → PIN.</string>
     <string name="profile_pin_rules_hint">Saving stores the PIN. Enable or disable PIN in Rules.</string>
@@ -364,6 +376,15 @@
     <string name="duration_seconds">%1$ds</string>
     <string name="duration_infinity">∞</string>
     <string name="duration_zero_minutes">0m</string>
+    <string name="duration_invalid_minute_second">Minutes and seconds must be between 00 and 59.</string>
+    <string name="duration_exceeds_maximum">Duration must be at most %1$s.</string>
+    <string name="duration_exceeds_rolling_maximum">Manual entry supports up to %1$s. Use step buttons for larger values.</string>
+    <string name="duration_keypad_clear">Clear</string>
+    <string name="duration_keypad_display_a11y">Duration %1$s</string>
+    <string name="duration_keypad_digit_a11y">Digit %1$s</string>
+    <string name="duration_keypad_double_zero_a11y">Double zero</string>
+    <string name="duration_keypad_backspace_a11y">Backspace</string>
+    <string name="duration_keypad_clear_a11y">Clear duration</string>
     <string name="step_minus_5m">-5m</string>
     <string name="step_plus_5m">+5m</string>
 
@@ -419,4 +440,12 @@
 
     <!-- Widget -->
     <string name="widget_tap_to_open">Tap to open Gatekeep</string>
+    <string name="more_options">More options</string>
+    <string name="effective_policy_now">Current policy</string>
+    <string name="schedule_segment_copy_format">%1$s (copy)</string>
+    <string name="extension_history">Extension history</string>
+    <string name="extension_history_subtitle">Recent extensions and overrides</string>
+    <string name="hud_app_label_content_description">Monitored app</string>
+    <string name="hud_time_content_description">Remaining time</string>
+    <string name="week_timeline">Week timeline</string>
 </resources>

@@ -29,6 +29,26 @@ object RuleEngine {
         }
 
         val schedulePolicy = context.resolvedSchedulePolicy
+
+        val focusBlock = FocusBlockManager.isBlocked(
+            pauses = context.pauses,
+            profileId = context.profile.id,
+            nowEpochMs = context.nowEpochMs,
+        )
+        if (focusBlock is FocusBlockManager.BlockCheck.Blocked) {
+            return RuleResult.Blocked(
+                reason = BlockReason.focusMode,
+                bypassAllowed = false,
+            )
+        }
+
+        if (context.focusModeUntilMs != null && context.nowEpochMs < context.focusModeUntilMs) {
+            return RuleResult.Blocked(
+                reason = BlockReason.focusMode,
+                bypassAllowed = false,
+            )
+        }
+
         if (schedulePolicy != null) {
             when (schedulePolicy.mode) {
                 SchedulePolicyMode.allow -> {
@@ -50,25 +70,6 @@ object RuleEngine {
         }
 
         val config = context.enforcementConfig
-
-        val focusBlock = FocusBlockManager.isBlocked(
-            pauses = context.pauses,
-            profileId = context.profile.id,
-            nowEpochMs = context.nowEpochMs,
-        )
-        if (focusBlock is FocusBlockManager.BlockCheck.Blocked) {
-            return RuleResult.Blocked(
-                reason = BlockReason.focusMode,
-                bypassAllowed = false,
-            )
-        }
-
-        if (context.focusModeUntilMs != null && context.nowEpochMs < context.focusModeUntilMs) {
-            return RuleResult.Blocked(
-                reason = BlockReason.focusMode,
-                bypassAllowed = false,
-            )
-        }
 
         val pauseCheck = PauseManager.isPaused(
             pauses = context.pauses,
