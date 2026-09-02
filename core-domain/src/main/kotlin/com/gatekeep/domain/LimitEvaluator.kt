@@ -21,9 +21,15 @@ object LimitEvaluator {
             )
         }
 
-        val dailyRemaining = limit.dailyLimitMs?.let { it + extensionBonus.dailyMs - usage.dailyMs }
-        val hourlyRemaining = limit.hourlyLimitMs?.let { it + extensionBonus.hourlyMs - usage.hourlyMs }
-        val weeklyRemaining = limit.weeklyLimitMs?.let { it + extensionBonus.weeklyMs - usage.weeklyMs }
+        val dailyRemaining = remainingForPeriod(
+            limit.dailyLimitMs, usage.dailyMs, extensionBonus.dailyMs, PeriodDuration.dayMs,
+        )
+        val hourlyRemaining = remainingForPeriod(
+            limit.hourlyLimitMs, usage.hourlyMs, extensionBonus.hourlyMs, PeriodDuration.hourMs,
+        )
+        val weeklyRemaining = remainingForPeriod(
+            limit.weeklyLimitMs, usage.weeklyMs, extensionBonus.weeklyMs, PeriodDuration.weekMs,
+        )
 
         if (dailyRemaining != null && dailyRemaining <= 0) {
             return LimitCheckResult.Blocked(com.gatekeep.domain.model.BlockReason.dailyLimit)
@@ -36,9 +42,10 @@ object LimitEvaluator {
         }
 
         val warning = when {
-            isNearLimit(limit.dailyLimitMs, usage.dailyMs, extensionBonus.dailyMs) ||
-                isNearLimit(limit.hourlyLimitMs, usage.hourlyMs, extensionBonus.hourlyMs) ||
-                isNearLimit(limit.weeklyLimitMs, usage.weeklyMs, extensionBonus.weeklyMs) -> WarningLevel.eightyPercent
+            isNearLimit(limit.dailyLimitMs, usage.dailyMs, extensionBonus.dailyMs, PeriodDuration.dayMs) ||
+                isNearLimit(limit.hourlyLimitMs, usage.hourlyMs, extensionBonus.hourlyMs, PeriodDuration.hourMs) ||
+                isNearLimit(limit.weeklyLimitMs, usage.weeklyMs, extensionBonus.weeklyMs, PeriodDuration.weekMs) ->
+                WarningLevel.eightyPercent
             else -> WarningLevel.none
         }
 
@@ -50,11 +57,25 @@ object LimitEvaluator {
         )
     }
 
-    private fun isNearLimit(limitMs: Long?, usedMs: Long, bonusMs: Long = 0L): Boolean {
-        if (limitMs == null || limitMs <= 0) return false
-        val effectiveLimit = limitMs + bonusMs
+    private fun remainingForPeriod(
+        limitMs: Long?,
+        usedMs: Long,
+        bonusMs: Long,
+        periodMs: Long,
+    ): Long? {
+        val effective = effectiveCap(limitMs, bonusMs, periodMs) ?: return null
+        return effective - usedMs
+    }
+
+    private fun isNearLimit(limitMs: Long?, usedMs: Long, bonusMs: Long, periodMs: Long): Boolean {
+        val effectiveLimit = effectiveCap(limitMs, bonusMs, periodMs) ?: return false
         if (effectiveLimit <= 0) return false
         return usedMs.toDouble() / effectiveLimit >= 0.8
+    }
+
+    private fun effectiveCap(limitMs: Long?, bonusMs: Long, periodMs: Long): Long? {
+        if (limitMs == null || limitMs <= 0) return null
+        return PeriodDuration.unlimitedIfAtLeastPeriod(limitMs + bonusMs, periodMs)
     }
 
     sealed class LimitCheckResult {

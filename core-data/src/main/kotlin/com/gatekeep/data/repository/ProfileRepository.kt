@@ -44,7 +44,56 @@ class ProfileRepository(
         profileDao.observeActive().map { it?.toDomain() }
 
     suspend fun createProfile(name: String): Long {
-        return profileDao.insert(com.gatekeep.data.local.entity.ProfileEntity(name = name, isActive = false))
+        val sortOrder = (profileDao.maxSortOrder() ?: -1) + 1
+        return profileDao.insert(
+            com.gatekeep.data.local.entity.ProfileEntity(name = name, isActive = false, sortOrder = sortOrder),
+        )
+    }
+
+    @Transaction
+    suspend fun reorderProfiles(orderedIds: List<Long>) {
+        orderedIds.forEachIndexed { index, id ->
+            profileDao.setSortOrder(id, index)
+        }
+    }
+
+    @Transaction
+    suspend fun duplicateProfile(id: Long, copyName: String): Long? {
+        val source = profileDao.getById(id) ?: return null
+        val ordered = profileDao.getAll()
+        val insertAt = ordered.indexOfFirst { it.id == id }.let { index ->
+            if (index < 0) ordered.size else index + 1
+        }
+        val newId = profileDao.insert(
+            source.copy(id = 0, name = copyName, isActive = false, sortOrder = insertAt),
+        )
+
+        monitoredAppDao.getForProfile(id).forEach { app ->
+            monitoredAppDao.upsert(app.copy(profileId = newId))
+        }
+        appLimitDao.getForProfile(id).forEach { limit ->
+            appLimitDao.upsert(limit.copy(profileId = newId))
+        }
+
+        val segmentIdMap = mutableMapOf<Long, Long>()
+        scheduleSegmentDao.getForProfile(id).forEach { segment ->
+            val newSegmentId = scheduleSegmentDao.insert(segment.copy(id = 0, profileId = newId))
+            segmentIdMap[segment.id] = newSegmentId
+        }
+        scheduleWindowDao.getForProfile(id).forEach { window ->
+            scheduleWindowDao.insert(
+                window.copy(
+                    id = 0,
+                    profileId = newId,
+                    segmentId = window.segmentId?.let { segmentIdMap[it] },
+                ),
+            )
+        }
+
+        val ids = ordered.map { it.id }.toMutableList()
+        ids.add(insertAt, newId)
+        reorderProfiles(ids)
+        return newId
     }
 
     suspend fun toggleProfileActive(id: Long, active: Boolean) {

@@ -690,6 +690,42 @@ class LimitEvaluatorTest {
             (result as LimitEvaluator.LimitCheckResult.Allowed).remainingDailyMs,
         )
     }
+
+    @Test
+    fun `hourly bonus at or over an hour is not enforced`() {
+        val limit = AppLimit(1, "com.test", hourlyLimitMs = 50 * 60_000L, enabled = true)
+        val result = LimitEvaluator.evaluate(
+            limit,
+            UsageSnapshot(hourlyMs = 50 * 60_000L),
+            LimitExtensionBonus(hourlyMs = 15 * 60_000L),
+        )
+        assertTrue(result is LimitEvaluator.LimitCheckResult.Allowed)
+        assertNull((result as LimitEvaluator.LimitCheckResult.Allowed).remainingHourlyMs)
+    }
+
+    @Test
+    fun `daily bonus at or over a day is not enforced`() {
+        val limit = AppLimit(1, "com.test", dailyLimitMs = 20 * PeriodDuration.hourMs, enabled = true)
+        val result = LimitEvaluator.evaluate(
+            limit,
+            UsageSnapshot(dailyMs = 20 * PeriodDuration.hourMs),
+            LimitExtensionBonus(dailyMs = 5 * PeriodDuration.hourMs),
+        )
+        assertTrue(result is LimitEvaluator.LimitCheckResult.Allowed)
+        assertNull((result as LimitEvaluator.LimitCheckResult.Allowed).remainingDailyMs)
+    }
+
+    @Test
+    fun `weekly bonus at or over a week is not enforced`() {
+        val limit = AppLimit(1, "com.test", weeklyLimitMs = 6 * PeriodDuration.dayMs, enabled = true)
+        val result = LimitEvaluator.evaluate(
+            limit,
+            UsageSnapshot(weeklyMs = 6 * PeriodDuration.dayMs),
+            LimitExtensionBonus(weeklyMs = PeriodDuration.dayMs),
+        )
+        assertTrue(result is LimitEvaluator.LimitCheckResult.Allowed)
+        assertNull((result as LimitEvaluator.LimitCheckResult.Allowed).remainingWeeklyMs)
+    }
 }
 
 class FocusBlockManagerTest {

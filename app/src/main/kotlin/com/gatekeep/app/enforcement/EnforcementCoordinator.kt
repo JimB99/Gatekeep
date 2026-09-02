@@ -11,6 +11,7 @@ import com.gatekeep.app.util.withAppLocale
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
+import com.gatekeep.domain.EffectiveLimitDisplay
 import com.gatekeep.domain.EnforcementPollInterval
 import com.gatekeep.domain.ExtensionGrantEngine
 import com.gatekeep.domain.ExtensionGrantSource
@@ -18,6 +19,7 @@ import com.gatekeep.domain.ExtensionDenialReason
 import com.gatekeep.domain.ExtensionPolicyEvaluator
 import com.gatekeep.domain.ExtensionRequestEvaluator
 import com.gatekeep.domain.PauseManager
+import com.gatekeep.domain.PeriodDuration
 import com.gatekeep.domain.ProfileMergeEngine
 import com.gatekeep.domain.RuleEngine
 import com.gatekeep.domain.SessionTracker
@@ -33,6 +35,8 @@ import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.OnSessionLimitAction
+import com.gatekeep.domain.model.Pause
+import com.gatekeep.domain.model.PauseType
 import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.RuleEvaluationContext
 import com.gatekeep.domain.model.RuleResult
@@ -102,10 +106,14 @@ class EnforcementCoordinator @Inject constructor(
     private var dailyDeadlineMs: Long? = null
     private var hourlyDeadlineMs: Long? = null
     private var weeklyDeadlineMs: Long? = null
+    private var graceDeadlineMs: Long? = null
+    private var lastHudRefreshMs: Long = 0
     private var countdownDailyLimitMs: Long? = null
     private var countdownHourlyLimitMs: Long? = null
     private var countdownWeeklyLimitMs: Long? = null
     private var countdownUsedTodayMs: Long? = null
+    private var countdownHourlyUsedMs: Long? = null
+    private var countdownWeeklyUsedMs: Long? = null
     private var countdownAppLabel: String? = null
     private var countdownPackageName: String? = null
     private var enforcementLoopRunnable: Runnable? = null
@@ -650,10 +658,14 @@ class EnforcementCoordinator @Inject constructor(
         dailyDeadlineMs = null
         hourlyDeadlineMs = null
         weeklyDeadlineMs = null
+        graceDeadlineMs = null
+        lastHudRefreshMs = 0
         countdownDailyLimitMs = null
         countdownHourlyLimitMs = null
         countdownWeeklyLimitMs = null
         countdownUsedTodayMs = null
+        countdownHourlyUsedMs = null
+        countdownWeeklyUsedMs = null
         countdownAppLabel = null
         countdownPackageName = null
         showCountdownNotification = false
@@ -925,25 +937,54 @@ class EnforcementCoordinator @Inject constructor(
         when (result) {
             is RuleResult.Allowed -> {
                 previousSessionStartMs = sessionForEval.sessionStartEpochMs
-                val pauseAllowsUsage = PauseManager.isPaused(
+                val pauseCheck = PauseManager.isPaused(
                     pauses = pauses,
                     profileId = primaryProfile.id,
                     packageName = packageName,
                     nowEpochMs = now,
-                ) is PauseManager.PauseCheck.Paused
-                val remainingSessionMs = if (pauseAllowsUsage) {
-                    null
-                } else {
-                    mergedLimit?.let { limit ->
-                        when (val sessionCheck = SessionTracker.evaluateSession(limit, sessionForEval, now)) {
-                            is SessionTracker.SessionCheckResult.Allowed -> sessionCheck.remainingSessionMs
-                            else -> result.remainingSessionMs
-                        }
-                    } ?: result.remainingSessionMs
-                }
+                )
+                val pauseAllowsUsage = pauseCheck is PauseManager.PauseCheck.Paused
+                val remainingPauseMs = (pauseCheck as? PauseManager.PauseCheck.Paused)
+                    ?.pause
+                    ?.untilEpochMs
+                    ?.let { (it - now).coerceAtLeast(0) }
+                val remainingSessionMs = mergedLimit?.let { limit ->
+                    when (val sessionCheck = SessionTracker.evaluateSession(limit, sessionForEval, now)) {
+                        is SessionTracker.SessionCheckResult.Allowed -> sessionCheck.remainingSessionMs
+                        else -> result.remainingSessionMs
+                    }
+                } ?: result.remainingSessionMs
                 val countdownDailyMs = if (pauseAllowsUsage) null else result.remainingDailyMs
                 val countdownHourlyMs = if (pauseAllowsUsage) null else result.remainingHourlyMs
                 val countdownWeeklyMs = if (pauseAllowsUsage) null else result.remainingWeeklyMs
+                val sharedPool = primaryProfile.limitUsageScope == LimitUsageScope.sharedPool
+                val graceUntil = ExtensionGrantEngine.activeGraceUntilEpochMs(
+                    pauses = pauses,
+                    profileId = primaryProfile.id,
+                    packageName = packageName,
+                    nowEpochMs = now,
+                    sharedPool = sharedPool,
+                )
+                val graceRemaining = graceUntil?.let { (it - now).coerceAtLeast(0) }
+                val noLimitToday = isNoLimitTodayActive(pauses, primaryProfile.id, packageName, now, sharedPool)
+                val dailyUsed = mergedLimit?.dailyLimitMs?.let { usage.dailyMs }
+                val hourlyUsed = mergedLimit?.hourlyLimitMs?.let { usage.hourlyMs }
+                val weeklyUsed = mergedLimit?.weeklyLimitMs?.let { usage.weeklyMs }
+                val dailyDisplayLimit = mergedLimit?.dailyLimitMs?.let { base ->
+                    EffectiveLimitDisplay.effectiveLimitMs(
+                        base, usage.dailyMs, limitExtensionBonus.dailyMs, graceRemaining, noLimitToday, PeriodDuration.dayMs,
+                    )
+                }
+                val hourlyDisplayLimit = mergedLimit?.hourlyLimitMs?.let { base ->
+                    EffectiveLimitDisplay.effectiveLimitMs(
+                        base, usage.hourlyMs, limitExtensionBonus.hourlyMs, graceRemaining, noLimitToday, PeriodDuration.hourMs,
+                    )
+                }
+                val weeklyDisplayLimit = mergedLimit?.weeklyLimitMs?.let { base ->
+                    EffectiveLimitDisplay.effectiveLimitMs(
+                        base, usage.weeklyMs, limitExtensionBonus.weeklyMs, graceRemaining, noLimitToday, PeriodDuration.weekMs,
+                    )
+                }
                 maybeShowWarning(packageName, appLabel, result.warningLevel, settings.warningAlertsEnabled, now)
                 if (result.notifyLimitReached) {
                     val notifyReason = result.notifyLimitReason ?: BlockReason.dailyLimit
@@ -988,13 +1029,6 @@ class EnforcementCoordinator @Inject constructor(
                     mainHandler.post { blockOverlay.removeAfterResolution() }
                 }
                 if (settings.showSessionTimerNotification) {
-                    val dailyLimit = mergedLimit?.dailyLimitMs
-                    val hourlyLimit = mergedLimit?.hourlyLimitMs
-                    val weeklyLimit = mergedLimit?.weeklyLimitMs
-                    val remainingDaily = countdownDailyMs
-                    val usedToday = if (dailyLimit != null && remainingDaily != null) {
-                        (dailyLimit - remainingDaily).coerceAtLeast(0)
-                    } else null
                     startEnforcementLoop(
                         appLabel = appLabel,
                         packageName = packageName,
@@ -1002,10 +1036,13 @@ class EnforcementCoordinator @Inject constructor(
                         remainingSessionMs = remainingSessionMs,
                         remainingHourlyMs = countdownHourlyMs,
                         remainingWeeklyMs = countdownWeeklyMs,
-                        dailyLimitMs = dailyLimit,
-                        hourlyLimitMs = hourlyLimit,
-                        weeklyLimitMs = weeklyLimit,
-                        usedTodayMs = usedToday,
+                        remainingPauseMs = remainingPauseMs,
+                        dailyLimitMs = dailyDisplayLimit,
+                        hourlyLimitMs = hourlyDisplayLimit,
+                        weeklyLimitMs = weeklyDisplayLimit,
+                        usedTodayMs = dailyUsed,
+                        hourlyUsedMs = hourlyUsed,
+                        weeklyUsedMs = weeklyUsed,
                         showNotification = true,
                     )
                 } else {
@@ -1016,10 +1053,13 @@ class EnforcementCoordinator @Inject constructor(
                         remainingSessionMs = remainingSessionMs,
                         remainingHourlyMs = countdownHourlyMs,
                         remainingWeeklyMs = countdownWeeklyMs,
-                        dailyLimitMs = mergedLimit?.dailyLimitMs,
-                        hourlyLimitMs = mergedLimit?.hourlyLimitMs,
-                        weeklyLimitMs = mergedLimit?.weeklyLimitMs,
-                        usedTodayMs = null,
+                        remainingPauseMs = remainingPauseMs,
+                        dailyLimitMs = dailyDisplayLimit,
+                        hourlyLimitMs = hourlyDisplayLimit,
+                        weeklyLimitMs = weeklyDisplayLimit,
+                        usedTodayMs = dailyUsed,
+                        hourlyUsedMs = hourlyUsed,
+                        weeklyUsedMs = weeklyUsed,
                         showNotification = false,
                     )
                 }
@@ -1133,10 +1173,13 @@ class EnforcementCoordinator @Inject constructor(
         remainingSessionMs: Long?,
         remainingHourlyMs: Long?,
         remainingWeeklyMs: Long?,
+        remainingPauseMs: Long?,
         dailyLimitMs: Long?,
         hourlyLimitMs: Long?,
         weeklyLimitMs: Long?,
         usedTodayMs: Long?,
+        hourlyUsedMs: Long?,
+        weeklyUsedMs: Long?,
         showNotification: Boolean,
     ) {
         enforcementLoopRunnable?.let { mainHandler.removeCallbacks(it) }
@@ -1145,6 +1188,8 @@ class EnforcementCoordinator @Inject constructor(
         dailyDeadlineMs = remainingDailyMs?.takeIf { it > 0 }?.let { now + it }
         hourlyDeadlineMs = remainingHourlyMs?.takeIf { it > 0 }?.let { now + it }
         weeklyDeadlineMs = remainingWeeklyMs?.takeIf { it > 0 }?.let { now + it }
+        graceDeadlineMs = remainingPauseMs?.takeIf { it > 0 }?.let { now + it }
+        lastHudRefreshMs = now
 
         countdownAppLabel = appLabel
         countdownPackageName = packageName
@@ -1154,6 +1199,8 @@ class EnforcementCoordinator @Inject constructor(
         countdownHourlyLimitMs = hourlyLimitMs
         countdownWeeklyLimitMs = weeklyLimitMs
         countdownUsedTodayMs = usedTodayMs
+        countdownHourlyUsedMs = hourlyUsedMs
+        countdownWeeklyUsedMs = weeklyUsedMs
         showCountdownNotification = showNotification
 
         if (showNotification) {
@@ -1173,6 +1220,7 @@ class EnforcementCoordinator @Inject constructor(
                         dailyDeadlineMs,
                         hourlyDeadlineMs,
                         weeklyDeadlineMs,
+                        graceDeadlineMs,
                     ).any { nowMs >= it }
                     if (deadlineReached) {
                         scope.launch { evaluate(pkg) }
@@ -1192,6 +1240,8 @@ class EnforcementCoordinator @Inject constructor(
                         )
                     if (!inForeground) {
                         stopEnforcementLoop()
+                    } else if (showCountdownNotification) {
+                        mainHandler.postDelayed(this, EnforcementPollInterval.FINE_INTERVAL_MS)
                     }
                     return
                 }
@@ -1206,7 +1256,7 @@ class EnforcementCoordinator @Inject constructor(
     private fun enforcementLoopDelayMs(nowMs: Long): Long? =
         EnforcementPollInterval.enforcementLoopIntervalMs(
             nowMs,
-            listOf(sessionDeadlineMs, dailyDeadlineMs, hourlyDeadlineMs, weeklyDeadlineMs),
+            listOf(sessionDeadlineMs, dailyDeadlineMs, hourlyDeadlineMs, weeklyDeadlineMs, graceDeadlineMs),
         )
 
     private fun pollForegroundIfChanged() {
@@ -1255,17 +1305,23 @@ class EnforcementCoordinator @Inject constructor(
                 countdownNotificationTitle = it
             }
         val now = System.currentTimeMillis()
+        val elapsed = if (lastHudRefreshMs > 0) (now - lastHudRefreshMs).coerceAtLeast(0) else 0
+        lastHudRefreshMs = now
         val sessionRemaining = sessionDeadlineMs
             ?.let { (it - now).coerceAtLeast(0) }
             ?.takeIf { it > 0 }
         val dailyRemaining = dailyDeadlineMs?.let { (it - now).coerceAtLeast(0) }
-        countdownUsedTodayMs = if (countdownDailyLimitMs != null && dailyRemaining != null) {
-            (countdownDailyLimitMs!! - dailyRemaining).coerceAtLeast(0)
-        } else {
-            countdownUsedTodayMs
-        }
         val hourlyRemaining = hourlyDeadlineMs?.let { (it - now).coerceAtLeast(0) }
         val weeklyRemaining = weeklyDeadlineMs?.let { (it - now).coerceAtLeast(0) }
+        countdownUsedTodayMs = tickHudUsedMs(
+            countdownUsedTodayMs, dailyRemaining, countdownDailyLimitMs, elapsed,
+        )
+        countdownHourlyUsedMs = tickHudUsedMs(
+            countdownHourlyUsedMs, hourlyRemaining, countdownHourlyLimitMs, elapsed,
+        )
+        countdownWeeklyUsedMs = tickHudUsedMs(
+            countdownWeeklyUsedMs, weeklyRemaining, countdownWeeklyLimitMs, elapsed,
+        )
         val shown = notificationHelper.showCountdown(
             title = title,
             hud = UsageHudInfo(
@@ -1275,8 +1331,10 @@ class EnforcementCoordinator @Inject constructor(
                 dailyUsedMs = countdownUsedTodayMs,
                 hourlyRemainingMs = hourlyRemaining,
                 hourlyLimitMs = countdownHourlyLimitMs,
+                hourlyUsedMs = countdownHourlyUsedMs,
                 weeklyRemainingMs = weeklyRemaining,
                 weeklyLimitMs = countdownWeeklyLimitMs,
+                weeklyUsedMs = countdownWeeklyUsedMs,
             ),
             lastBody = lastNotificationBody,
             onBodyPosted = { lastNotificationBody = it },
@@ -1295,8 +1353,20 @@ class EnforcementCoordinator @Inject constructor(
         usedTodayMs: Long?,
     ) {
         startEnforcementLoop(
-            appLabel, packageName, remainingDailyMs, remainingSessionMs,
-            null, null, dailyLimitMs, null, null, usedTodayMs, showNotification = true,
+            appLabel = appLabel,
+            packageName = packageName,
+            remainingDailyMs = remainingDailyMs,
+            remainingSessionMs = remainingSessionMs,
+            remainingHourlyMs = null,
+            remainingWeeklyMs = null,
+            remainingPauseMs = null,
+            dailyLimitMs = dailyLimitMs,
+            hourlyLimitMs = null,
+            weeklyLimitMs = null,
+            usedTodayMs = usedTodayMs,
+            hourlyUsedMs = null,
+            weeklyUsedMs = null,
+            showNotification = true,
         )
     }
 
@@ -1578,6 +1648,23 @@ class EnforcementCoordinator @Inject constructor(
                 hourlyMs = usageRepository.sumExtensionMsForPackageSince(profileId, packageName, hourStart),
                 weeklyMs = usageRepository.sumExtensionMsForPackageSince(profileId, packageName, weekStart),
             )
+        }
+    }
+
+    private fun isNoLimitTodayActive(
+        pauses: List<Pause>,
+        profileId: Long,
+        packageName: String,
+        now: Long,
+        sharedPool: Boolean,
+    ): Boolean {
+        val active = pauses.filter {
+            it.untilEpochMs > now && it.type == PauseType.noLimitToday
+        }
+        return if (sharedPool) {
+            active.any { it.profileId == profileId && it.packageName == null }
+        } else {
+            active.any { it.profileId == profileId && it.packageName == packageName }
         }
     }
 

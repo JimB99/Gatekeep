@@ -119,6 +119,9 @@ fun ProfileCurrentUsageScreen(
                     }
                 },
                 enabled = true,
+                title = stringResource(R.string.extension_reset_title),
+                help = stringResource(R.string.extension_reset_help),
+                action = stringResource(R.string.extension_reset_action),
             )
 
             val usage = currentUsage
@@ -219,29 +222,17 @@ private fun UsageLimitBar(row: CurrentUsageLimitRow) {
     val label = limitKindLabel(row.kind)
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium)
-        if (row.noLimitToday) {
-            Text(
-                stringResource(R.string.no_limit_today_short),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else if (row.effectiveLimitMs != null) {
-            Text(
-                "${formatDurationMs(row.usageMs)} / ${formatDurationMs(row.effectiveLimitMs)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            val scale = row.effectiveLimitMs.coerceAtLeast(1L)
+        Text(
+            "${formatDurationMs(row.usageMs)} / ${formatDurationMs(row.effectiveLimitMs)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        row.effectiveLimitMs?.let { limitMs ->
+            val scale = limitMs.coerceAtLeast(1L)
             LinearProgressIndicator(
                 progress = { (row.usageMs.toFloat() / scale).coerceIn(0f, 1f) },
                 drawStopIndicator = {},
                 modifier = Modifier.fillMaxWidth(),
-            )
-        } else {
-            Text(
-                formatDurationMs(row.usageMs),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -252,7 +243,6 @@ private fun limitKindLabel(kind: CurrentUsageLimitKind): String = when (kind) {
     CurrentUsageLimitKind.weekly -> stringResource(R.string.weekly)
     CurrentUsageLimitKind.daily -> stringResource(R.string.daily_limit)
     CurrentUsageLimitKind.hourly -> stringResource(R.string.limit_hourly_label)
-    CurrentUsageLimitKind.session -> stringResource(R.string.session_limit)
 }
 
 @Composable

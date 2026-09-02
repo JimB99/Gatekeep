@@ -60,6 +60,9 @@
     <string name="profile_current_usage_subtitle">Nutzung, Limits und Verlängerungen</string>
     <string name="extension_applied">Angewendet</string>
     <string name="extension_reset_done">Verlängerungen zurückgesetzt</string>
+    <string name="extension_reset_title">Verlängerungen zurücksetzen</string>
+    <string name="extension_reset_help">Entfernt extra Zeit und „Heute kein Limit“ für dieses Profil.</string>
+    <string name="extension_reset_action">Zurücksetzen</string>
     <string name="extension_one_hour">1 Std.</string>
     <string name="version_format">Version %1$s</string>
     <string name="version_full_format">Version %1$s (%2$d)</string>
@@ -128,6 +131,7 @@
     <string name="schedule_mode_default_short">Standard</string>
     <string name="schedule_mode_customize_short">Eigen</string>
     <string name="duplicate_schedule">Duplizieren</string>
+    <string name="duplicate_profile">Duplizieren</string>
     <string name="delete_schedule">Löschen</string>
     <string name="delete_schedule_title">Zeitplan löschen?</string>
     <string name="delete_schedule_message">„%1$s“ entfernen? Dies kann nicht rückgängig gemacht werden.</string>
@@ -428,6 +432,7 @@
     <string name="more_options">Weitere Optionen</string>
     <string name="effective_policy_now">Aktuelle Richtlinie</string>
     <string name="schedule_segment_copy_format">%1$s (Kopie)</string>
+    <string name="profile_copy_format">%1$s (Kopie)</string>
     <string name="hud_app_label_content_description">Überwachte App</string>
     <string name="hud_time_content_description">Verbleibende Zeit</string>
     <string name="week_timeline">Wochenübersicht</string>

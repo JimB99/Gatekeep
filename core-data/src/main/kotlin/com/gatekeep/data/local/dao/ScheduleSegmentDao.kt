@@ -14,6 +14,9 @@ interface ScheduleSegmentDao {
     @Query("SELECT * FROM schedule_segments WHERE profileId = :profileId ORDER BY sortOrder, id")
     fun observeForProfile(profileId: Long): Flow<List<ScheduleSegmentEntity>>
 
+    @Query("SELECT * FROM schedule_segments WHERE profileId = :profileId ORDER BY sortOrder, id")
+    suspend fun getForProfile(profileId: Long): List<ScheduleSegmentEntity>
+
     @Query("SELECT * FROM schedule_segments")
     fun observeAll(): Flow<List<ScheduleSegmentEntity>>
 

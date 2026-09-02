@@ -185,14 +185,17 @@ fun PauseResetBlock(
     onReset: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier,
+    title: String = stringResource(R.string.pause_reset_title),
+    help: String = stringResource(R.string.pause_reset_help),
+    action: String = stringResource(R.string.pause_reset_action),
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            stringResource(R.string.pause_reset_title),
+            title,
             style = MaterialTheme.typography.titleSmall,
         )
         Text(
-            stringResource(R.string.pause_reset_help),
+            help,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -201,7 +204,7 @@ fun PauseResetBlock(
             enabled = enabled,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(stringResource(R.string.pause_reset_action))
+            Text(action)
         }
     }
 }

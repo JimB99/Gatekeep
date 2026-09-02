@@ -23,9 +23,47 @@ data class UsageHudInfo(
     val dailyUsedMs: Long? = null,
     val hourlyRemainingMs: Long? = null,
     val hourlyLimitMs: Long? = null,
+    val hourlyUsedMs: Long? = null,
     val weeklyRemainingMs: Long? = null,
     val weeklyLimitMs: Long? = null,
+    val weeklyUsedMs: Long? = null,
 )
+
+enum class UsageHudBucket {
+    daily,
+    hourly,
+    weekly,
+}
+
+sealed class UsageHudLine {
+    data class Session(val remainingMs: Long) : UsageHudLine()
+    data class UsedOverLimit(
+        val bucket: UsageHudBucket,
+        val usedMs: Long,
+        val limitMs: Long?,
+    ) : UsageHudLine()
+}
+
+fun UsageHudInfo.countdownLines(): List<UsageHudLine> = buildList {
+    sessionRemainingMs?.takeIf { it > 0 }?.let { add(UsageHudLine.Session(it)) }
+    dailyUsedMs?.let { add(UsageHudLine.UsedOverLimit(UsageHudBucket.daily, it, dailyLimitMs)) }
+    hourlyUsedMs?.let { add(UsageHudLine.UsedOverLimit(UsageHudBucket.hourly, it, hourlyLimitMs)) }
+    weeklyUsedMs?.let { add(UsageHudLine.UsedOverLimit(UsageHudBucket.weekly, it, weeklyLimitMs)) }
+}
+
+fun tickHudUsedMs(
+    currentUsedMs: Long?,
+    remainingMs: Long?,
+    limitMs: Long?,
+    elapsedMs: Long,
+): Long? {
+    if (remainingMs != null && limitMs != null) {
+        return (limitMs - remainingMs).coerceAtLeast(0)
+    }
+    if (currentUsedMs == null) return null
+    val next = currentUsedMs + elapsedMs.coerceAtLeast(0)
+    return limitMs?.let { next.coerceAtMost(it) } ?: next
+}
 
 @Singleton
 class GatekeepNotificationHelper @Inject constructor(
@@ -87,42 +125,21 @@ class GatekeepNotificationHelper @Inject constructor(
     ): Boolean {
         val intent = Intent(context, MainActivity::class.java)
         val pending = PendingIntent.getActivity(context, 1, intent, PendingIntent.FLAG_IMMUTABLE)
-        val parts = buildList {
-            hud.sessionRemainingMs?.takeIf { it > 0 }?.let {
-                add(localizedContext.getString(R.string.hud_session_format, formatDurationMs(context, it)))
-            }
-            if (hud.dailyLimitMs != null && hud.dailyUsedMs != null) {
-                add(
-                    localizedContext.getString(
-                        R.string.hud_daily_used_format,
-                        formatDurationMs(context, hud.dailyUsedMs),
-                        formatDurationMs(context, hud.dailyLimitMs),
-                    ),
+        val parts = hud.countdownLines().map { line ->
+            when (line) {
+                is UsageHudLine.Session -> localizedContext.getString(
+                    R.string.hud_session_format,
+                    formatDurationMs(context, line.remainingMs),
                 )
-            } else {
-                hud.dailyRemainingMs?.let {
-                    add(localizedContext.getString(R.string.hud_daily_left_format, formatDurationMs(context, it)))
+                is UsageHudLine.UsedOverLimit -> {
+                    val used = formatDurationMs(context, line.usedMs)
+                    val limit = formatDurationMs(context, line.limitMs)
+                    when (line.bucket) {
+                        UsageHudBucket.daily -> localizedContext.getString(R.string.hud_daily_used_format, used, limit)
+                        UsageHudBucket.hourly -> localizedContext.getString(R.string.hud_hourly_format, used, limit)
+                        UsageHudBucket.weekly -> localizedContext.getString(R.string.hud_weekly_format, used, limit)
+                    }
                 }
-            }
-            if (hud.hourlyLimitMs != null && hud.hourlyRemainingMs != null) {
-                val used = (hud.hourlyLimitMs - hud.hourlyRemainingMs).coerceAtLeast(0)
-                add(
-                    localizedContext.getString(
-                        R.string.hud_hourly_format,
-                        formatDurationMs(context, used),
-                        formatDurationMs(context, hud.hourlyLimitMs),
-                    ),
-                )
-            }
-            if (hud.weeklyLimitMs != null && hud.weeklyRemainingMs != null) {
-                val used = (hud.weeklyLimitMs - hud.weeklyRemainingMs).coerceAtLeast(0)
-                add(
-                    localizedContext.getString(
-                        R.string.hud_weekly_format,
-                        formatDurationMs(context, used),
-                        formatDurationMs(context, hud.weeklyLimitMs),
-                    ),
-                )
             }
         }
         if (parts.isEmpty()) {

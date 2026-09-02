@@ -27,10 +27,10 @@ import com.gatekeep.data.repository.UsageRepository
 import com.gatekeep.domain.AppCategories
 import com.gatekeep.domain.EffectiveLimitDisplay
 import com.gatekeep.domain.ExtensionGrantEngine
+import com.gatekeep.domain.PeriodDuration
 import com.gatekeep.domain.PolicyTimelineResolver
 import com.gatekeep.domain.ProfileMergeEngine
 import com.gatekeep.domain.SchedulePolicyResolver
-import com.gatekeep.domain.SessionTracker
 import com.gatekeep.domain.StatsPeriodKind
 import com.gatekeep.domain.StatsPeriodLogic
 import com.gatekeep.domain.TimeBoundaries
@@ -141,6 +141,18 @@ class ProfilesHomeViewModel @Inject constructor(
         viewModelScope.launch {
             val id = profileRepository.createProfile(name)
             profileRepository.toggleProfileActive(id, true)
+        }
+    }
+
+    fun reorderProfiles(orderedIds: List<Long>) {
+        viewModelScope.launch { profileRepository.reorderProfiles(orderedIds) }
+    }
+
+    fun duplicateProfile(id: Long) {
+        viewModelScope.launch {
+            val profile = profiles.value.find { it.id == id } ?: return@launch
+            val copyName = context.getString(R.string.profile_copy_format, profile.name)
+            profileRepository.duplicateProfile(id, copyName)
         }
     }
 
@@ -357,7 +369,6 @@ class ProfileViewModel @Inject constructor(
         weekly,
         daily,
         hourly,
-        session,
     }
 
     data class CurrentUsageLimitRow(
@@ -408,7 +419,6 @@ class ProfileViewModel @Inject constructor(
             packageName: String,
             limit: AppLimit,
             usage: com.gatekeep.domain.model.UsageSnapshot,
-            sessionState: com.gatekeep.domain.model.SessionState?,
         ): List<CurrentUsageLimitRow> {
             val dailyBonus = if (sharedPool) {
                 usageRepository.sumExtensionMsForProfileSince(profileId, dayStart)
@@ -434,7 +444,6 @@ class ProfileViewModel @Inject constructor(
             )
             val graceRemaining = graceUntil?.let { (it - now).coerceAtLeast(0) }
             val noLimitToday = isNoLimitTodayActive(pauses, profileId, packageName, now, sharedPool)
-            val sessionUsage = SessionTracker.sessionDurationMs(sessionState, now)
 
             return buildList {
                 limit.weeklyLimitMs?.let { base ->
@@ -443,7 +452,12 @@ class ProfileViewModel @Inject constructor(
                             kind = CurrentUsageLimitKind.weekly,
                             usageMs = usage.weeklyMs,
                             effectiveLimitMs = EffectiveLimitDisplay.effectiveLimitMs(
-                                base, usage.weeklyMs, weeklyBonus, graceRemaining, noLimitToday,
+                                base,
+                                usage.weeklyMs,
+                                weeklyBonus,
+                                graceRemaining,
+                                noLimitToday,
+                                PeriodDuration.weekMs,
                             ),
                             noLimitToday = noLimitToday,
                         ),
@@ -455,7 +469,12 @@ class ProfileViewModel @Inject constructor(
                             kind = CurrentUsageLimitKind.daily,
                             usageMs = usage.dailyMs,
                             effectiveLimitMs = EffectiveLimitDisplay.effectiveLimitMs(
-                                base, usage.dailyMs, dailyBonus, graceRemaining, noLimitToday,
+                                base,
+                                usage.dailyMs,
+                                dailyBonus,
+                                graceRemaining,
+                                noLimitToday,
+                                PeriodDuration.dayMs,
                             ),
                             noLimitToday = noLimitToday,
                         ),
@@ -467,19 +486,12 @@ class ProfileViewModel @Inject constructor(
                             kind = CurrentUsageLimitKind.hourly,
                             usageMs = usage.hourlyMs,
                             effectiveLimitMs = EffectiveLimitDisplay.effectiveLimitMs(
-                                base, usage.hourlyMs, hourlyBonus, graceRemaining, noLimitToday,
-                            ),
-                            noLimitToday = noLimitToday,
-                        ),
-                    )
-                }
-                limit.sessionLimitMs?.let { base ->
-                    add(
-                        CurrentUsageLimitRow(
-                            kind = CurrentUsageLimitKind.session,
-                            usageMs = sessionUsage,
-                            effectiveLimitMs = EffectiveLimitDisplay.effectiveLimitMs(
-                                base, sessionUsage, 0L, graceRemaining, noLimitToday,
+                                base,
+                                usage.hourlyMs,
+                                hourlyBonus,
+                                graceRemaining,
+                                noLimitToday,
+                                PeriodDuration.hourMs,
                             ),
                             noLimitToday = noLimitToday,
                         ),
@@ -492,7 +504,7 @@ class ProfileViewModel @Inject constructor(
             val snapshots = apps.map { usageStatsCollector.getUsageSnapshot(it.packageName, now) }
             val usage = ProfileMergeEngine.sumUsageSnapshots(snapshots)
             val baseLimit = profile.toAppLimit(apps.first().packageName)
-            val sharedLimits = buildRows(apps.first().packageName, baseLimit, usage, null)
+            val sharedLimits = buildRows(apps.first().packageName, baseLimit, usage)
             _currentUsage.value = CurrentUsageState(
                 isSharedPool = true,
                 sharedLimits = sharedLimits,
@@ -503,11 +515,10 @@ class ProfileViewModel @Inject constructor(
                 val perAppLimit = profileRepository.getLimit(profileId, app.packageName)
                 val limit = ProfileMergeEngine.mergeProfileAndAppLimit(profile, app.packageName, perAppLimit)
                 val usage = usageStatsCollector.getUsageSnapshot(app.packageName, now)
-                val session = usageRepository.getSessionState(profileId, app.packageName)
                 CurrentUsageAppRow(
                     packageName = app.packageName,
                     label = app.label,
-                    limits = buildRows(app.packageName, limit, usage, session),
+                    limits = buildRows(app.packageName, limit, usage),
                 )
             }
             _currentUsage.value = CurrentUsageState(

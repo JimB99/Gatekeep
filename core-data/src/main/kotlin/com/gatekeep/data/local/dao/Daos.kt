@@ -18,8 +18,14 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ProfileDao {
-    @Query("SELECT * FROM profiles ORDER BY sortOrder")
+    @Query("SELECT * FROM profiles ORDER BY sortOrder, id")
     fun observeAll(): Flow<List<ProfileEntity>>
+
+    @Query("SELECT * FROM profiles ORDER BY sortOrder, id")
+    suspend fun getAll(): List<ProfileEntity>
+
+    @Query("SELECT MAX(sortOrder) FROM profiles")
+    suspend fun maxSortOrder(): Int?
 
     @Query("SELECT * FROM profiles WHERE isActive = 1")
     fun observeActiveProfiles(): Flow<List<ProfileEntity>>
@@ -36,6 +42,9 @@ interface ProfileDao {
     @Query("UPDATE profiles SET isActive = :active WHERE id = :id")
     suspend fun setProfileActive(id: Long, active: Boolean)
 
+    @Query("UPDATE profiles SET sortOrder = :sortOrder WHERE id = :id")
+    suspend fun setSortOrder(id: Long, sortOrder: Int)
+
     @Query("DELETE FROM profiles WHERE id = :id")
     suspend fun delete(id: Long)
 }
@@ -44,6 +53,9 @@ interface ProfileDao {
 interface MonitoredAppDao {
     @Query("SELECT * FROM monitored_apps WHERE profileId = :profileId")
     fun observeForProfile(profileId: Long): Flow<List<MonitoredAppEntity>>
+
+    @Query("SELECT * FROM monitored_apps WHERE profileId = :profileId")
+    suspend fun getForProfile(profileId: Long): List<MonitoredAppEntity>
 
     @Upsert
     suspend fun upsert(app: MonitoredAppEntity)
@@ -66,6 +78,9 @@ interface AppLimitDao {
     @Query("SELECT * FROM app_limits WHERE profileId = :profileId")
     fun observeForProfile(profileId: Long): Flow<List<AppLimitEntity>>
 
+    @Query("SELECT * FROM app_limits WHERE profileId = :profileId")
+    suspend fun getForProfile(profileId: Long): List<AppLimitEntity>
+
     @Query("SELECT * FROM app_limits WHERE profileId = :profileId AND packageName = :packageName")
     suspend fun get(profileId: Long, packageName: String): AppLimitEntity?
 
@@ -80,6 +95,9 @@ interface AppLimitDao {
 interface ScheduleWindowDao {
     @Query("SELECT * FROM schedule_windows WHERE profileId = :profileId")
     fun observeForProfile(profileId: Long): Flow<List<ScheduleWindowEntity>>
+
+    @Query("SELECT * FROM schedule_windows WHERE profileId = :profileId")
+    suspend fun getForProfile(profileId: Long): List<ScheduleWindowEntity>
 
     @Query("SELECT * FROM schedule_windows")
     fun observeAll(): Flow<List<ScheduleWindowEntity>>

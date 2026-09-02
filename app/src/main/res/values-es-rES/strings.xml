@@ -60,6 +60,9 @@
     <string name="profile_current_usage_subtitle">Uso, límites y extensiones</string>
     <string name="extension_applied">Aplicado</string>
     <string name="extension_reset_done">Extensiones restablecidas</string>
+    <string name="extension_reset_title">Restablecer extensiones</string>
+    <string name="extension_reset_help">Elimina el tiempo extra y «Sin límite hoy» de este perfil.</string>
+    <string name="extension_reset_action">Restablecer</string>
     <string name="extension_one_hour">1 h</string>
     <string name="version_format">Versión %1$s</string>
     <string name="version_full_format">Versión %1$s (%2$d)</string>
@@ -128,6 +131,7 @@
     <string name="schedule_mode_default_short">Predet.</string>
     <string name="schedule_mode_customize_short">Pers.</string>
     <string name="duplicate_schedule">Duplicar</string>
+    <string name="duplicate_profile">Duplicar</string>
     <string name="delete_schedule">Eliminar</string>
     <string name="delete_schedule_title">¿Eliminar horario?</string>
     <string name="delete_schedule_message">¿Eliminar «%1$s»? No se puede deshacer.</string>
@@ -428,6 +432,7 @@
     <string name="more_options">Más opciones</string>
     <string name="effective_policy_now">Política actual</string>
     <string name="schedule_segment_copy_format">%1$s (copia)</string>
+    <string name="profile_copy_format">%1$s (copia)</string>
     <string name="hud_app_label_content_description">App supervisada</string>
     <string name="hud_time_content_description">Tiempo restante</string>
     <string name="week_timeline">Vista semanal</string>

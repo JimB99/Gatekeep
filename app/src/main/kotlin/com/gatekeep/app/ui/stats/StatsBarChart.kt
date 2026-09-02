@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -85,7 +86,7 @@ fun StatsBarChart(
     val chartGap = 4.dp
     val hasSubLabels = buckets.any { it.subLabel != null }
     val labelRowHeight = when {
-        rotateLabels -> 56.dp
+        rotateLabels -> 72.dp
         hasSubLabels -> 44.dp
         else -> 28.dp
     }
@@ -124,7 +125,7 @@ fun StatsBarChart(
 
         Spacer(modifier = Modifier.width(chartGap))
 
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f).graphicsLayer { clip = false }) {
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -158,13 +159,20 @@ fun StatsBarChart(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(labelRowHeight)
-                    .padding(top = 4.dp, end = if (rotateLabels) 8.dp else 0.dp),
+                    .graphicsLayer { clip = false }
+                    .padding(
+                        top = 4.dp,
+                        start = if (rotateLabels) 8.dp else 0.dp,
+                        end = if (rotateLabels) 12.dp else 0.dp,
+                        bottom = if (rotateLabels) 8.dp else 0.dp,
+                    ),
             ) {
                 buckets.forEachIndexed { index, bucket ->
                     val showLabel = shouldShowLabel(index)
                     Column(
                         modifier = Modifier
                             .weight(1f)
+                            .graphicsLayer { clip = false }
                             .padding(horizontal = if (index == 0 || index == buckets.lastIndex) 0.dp else 1.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
@@ -175,16 +183,21 @@ fun StatsBarChart(
                                 color = axisLabelColor,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
-                                overflow = TextOverflow.Clip,
+                                overflow = TextOverflow.Visible,
                                 softWrap = false,
-                                modifier = if (rotateLabels) {
-                                    Modifier.graphicsLayer {
-                                        rotationZ = -45f
-                                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
-                                    }
-                                } else {
-                                    Modifier
-                                },
+                                modifier = Modifier
+                                    .wrapContentWidth(unbounded = true)
+                                    .then(
+                                        if (rotateLabels) {
+                                            Modifier.graphicsLayer {
+                                                clip = false
+                                                rotationZ = -45f
+                                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
+                                            }
+                                        } else {
+                                            Modifier
+                                        },
+                                    ),
                             )
                             bucket.subLabel?.let { sub ->
                                 Text(
@@ -193,6 +206,9 @@ fun StatsBarChart(
                                     color = axisLabelColor,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
+                                    overflow = TextOverflow.Visible,
+                                    softWrap = false,
+                                    modifier = Modifier.wrapContentWidth(unbounded = true),
                                 )
                             }
                         }

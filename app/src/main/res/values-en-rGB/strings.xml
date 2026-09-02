@@ -63,6 +63,9 @@
     <string name="profile_current_usage_subtitle">Usage, limits, and extensions</string>
     <string name="extension_applied">Applied</string>
     <string name="extension_reset_done">Extensions reset</string>
+    <string name="extension_reset_title">Reset extensions</string>
+    <string name="extension_reset_help">Clears extra time and “No limit today” for this profile.</string>
+    <string name="extension_reset_action">Reset</string>
     <string name="extension_one_hour">1h</string>
     <string name="version_format">Version %1$s</string>
     <string name="version_full_format">Version %1$s (%2$d)</string>
@@ -133,6 +136,7 @@
     <string name="schedule_mode_default_short">Default</string>
     <string name="schedule_mode_customize_short">Custom</string>
     <string name="duplicate_schedule">Duplicate</string>
+    <string name="duplicate_profile">Duplicate</string>
     <string name="delete_schedule">Delete</string>
     <string name="delete_schedule_title">Delete schedule?</string>
     <string name="delete_schedule_message">Remove \"%1$s\"? This cannot be undone.</string>
@@ -445,6 +449,7 @@
     <string name="more_options">More options</string>
     <string name="effective_policy_now">Current policy</string>
     <string name="schedule_segment_copy_format">%1$s (copy)</string>
+    <string name="profile_copy_format">%1$s (copy)</string>
     <string name="hud_app_label_content_description">Monitored app</string>
     <string name="hud_time_content_description">Remaining time</string>
     <string name="week_timeline">Weekly overview</string>
