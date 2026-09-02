@@ -150,7 +150,11 @@ data class UsageAggregateEntity(
 
 @Entity(
     tableName = "override_events",
-    indices = [Index("profileId")],
+    indices = [
+        Index("profileId"),
+        Index(value = ["profileId", "packageName", "method", "timestamp"]),
+        Index(value = ["profileId", "method", "timestamp"]),
+    ],
 )
 data class OverrideEventEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

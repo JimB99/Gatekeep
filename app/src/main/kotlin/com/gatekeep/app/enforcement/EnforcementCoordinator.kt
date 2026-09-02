@@ -648,9 +648,10 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private suspend fun applyScreenOffExclusion(screenOffDurationMs: Long) {
+        if (screenOffDurationMs <= 0 || previousProfileId <= 0) return
         val pkg = currentForegroundPackage ?: return
+        if (pkg in ignoredForegroundPackages || pkg == context.packageName) return
         val state = usageRepository.getSessionState(previousProfileId, pkg) ?: return
-        if (previousProfileId <= 0) return
         usageRepository.saveSessionState(
             SessionTracker.addExcludedTime(state, screenOffDurationMs),
             previousProfileId,
@@ -689,20 +690,23 @@ class EnforcementCoordinator @Inject constructor(
         }
         if (previousSessionStartMs > 0 && previousProfileId > 0) {
             if (now > previousSessionStartMs) {
-                usageRepository.recordSession(prev, previousProfileId, previousSessionStartMs, now)
+                val excluded = usageRepository.getSessionState(previousProfileId, prev)?.excludedMs ?: 0L
+                usageRepository.recordSession(
+                    packageName = prev,
+                    profileId = previousProfileId,
+                    startEpochMs = previousSessionStartMs,
+                    endEpochMs = now,
+                    excludedMs = excluded,
+                )
             }
         }
         val oldState = usageRepository.getSessionState(previousProfileId, prev)
         if (oldState != null && previousProfileId > 0) {
-            val now = System.currentTimeMillis()
             val onBreak = oldState.breakUntilEpochMs?.let { now < it } == true
             val updated = if (onBreak) {
                 oldState
             } else {
-                SessionTracker.startSession(prev, now).copy(
-                    excludedMs = oldState.excludedMs,
-                    frictionStartedAtEpochMs = oldState.frictionStartedAtEpochMs,
-                )
+                SessionTracker.startSession(prev, now)
             }
             usageRepository.saveSessionState(updated, previousProfileId)
         }

@@ -15,6 +15,7 @@ import com.gatekeep.domain.model.SchedulePolicyMode
 import com.gatekeep.domain.model.PolicySource
 import com.gatekeep.domain.model.ScheduleWindow
 import com.gatekeep.domain.model.UsageSnapshot
+import com.gatekeep.domain.model.WarningLevel
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -616,6 +617,78 @@ class SessionTrackerTest {
         assertTrue(session.sessionLimitNotified)
         val newSession = SessionTracker.startSession("com.test", now + 1000)
         assertFalse(newSession.sessionLimitNotified)
+    }
+
+    @Test
+    fun `screen-off exclusion does not consume session remaining`() {
+        val now = 1_000_000L
+        val sessionLimit = 15 * 60_000L
+        val session = SessionTracker.addExcludedTime(
+            SessionTracker.startSession("com.test", now - 5 * 60_000L),
+            5 * 60_000L,
+        )
+        val result = SessionTracker.evaluateSession(
+            AppLimit(1, "com.test", sessionLimitMs = sessionLimit),
+            session,
+            now,
+        )
+        assertTrue(result is SessionTracker.SessionCheckResult.Allowed)
+        assertEquals(
+            sessionLimit,
+            (result as SessionTracker.SessionCheckResult.Allowed).remainingSessionMs,
+        )
+    }
+
+    @Test
+    fun `leaving and starting a new session resets consecutive extensions`() {
+        val now = 1_000_000L
+        val used = SessionTracker.incrementConsecutiveExtensions(
+            SessionTracker.startSession("com.test", now),
+        )
+        assertEquals(1, used.consecutiveExtensionCount)
+        val nextSession = SessionTracker.startSession("com.test", now + 1)
+        assertEquals(0, nextSession.consecutiveExtensionCount)
+    }
+}
+
+class LimitEvaluatorTest {
+
+    @Test
+    fun `eighty percent warning uses effective limit including extension bonus`() {
+        val limit = AppLimit(1, "com.test", dailyLimitMs = 60 * 60_000L, enabled = true)
+        val usage = UsageSnapshot(dailyMs = 50 * 60_000L)
+        val withoutBonus = LimitEvaluator.evaluate(limit, usage)
+        assertTrue(withoutBonus is LimitEvaluator.LimitCheckResult.Allowed)
+        assertEquals(
+            WarningLevel.eightyPercent,
+            (withoutBonus as LimitEvaluator.LimitCheckResult.Allowed).warningLevel,
+        )
+
+        val withBonus = LimitEvaluator.evaluate(
+            limit,
+            usage,
+            LimitExtensionBonus(dailyMs = 20 * 60_000L),
+        )
+        assertTrue(withBonus is LimitEvaluator.LimitCheckResult.Allowed)
+        assertEquals(
+            WarningLevel.none,
+            (withBonus as LimitEvaluator.LimitCheckResult.Allowed).warningLevel,
+        )
+    }
+
+    @Test
+    fun `usage at base cap is still allowed when extension bonus remains`() {
+        val limit = AppLimit(1, "com.test", dailyLimitMs = 60 * 60_000L, enabled = true)
+        val result = LimitEvaluator.evaluate(
+            limit,
+            UsageSnapshot(dailyMs = 60 * 60_000L),
+            LimitExtensionBonus(dailyMs = 5 * 60_000L),
+        )
+        assertTrue(result is LimitEvaluator.LimitCheckResult.Allowed)
+        assertEquals(
+            5 * 60_000L,
+            (result as LimitEvaluator.LimitCheckResult.Allowed).remainingDailyMs,
+        )
     }
 }
 

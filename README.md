@@ -48,6 +48,14 @@ See [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Database upgrades
+
+Room migrations are explicit — the app does **not** use `fallbackToDestructiveMigration()`.
+If an upgrade fails schema validation (for example an index-name mismatch), GateKeep logs the
+error, deletes `gatekeep.db` (and WAL/SHM sidecars), and opens a fresh database once.
+Local enforcement history may reset after that recovery path. Profile backups from Settings
+are the way to keep configuration across a failed upgrade.
+
 ## Roadmap
 
 - [ ] **Week timeline view** on the Policy → Schedules tab (visual 7-day grid; list editor remains primary)

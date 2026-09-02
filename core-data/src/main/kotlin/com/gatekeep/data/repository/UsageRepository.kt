@@ -34,8 +34,11 @@ class UsageRepository(
         profileId: Long,
         startEpochMs: Long,
         endEpochMs: Long,
+        excludedMs: Long = 0,
     ) {
-        val duration = (endEpochMs - startEpochMs).coerceAtLeast(0)
+        val wallClock = (endEpochMs - startEpochMs).coerceAtLeast(0)
+        val duration = (wallClock - excludedMs.coerceAtLeast(0)).coerceAtLeast(0)
+        if (duration <= 0) return
         usageSessionDao.insert(
             UsageSessionEntity(
                 packageName = packageName,

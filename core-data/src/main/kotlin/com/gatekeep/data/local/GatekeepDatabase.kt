@@ -37,7 +37,7 @@ import com.gatekeep.data.local.entity.UsageSessionEntity
         SessionStateEntity::class,
     ],
     version = 13,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class GatekeepDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao

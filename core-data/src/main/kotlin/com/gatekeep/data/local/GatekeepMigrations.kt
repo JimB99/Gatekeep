@@ -4,6 +4,23 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 object GatekeepMigrations {
+
+    /**
+     * Every migration, in order. Single source of truth so the runtime database builder and the
+     * migration tests can never drift apart.
+     */
+    val ALL: Array<Migration>
+        get() = arrayOf(
+            MIGRATION_5_6,
+            MIGRATION_6_7,
+            MIGRATION_7_8,
+            MIGRATION_8_9,
+            MIGRATION_9_10,
+            MIGRATION_10_11,
+            MIGRATION_11_12,
+            MIGRATION_12_13,
+        )
+
     val MIGRATION_5_6 = object : Migration(5, 6) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL(
@@ -203,13 +220,13 @@ object GatekeepMigrations {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL(
                 """
-                CREATE INDEX IF NOT EXISTS index_override_events_profile_package_method_timestamp
+                CREATE INDEX IF NOT EXISTS index_override_events_profileId_packageName_method_timestamp
                 ON override_events(profileId, packageName, method, timestamp)
                 """.trimIndent(),
             )
             db.execSQL(
                 """
-                CREATE INDEX IF NOT EXISTS index_override_events_profile_method_timestamp
+                CREATE INDEX IF NOT EXISTS index_override_events_profileId_method_timestamp
                 ON override_events(profileId, method, timestamp)
                 """.trimIndent(),
             )

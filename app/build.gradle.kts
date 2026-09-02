@@ -15,8 +15,8 @@ android {
         applicationId = "com.gatekeep.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 17
-        versionName = "3.6.0"
+        versionCode = 18
+        versionName = "3.6.1"
         ndk {
             abiFilters += "arm64-v8a"
         }

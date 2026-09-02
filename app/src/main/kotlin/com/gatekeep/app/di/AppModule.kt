@@ -1,9 +1,8 @@
 package com.gatekeep.app.di
 
 import android.content.Context
-import androidx.room.Room
+import com.gatekeep.data.local.DatabaseBootstrap
 import com.gatekeep.data.local.GatekeepDatabase
-import com.gatekeep.data.local.GatekeepMigrations
 import com.gatekeep.app.enforcement.CountdownController
 import com.gatekeep.app.enforcement.ExtensionGrantUseCase
 import com.gatekeep.app.enforcement.SessionLifecycleService
@@ -29,20 +28,10 @@ object AppModule {
         @ApplicationContext context: Context,
         enforcementLog: EnforcementLog,
     ): GatekeepDatabase {
-        val db = Room.databaseBuilder(context, GatekeepDatabase::class.java, "gatekeep.db")
-            .addMigrations(
-                GatekeepMigrations.MIGRATION_5_6,
-                GatekeepMigrations.MIGRATION_6_7,
-                GatekeepMigrations.MIGRATION_7_8,
-                GatekeepMigrations.MIGRATION_8_9,
-                GatekeepMigrations.MIGRATION_9_10,
-                GatekeepMigrations.MIGRATION_10_11,
-                GatekeepMigrations.MIGRATION_11_12,
-                GatekeepMigrations.MIGRATION_12_13,
-            )
-            .build()
         enforcementLog.clearStaleMigrationErrors()
-        return db
+        return DatabaseBootstrap.open(context) { error ->
+            enforcementLog.logError("Database migration failed; recreating local database", error)
+        }
     }
 
     @Provides
