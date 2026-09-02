@@ -385,8 +385,8 @@ class EnforcementCoordinator @Inject constructor(
         }
     }
 
-    suspend fun grantExtensionForProfileAwait(profileId: Long, packageName: String, minutes: Int) {
-        grantExtensionForProfileInternal(
+    suspend fun grantExtensionForProfileAwait(profileId: Long, packageName: String, minutes: Int): Boolean {
+        return grantExtensionForProfileInternal(
             profileId = profileId,
             packageName = packageName,
             minutes = minutes,
@@ -401,10 +401,10 @@ class EnforcementCoordinator @Inject constructor(
         minutes: Int,
         source: ExtensionGrantSource,
         blockedReason: BlockReason?,
-    ) {
+    ): Boolean {
         try {
             val profile = profileRepository.observeProfiles().first().find { it.id == profileId }
-                ?: return
+                ?: return false
             val dayStart = usageStatsCollector.dayStartEpochMs()
             val consecutive = consecutiveExtensionsFor(profileId, packageName)
             val decision = extensionGrantUseCase.evaluate(
@@ -435,6 +435,7 @@ class EnforcementCoordinator @Inject constructor(
                         val generation = blockGeneration
                         presentBlockOverlay(request, generation)
                     }
+                    return false
                 }
                 is ExtensionPolicyEvaluator.ExtensionDecision.Allowed -> {
                     applyExtensionGrant(
@@ -445,13 +446,16 @@ class EnforcementCoordinator @Inject constructor(
                         blockedReason = blockedReason,
                     )
                     incrementConsecutiveExtensions(profileId, packageName)
+                    return true
                 }
                 is ExtensionPolicyEvaluator.ExtensionDecision.NoLimitToday -> {
                     grantNoLimitTodayForProfile(profileId, packageName)
+                    return true
                 }
             }
         } catch (e: Exception) {
             enforcementLog.logError("Grant extension failed", e)
+            return false
         }
     }
 
@@ -522,6 +526,14 @@ class EnforcementCoordinator @Inject constructor(
         blockedReason: BlockReason?,
     ) {
         val now = System.currentTimeMillis()
+        val pauses = usageRepository.observeActivePauses(now).first()
+        val existingGraceUntil = ExtensionGrantEngine.activeGraceUntilEpochMs(
+            pauses = pauses,
+            profileId = profile.id,
+            packageName = packageName,
+            nowEpochMs = now,
+            sharedPool = profile.limitUsageScope == LimitUsageScope.sharedPool,
+        )
         val plan = ExtensionGrantEngine.planGrant(
             profileId = profile.id,
             packageName = packageName,
@@ -530,6 +542,7 @@ class EnforcementCoordinator @Inject constructor(
             limitUsageScope = profile.limitUsageScope,
             blockedReason = blockedReason,
             source = source,
+            existingGraceUntilEpochMs = existingGraceUntil,
         )
         blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
         blockOverlay.clearFrictionState()

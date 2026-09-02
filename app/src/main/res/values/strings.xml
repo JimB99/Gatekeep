@@ -123,6 +123,7 @@
     <string name="policy">Policy</string>
     <string name="policy_default_tab">Default</string>
     <string name="policy_schedules_tab">Schedules</string>
+    <string name="policy_week_tab">Week</string>
     <string name="policy_subtitle_format">%1$s · %2$d schedules</string>
     <string name="when_no_schedule_matches">When no schedule matches</string>
     <string name="when_no_schedule_matches_hint">Used when no schedule matches, or when a schedule is set to Default.</string>
@@ -443,9 +444,7 @@
     <string name="more_options">More options</string>
     <string name="effective_policy_now">Current policy</string>
     <string name="schedule_segment_copy_format">%1$s (copy)</string>
-    <string name="extension_history">Extension history</string>
-    <string name="extension_history_subtitle">Recent extensions and overrides</string>
     <string name="hud_app_label_content_description">Monitored app</string>
     <string name="hud_time_content_description">Remaining time</string>
-    <string name="week_timeline">Week timeline</string>
+    <string name="week_timeline">Weekly overview</string>
 </resources>

@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.R
@@ -82,7 +83,7 @@ fun ProfilePolicyScreen(
     onNavigateRulesSession: () -> Unit,
     onNavigateNoMatchLimits: () -> Unit,
     onNavigateNoMatchRules: () -> Unit,
-    onNavigateSegmentEditor: (Long?) -> Unit,
+    onNavigateSegmentEditor: (Long?, Int) -> Unit,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val profiles by viewModel.profiles.collectAsState()
@@ -135,12 +136,35 @@ fun ProfilePolicyScreen(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text(stringResource(R.string.policy_default_tab)) },
+                    text = {
+                        Text(
+                            stringResource(R.string.policy_default_tab),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text(stringResource(R.string.policy_schedules_tab)) },
+                    text = {
+                        Text(
+                            stringResource(R.string.policy_schedules_tab),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                )
+                Tab(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    text = {
+                        Text(
+                            stringResource(R.string.policy_week_tab),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
                 )
             }
             when (selectedTab) {
@@ -164,12 +188,17 @@ fun ProfilePolicyScreen(
                     segments = segments,
                     windows = windows,
                     profile = profile,
-                    locale = Locale.forLanguageTag(appSettings.languageTag.ifBlank { "en" }),
-                    onAddSchedule = { onNavigateSegmentEditor(null) },
-                    onEditSegment = { onNavigateSegmentEditor(it) },
+                    onAddSchedule = { onNavigateSegmentEditor(null, 1) },
+                    onEditSegment = { onNavigateSegmentEditor(it, 1) },
                     onToggleActive = { id, active -> viewModel.toggleSegmentActive(id, active) },
                     onDuplicate = { viewModel.duplicateSegment(it) },
                     onDelete = { viewModel.deleteSegment(it) },
+                )
+                else -> PolicyWeekTab(
+                    segments = segments,
+                    windows = windows,
+                    locale = Locale.forLanguageTag(appSettings.languageTag.ifBlank { "en" }),
+                    onSegmentSelected = { onNavigateSegmentEditor(it, 2) },
                 )
             }
         }
@@ -353,7 +382,6 @@ private fun PolicySchedulesTab(
     segments: List<ScheduleSegment>,
     windows: List<ScheduleWindow>,
     profile: Profile?,
-    locale: Locale,
     onAddSchedule: () -> Unit,
     onEditSegment: (Long) -> Unit,
     onToggleActive: (Long, Boolean) -> Unit,
@@ -375,13 +403,6 @@ private fun PolicySchedulesTab(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-        WeekTimelineView(
-            segments = segments,
-            windows = windows,
-            locale = locale,
-            onSegmentSelected = onEditSegment,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        )
         LazyColumn(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -480,6 +501,28 @@ private fun PolicySchedulesTab(
                     Text(stringResource(R.string.cancel))
                 }
             },
+        )
+    }
+}
+
+@Composable
+private fun PolicyWeekTab(
+    segments: List<ScheduleSegment>,
+    windows: List<ScheduleWindow>,
+    locale: Locale,
+    onSegmentSelected: (Long) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
+        WeekTimelineView(
+            segments = segments,
+            windows = windows,
+            locale = locale,
+            onSegmentSelected = onSegmentSelected,
         )
     }
 }

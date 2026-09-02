@@ -2,6 +2,8 @@ package com.gatekeep.domain
 
 import com.gatekeep.domain.model.BlockReason
 import com.gatekeep.domain.model.LimitUsageScope
+import com.gatekeep.domain.model.Pause
+import com.gatekeep.domain.model.PauseType
 
 enum class ExtensionGrantSource {
     overlay,
@@ -29,9 +31,14 @@ object ExtensionGrantEngine {
         limitUsageScope: LimitUsageScope,
         blockedReason: BlockReason?,
         source: ExtensionGrantSource,
+        existingGraceUntilEpochMs: Long? = null,
     ): GrantPlan {
         val extensionMs = minutes.toLong() * 60_000L
-        val graceUntil = nowEpochMs + extensionMs
+        val graceUntil = stackedGraceUntilEpochMs(
+            nowEpochMs = nowEpochMs,
+            extensionMs = extensionMs,
+            existingGraceUntilEpochMs = existingGraceUntilEpochMs,
+        )
         val isSessionBlock = blockedReason in setOf(
             BlockReason.sessionLimit,
             BlockReason.onBreak,
@@ -95,6 +102,33 @@ object ExtensionGrantEngine {
             graceUntilEpochMs = graceUntilEpochMs,
             blockedReason = blockedReason,
         )
+    }
+
+    fun stackedGraceUntilEpochMs(
+        nowEpochMs: Long,
+        extensionMs: Long,
+        existingGraceUntilEpochMs: Long?,
+    ): Long {
+        val base = maxOf(existingGraceUntilEpochMs ?: nowEpochMs, nowEpochMs)
+        return base + extensionMs
+    }
+
+    fun activeGraceUntilEpochMs(
+        pauses: List<Pause>,
+        profileId: Long,
+        packageName: String,
+        nowEpochMs: Long,
+        sharedPool: Boolean,
+    ): Long? {
+        val expectedPackage = if (sharedPool) null else packageName
+        return pauses
+            .filter {
+                it.type == PauseType.extensionGrace &&
+                    it.untilEpochMs > nowEpochMs &&
+                    it.profileId == profileId &&
+                    it.packageName == expectedPackage
+            }
+            .maxOfOrNull { it.untilEpochMs }
     }
 
     fun policyForReason(

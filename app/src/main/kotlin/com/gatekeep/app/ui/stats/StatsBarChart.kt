@@ -1,10 +1,7 @@
 package com.gatekeep.app.ui.stats
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -102,111 +99,101 @@ fun StatsBarChart(
         }
     }
 
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val minBarSlotWidth = 28.dp
-        val chartContentWidth = maxOf(maxWidth - axisWidth - chartGap, minBarSlotWidth * buckets.size)
-        val barSlotWidthDp = chartContentWidth / buckets.size.coerceAtLeast(1)
-
-        Row(
+    Row(modifier = modifier.fillMaxWidth()) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
+                .width(axisWidth)
+                .height(chartHeightDp),
         ) {
-            Box(
+            axisLabels.forEachIndexed { index, label ->
+                val fraction = axisFractions.getOrElse(index) { 0f }
+                val yOffset = chartHeightDp * (1f - fraction)
+                Text(
+                    text = label,
+                    style = labelStyle,
+                    color = if (showZeroLabel && index == axisLabels.lastIndex) zeroLabelColor else axisLabelColor,
+                    maxLines = 1,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset(y = yOffset - 8.dp)
+                        .width(axisWidth),
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(chartGap))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Canvas(
                 modifier = Modifier
-                    .width(axisWidth)
-                    .height(chartHeightDp),
+                    .fillMaxWidth()
+                    .height(chartHeightDp)
+                    .clipToBounds(),
             ) {
-                axisLabels.forEachIndexed { index, label ->
-                    val fraction = axisFractions.getOrElse(index) { 0f }
-                    val yOffset = chartHeightDp * (1f - fraction)
-                    Text(
-                        text = label,
-                        style = labelStyle,
-                        color = if (showZeroLabel && index == axisLabels.lastIndex) zeroLabelColor else axisLabelColor,
-                        maxLines = 1,
-                        textAlign = TextAlign.End,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .offset(y = yOffset - 8.dp)
-                            .width(axisWidth),
+                val chartHeight = size.height
+                val barSlotWidth = size.width / buckets.size.coerceAtLeast(1)
+                axisFractions.forEach { fraction ->
+                    val y = chartHeight * (1f - fraction)
+                    drawLine(
+                        color = gridColor,
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = 1f,
+                    )
+                }
+                buckets.forEachIndexed { index, bucket ->
+                    val fraction = (bucket.usageMs.toFloat() / scale).coerceIn(0f, 1f)
+                    val barHeight = (chartHeight * fraction).coerceAtLeast(if (bucket.usageMs > 0) 2f else 0f)
+                    val left = index * barSlotWidth + barSlotWidth * 0.15f
+                    val barWidth = barSlotWidth * 0.7f
+                    drawRect(
+                        color = barColor,
+                        topLeft = Offset(left, chartHeight - barHeight),
+                        size = Size(barWidth, barHeight),
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.width(chartGap))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Canvas(
-                    modifier = Modifier
-                        .width(chartContentWidth)
-                        .height(chartHeightDp)
-                        .clipToBounds(),
-                ) {
-                    val chartHeight = size.height
-                    val barSlotWidth = size.width / buckets.size.coerceAtLeast(1)
-                    axisFractions.forEach { fraction ->
-                        val y = chartHeight * (1f - fraction)
-                        drawLine(
-                            color = gridColor,
-                            start = Offset(0f, y),
-                            end = Offset(size.width, y),
-                            strokeWidth = 1f,
-                        )
-                    }
-                    buckets.forEachIndexed { index, bucket ->
-                        val fraction = (bucket.usageMs.toFloat() / scale).coerceIn(0f, 1f)
-                        val barHeight = (chartHeight * fraction).coerceAtLeast(if (bucket.usageMs > 0) 2f else 0f)
-                        val left = index * barSlotWidth + barSlotWidth * 0.15f
-                        val barWidth = barSlotWidth * 0.7f
-                        drawRect(
-                            color = barColor,
-                            topLeft = Offset(left, chartHeight - barHeight),
-                            size = Size(barWidth, barHeight),
-                        )
-                    }
-                }
-                Row(
-                    modifier = Modifier
-                        .width(chartContentWidth)
-                        .height(labelRowHeight)
-                        .padding(top = 4.dp, end = if (rotateLabels) 8.dp else 0.dp),
-                ) {
-                    buckets.forEachIndexed { index, bucket ->
-                        val showLabel = shouldShowLabel(index)
-                        Column(
-                            modifier = Modifier
-                                .width(barSlotWidthDp)
-                                .padding(horizontal = if (index == 0 || index == buckets.lastIndex) 0.dp else 1.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            if (showLabel) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(labelRowHeight)
+                    .padding(top = 4.dp, end = if (rotateLabels) 8.dp else 0.dp),
+            ) {
+                buckets.forEachIndexed { index, bucket ->
+                    val showLabel = shouldShowLabel(index)
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = if (index == 0 || index == buckets.lastIndex) 0.dp else 1.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        if (showLabel) {
+                            Text(
+                                text = bucket.label,
+                                style = labelStyle,
+                                color = axisLabelColor,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                overflow = TextOverflow.Clip,
+                                softWrap = false,
+                                modifier = if (rotateLabels) {
+                                    Modifier.graphicsLayer {
+                                        rotationZ = -45f
+                                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
+                                    }
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            bucket.subLabel?.let { sub ->
                                 Text(
-                                    text = bucket.label,
-                                    style = labelStyle,
+                                    text = sub,
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = axisLabelColor,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Visible,
-                                    softWrap = false,
-                                    modifier = if (rotateLabels) {
-                                        Modifier.graphicsLayer {
-                                            rotationZ = -45f
-                                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
-                                        }
-                                    } else {
-                                        Modifier
-                                    },
                                 )
-                                bucket.subLabel?.let { sub ->
-                                    Text(
-                                        text = sub,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = axisLabelColor,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 1,
-                                    )
-                                }
                             }
                         }
                     }

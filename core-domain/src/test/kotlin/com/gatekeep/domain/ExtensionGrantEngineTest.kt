@@ -70,4 +70,58 @@ class ExtensionGrantEngineTest {
         assertEquals(100L + 10 * 60_000L, plan.graceUntilEpochMs)
         assertNull(plan.gracePackageName)
     }
+
+    @Test
+    fun `stacks grace onto remaining until not now`() {
+        val now = 1_000_000L
+        val existingUntil = now + 5 * 60_000L
+        val plan = ExtensionGrantEngine.planGrant(
+            profileId = 1L,
+            packageName = "com.test",
+            minutes = 15,
+            nowEpochMs = now,
+            limitUsageScope = LimitUsageScope.perApp,
+            blockedReason = null,
+            source = ExtensionGrantSource.inApp,
+            existingGraceUntilEpochMs = existingUntil,
+        )
+        assertEquals(existingUntil + 15 * 60_000L, plan.graceUntilEpochMs)
+    }
+
+    @Test
+    fun `expired grace stacks from now`() {
+        val now = 1_000_000L
+        val stacked = ExtensionGrantEngine.stackedGraceUntilEpochMs(
+            nowEpochMs = now,
+            extensionMs = 5 * 60_000L,
+            existingGraceUntilEpochMs = now - 1,
+        )
+        assertEquals(now + 5 * 60_000L, stacked)
+    }
+
+    @Test
+    fun `active grace until picks latest matching pause`() {
+        val pauses = listOf(
+            com.gatekeep.domain.model.Pause(
+                profileId = 1L,
+                packageName = "com.test",
+                type = com.gatekeep.domain.model.PauseType.extensionGrace,
+                untilEpochMs = 50L,
+            ),
+            com.gatekeep.domain.model.Pause(
+                profileId = 1L,
+                packageName = "com.test",
+                type = com.gatekeep.domain.model.PauseType.extensionGrace,
+                untilEpochMs = 90L,
+            ),
+        )
+        val until = ExtensionGrantEngine.activeGraceUntilEpochMs(
+            pauses = pauses,
+            profileId = 1L,
+            packageName = "com.test",
+            nowEpochMs = 10L,
+            sharedPool = false,
+        )
+        assertEquals(90L, until)
+    }
 }

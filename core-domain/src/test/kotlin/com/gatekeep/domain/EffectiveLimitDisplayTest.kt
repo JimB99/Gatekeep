@@ -44,4 +44,16 @@ class EffectiveLimitDisplayTest {
             ),
         )
     }
+
+    @Test
+    fun `grace cap uses usage plus remaining even when under base bonus`() {
+        val effective = EffectiveLimitDisplay.effectiveLimitMs(
+            baseLimitMs = 60 * 60_000L,
+            usageMs = 40 * 60_000L,
+            extensionBonusMs = 15 * 60_000L,
+            graceRemainingMs = 15 * 60_000L,
+            noLimitToday = false,
+        )
+        assertEquals(55 * 60_000L, effective)
+    }
 }

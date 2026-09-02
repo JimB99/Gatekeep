@@ -25,14 +25,14 @@ import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
 import com.gatekeep.domain.AppCategories
+import com.gatekeep.domain.EffectiveLimitDisplay
+import com.gatekeep.domain.ExtensionGrantEngine
+import com.gatekeep.domain.PolicyTimelineResolver
+import com.gatekeep.domain.ProfileMergeEngine
+import com.gatekeep.domain.SchedulePolicyResolver
+import com.gatekeep.domain.SessionTracker
 import com.gatekeep.domain.StatsPeriodKind
 import com.gatekeep.domain.StatsPeriodLogic
-import com.gatekeep.data.local.entity.OverrideEventEntity
-import com.gatekeep.domain.EffectiveLimitDisplay
-import com.gatekeep.domain.PolicyTimelineResolver
-import com.gatekeep.domain.SchedulePolicyResolver
-import com.gatekeep.domain.ProfileMergeEngine
-import com.gatekeep.domain.SessionTracker
 import com.gatekeep.domain.TimeBoundaries
 import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.FrictionMethod
@@ -199,17 +199,8 @@ class ProfileViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _extensionHistory = MutableStateFlow<List<OverrideEventEntity>>(emptyList())
-    val extensionHistory = _extensionHistory.asStateFlow()
-
     private val _effectivePolicy = MutableStateFlow<PolicyTimelineResolver.EffectivePolicySnapshot?>(null)
     val effectivePolicy = _effectivePolicy.asStateFlow()
-
-    fun refreshExtensionHistory(profileId: Long) {
-        viewModelScope.launch {
-            _extensionHistory.value = usageRepository.getRecentOverridesForProfile(profileId)
-        }
-    }
 
     fun refreshEffectivePolicy(profileId: Long) {
         viewModelScope.launch {
@@ -312,21 +303,26 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    suspend fun grantExtensionInAppAwait(profileId: Long, packageNames: List<String>, minutes: Int) {
+    suspend fun grantExtensionInAppAwait(profileId: Long, packageNames: List<String>, minutes: Int): Boolean {
         val profile = profileRepository.observeProfiles().first().find { it.id == profileId }
-        if (profile == null || packageNames.isEmpty()) return
-        if (profile.limitUsageScope == com.gatekeep.domain.model.LimitUsageScope.sharedPool) {
+        if (profile == null || packageNames.isEmpty()) return false
+        val granted = if (profile.limitUsageScope == com.gatekeep.domain.model.LimitUsageScope.sharedPool) {
             enforcementCoordinator.grantExtensionForProfileAwait(
                 profileId,
                 packageNames.first(),
                 minutes,
             )
         } else {
+            var anyGranted = false
             packageNames.forEach { pkg ->
-                enforcementCoordinator.grantExtensionForProfileAwait(profileId, pkg, minutes)
+                if (enforcementCoordinator.grantExtensionForProfileAwait(profileId, pkg, minutes)) {
+                    anyGranted = true
+                }
             }
+            anyGranted
         }
         refreshCurrentUsage(profileId)
+        return granted
     }
 
     fun grantNoLimitTodayInApp(profileId: Long, packageNames: List<String>) {
@@ -429,7 +425,14 @@ class ProfileViewModel @Inject constructor(
             } else {
                 usageRepository.sumExtensionMsForPackageSince(profileId, packageName, weekStart)
             }
-            val graceRemaining = graceRemainingMs(pauses, profileId, packageName, now, sharedPool)
+            val graceUntil = ExtensionGrantEngine.activeGraceUntilEpochMs(
+                pauses = pauses,
+                profileId = profileId,
+                packageName = packageName,
+                nowEpochMs = now,
+                sharedPool = sharedPool,
+            )
+            val graceRemaining = graceUntil?.let { (it - now).coerceAtLeast(0) }
             val noLimitToday = isNoLimitTodayActive(pauses, profileId, packageName, now, sharedPool)
             val sessionUsage = SessionTracker.sessionDurationMs(sessionState, now)
 
@@ -513,24 +516,6 @@ class ProfileViewModel @Inject constructor(
                 perApp = perApp,
             )
         }
-    }
-
-    private fun graceRemainingMs(
-        pauses: List<Pause>,
-        profileId: Long,
-        packageName: String,
-        now: Long,
-        sharedPool: Boolean,
-    ): Long? {
-        val active = pauses.filter {
-            it.untilEpochMs > now && it.type == PauseType.extensionGrace
-        }
-        val pause = if (sharedPool) {
-            active.firstOrNull { it.profileId == profileId && it.packageName == null }
-        } else {
-            active.firstOrNull { it.profileId == profileId && it.packageName == packageName }
-        }
-        return pause?.let { (it.untilEpochMs - now).coerceAtLeast(0) }
     }
 
     private fun isNoLimitTodayActive(

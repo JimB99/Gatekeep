@@ -115,6 +115,7 @@
     <string name="policy">Política</string>
     <string name="policy_default_tab">Predeterminado</string>
     <string name="policy_schedules_tab">Horarios</string>
+    <string name="policy_week_tab">Semana</string>
     <string name="policy_subtitle_format">%1$s · %2$d horarios</string>
     <string name="when_no_schedule_matches">Cuando no coincide ningún horario</string>
     <string name="when_no_schedule_matches_hint">Se usa cuando no coincide ningún horario o un horario está en Predeterminado.</string>
@@ -427,8 +428,6 @@
     <string name="more_options">Más opciones</string>
     <string name="effective_policy_now">Política actual</string>
     <string name="schedule_segment_copy_format">%1$s (copia)</string>
-    <string name="extension_history">Historial de extensiones</string>
-    <string name="extension_history_subtitle">Extensiones y anulaciones recientes</string>
     <string name="hud_app_label_content_description">App supervisada</string>
     <string name="hud_time_content_description">Tiempo restante</string>
     <string name="week_timeline">Vista semanal</string>

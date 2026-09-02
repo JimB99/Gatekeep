@@ -3,7 +3,9 @@ package com.gatekeep.domain
 object EffectiveLimitDisplay {
 
   /**
-   * Effective cap for UI: base + persisted bonuses, or usage + active grace (counts from now).
+   * Effective cap for UI.
+   * With an active grace, the cap is current usage + remaining grace (counts from now).
+   * Otherwise it is base + persisted extension bonuses.
    * Returns null when unlimited (no limit today) or when no base limit is configured.
    */
   fun effectiveLimitMs(
@@ -15,11 +17,8 @@ object EffectiveLimitDisplay {
   ): Long? {
       if (baseLimitMs == null) return null
       if (noLimitToday) return null
-      val bonusCap = baseLimitMs + extensionBonusMs
-      val graceCap = graceRemainingMs?.let { usageMs + it }
-      return when {
-          graceCap != null -> maxOf(bonusCap, graceCap)
-          else -> bonusCap
-      }
+      val graceCap = graceRemainingMs?.let { remaining -> usageMs + remaining }
+      if (graceCap != null) return graceCap
+      return baseLimitMs + extensionBonusMs
   }
 }

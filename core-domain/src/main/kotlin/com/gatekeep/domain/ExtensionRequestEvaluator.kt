@@ -33,11 +33,14 @@ object ExtensionRequestEvaluator {
                 ExtensionDenialReason.extensionNotAllowed,
             )
         }
+        val ownerOverride = source == ExtensionGrantSource.inApp
         return ExtensionPolicyEvaluator.evaluateExtension(
             policy = policy,
             requestedMinutes = requestedMinutes,
             overridesToday = overridesToday,
             consecutiveInSession = consecutiveInSession,
+            requireConfiguredMinutes = !ownerOverride,
+            enforceQuotas = !ownerOverride,
         )
     }
 

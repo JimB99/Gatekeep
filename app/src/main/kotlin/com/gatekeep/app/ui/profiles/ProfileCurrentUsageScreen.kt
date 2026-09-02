@@ -20,6 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -30,7 +31,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -47,9 +47,15 @@ import com.gatekeep.app.ui.viewmodel.ProfileViewModel.CurrentUsageAppRow
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel.CurrentUsageLimitKind
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel.CurrentUsageLimitRow
 import com.gatekeep.app.util.formatDurationMs
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val CURRENT_USAGE_EXTEND_MINUTES = listOf(5, 15, 60)
+
+private class AppliedSnackbarGate {
+    var job: Job? = null
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +70,19 @@ fun ProfileCurrentUsageScreen(
     val scope = rememberCoroutineScope()
     val appliedMsg = stringResource(R.string.extension_applied)
     val resetDoneMsg = stringResource(R.string.extension_reset_done)
+    val appliedGate = remember { AppliedSnackbarGate() }
+
+    fun showAppliedOnce() {
+        appliedGate.job?.cancel()
+        appliedGate.job = scope.launch {
+            delay(400)
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(
+                message = appliedMsg,
+                duration = SnackbarDuration.Short,
+            )
+        }
+    }
 
     LaunchedEffect(profileId) {
         viewModel.bindProfile(profileId)
@@ -95,6 +114,7 @@ fun ProfileCurrentUsageScreen(
                 onReset = {
                     scope.launch {
                         viewModel.resetExtensionsForProfileAwait(profileId)
+                        snackbarHostState.currentSnackbarData?.dismiss()
                         snackbarHostState.showSnackbar(resetDoneMsg)
                     }
                 },
@@ -110,14 +130,15 @@ fun ProfileCurrentUsageScreen(
                     limits = usage.sharedLimits,
                     onExtendMinutes = { minutes ->
                         scope.launch {
-                            viewModel.grantExtensionInAppAwait(profileId, monitoredPackages, minutes)
-                            snackbarHostState.showSnackbar(appliedMsg)
+                            if (viewModel.grantExtensionInAppAwait(profileId, monitoredPackages, minutes)) {
+                                showAppliedOnce()
+                            }
                         }
                     },
                     onNoLimitToday = {
                         scope.launch {
                             viewModel.grantNoLimitTodayInAppAwait(profileId, monitoredPackages)
-                            snackbarHostState.showSnackbar(appliedMsg)
+                            showAppliedOnce()
                         }
                     },
                 )
@@ -127,12 +148,14 @@ fun ProfileCurrentUsageScreen(
                         appRow = appRow,
                         onExtendMinutes = { minutes ->
                             scope.launch {
-                                viewModel.grantExtensionInAppAwait(
+                                val granted = viewModel.grantExtensionInAppAwait(
                                     profileId,
                                     listOf(appRow.packageName),
                                     minutes,
                                 )
-                                snackbarHostState.showSnackbar(appliedMsg)
+                                if (granted) {
+                                    showAppliedOnce()
+                                }
                             }
                         },
                         onNoLimitToday = {
@@ -141,7 +164,7 @@ fun ProfileCurrentUsageScreen(
                                     profileId,
                                     listOf(appRow.packageName),
                                 )
-                                snackbarHostState.showSnackbar(appliedMsg)
+                                showAppliedOnce()
                             }
                         },
                     )
@@ -194,7 +217,7 @@ private fun PerAppUsageCard(
 @Composable
 private fun UsageLimitBar(row: CurrentUsageLimitRow) {
     val label = limitKindLabel(row.kind)
-  Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium)
         if (row.noLimitToday) {
             Text(

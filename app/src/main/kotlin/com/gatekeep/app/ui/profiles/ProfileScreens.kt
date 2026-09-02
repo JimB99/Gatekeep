@@ -76,7 +76,6 @@ fun ProfileHubScreen(
     onEditCurrentUsage: () -> Unit,
     onEditPolicy: () -> Unit,
     onEditPin: () -> Unit,
-    onExtensionHistory: () -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val profiles by viewModel.profiles.collectAsState()
@@ -219,11 +218,6 @@ fun ProfileHubScreen(
                 title = stringResource(R.string.policy),
                 subtitle = profilePolicySubtitle(profile, scheduleSegments.size),
                 onClick = onEditPolicy,
-            )
-            ProfileNavRow(
-                title = stringResource(R.string.extension_history),
-                subtitle = stringResource(R.string.extension_history_subtitle),
-                onClick = onExtensionHistory,
             )
             ProfileNavRow(
                 title = stringResource(R.string.profile_pin),

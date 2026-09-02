@@ -18,7 +18,6 @@ import com.gatekeep.app.ui.policy.PolicyOverrideRulesHubScreen
 import com.gatekeep.app.ui.policy.PolicyOverrideScope
 import com.gatekeep.app.ui.policy.ProfilePolicyScreen
 import com.gatekeep.app.ui.policy.SegmentEditorScreen
-import com.gatekeep.app.ui.profiles.ExtensionHistoryScreen
 import com.gatekeep.app.ui.profiles.ProfileCurrentUsageScreen
 import com.gatekeep.app.ui.profiles.ProfileHubScreen
 import com.gatekeep.app.ui.profiles.ProfileLimitsScreen
@@ -60,7 +59,6 @@ object Routes {
     const val PROFILE_RULES_OPEN = "profile/{profileId}/rules/open"
     const val PROFILE_RULES_LIMIT = "profile/{profileId}/rules/limit"
     const val PROFILE_RULES_SESSION = "profile/{profileId}/rules/session"
-    const val PROFILE_EXTENSION_HISTORY = "profile/{profileId}/extension-history"
     const val PROFILE_CURRENT_USAGE = "profile/{profileId}/current-usage"
     const val PROFILE_PIN = "profile/{profileId}/pin"
     const val APP_PICKER = "apps/{profileId}"
@@ -103,7 +101,6 @@ object Routes {
     fun profileRulesLimit(id: Long) = "profile/$id/rules/limit"
     fun profileRulesSession(id: Long) = "profile/$id/rules/session"
     fun profileCurrentUsage(id: Long) = "profile/$id/current-usage"
-    fun profileExtensionHistory(id: Long) = "profile/$id/extension-history"
     fun profilePin(id: Long) = "profile/$id/pin"
     fun appPicker(profileId: Long) = "apps/$profileId"
     fun schedule(profileId: Long) = "schedule/$profileId"
@@ -149,17 +146,6 @@ fun GatekeepNavHost(
                 onEditCurrentUsage = { navController.navigate(Routes.profileCurrentUsage(profileId)) },
                 onEditPolicy = { navController.navigate(Routes.profilePolicy(profileId)) },
                 onEditPin = { navController.navigate(Routes.profilePin(profileId)) },
-                onExtensionHistory = { navController.navigate(Routes.profileExtensionHistory(profileId)) },
-            )
-        }
-        composable(
-            route = Routes.PROFILE_EXTENSION_HISTORY,
-            arguments = listOf(navArgument("profileId") { type = NavType.LongType }),
-        ) { entry ->
-            val profileId = entry.arguments?.getLong("profileId") ?: return@composable
-            ExtensionHistoryScreen(
-                profileId = profileId,
-                onBack = { navController.popBackStack() },
             )
         }
         composable(
@@ -190,7 +176,8 @@ fun GatekeepNavHost(
                 onNavigateRulesSession = { navController.navigate(Routes.profilePolicyRulesSession(profileId)) },
                 onNavigateNoMatchLimits = { navController.navigate(Routes.profilePolicyNoMatchLimits(profileId)) },
                 onNavigateNoMatchRules = { navController.navigate(Routes.profilePolicyNoMatchRules(profileId)) },
-                onNavigateSegmentEditor = { segmentId ->
+                onNavigateSegmentEditor = { segmentId, returnTab ->
+                    navController.currentBackStackEntry?.savedStateHandle?.set("policyTab", returnTab)
                     if (segmentId == null) {
                         navController.navigate(Routes.profilePolicySegmentNew(profileId))
                     } else {
@@ -240,7 +227,6 @@ fun GatekeepNavHost(
                 profileId = profileId,
                 segmentId = segmentId,
                 onBack = {
-                    navController.previousBackStackEntry?.savedStateHandle?.set("policyTab", 1)
                     navController.popBackStack()
                 },
                 onNavigateCustomizeLimits = { segId ->
@@ -250,7 +236,6 @@ fun GatekeepNavHost(
                     navController.navigate(Routes.profilePolicySegmentCustomizeRules(profileId, segId))
                 },
                 onDelete = {
-                    navController.previousBackStackEntry?.savedStateHandle?.set("policyTab", 1)
                     navController.popBackStack()
                 },
             )
@@ -264,7 +249,6 @@ fun GatekeepNavHost(
                 profileId = profileId,
                 segmentId = null,
                 onBack = {
-                    navController.previousBackStackEntry?.savedStateHandle?.set("policyTab", 1)
                     navController.popBackStack()
                 },
                 onNavigateCustomizeLimits = { segId ->

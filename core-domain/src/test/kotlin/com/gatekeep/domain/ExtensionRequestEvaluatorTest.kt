@@ -16,15 +16,49 @@ class ExtensionRequestEvaluatorTest {
     )
 
     @Test
-    fun `in app uses same validation as overlay`() {
+    fun `overlay denies minutes not in policy options`() {
         val denied = ExtensionRequestEvaluator.evaluate(
             policy = policy,
-            source = ExtensionGrantSource.inApp,
-            requestedMinutes = 99,
+            source = ExtensionGrantSource.overlay,
+            requestedMinutes = 60,
             overridesToday = 0,
             consecutiveInSession = 0,
         )
         assertTrue(denied is ExtensionPolicyEvaluator.ExtensionDecision.Denied)
+    }
+
+    @Test
+    fun `in app allows current usage minutes not in overlay options`() {
+        val defaultOptions = policy.copy(optionMinutes = listOf(1, 5, 10))
+        val allowed15 = ExtensionRequestEvaluator.evaluate(
+            policy = defaultOptions,
+            source = ExtensionGrantSource.inApp,
+            requestedMinutes = 15,
+            overridesToday = 0,
+            consecutiveInSession = 0,
+        )
+        val allowed60 = ExtensionRequestEvaluator.evaluate(
+            policy = defaultOptions,
+            source = ExtensionGrantSource.inApp,
+            requestedMinutes = 60,
+            overridesToday = 0,
+            consecutiveInSession = 0,
+        )
+        assertEquals(ExtensionPolicyEvaluator.ExtensionDecision.Allowed(15), allowed15)
+        assertEquals(ExtensionPolicyEvaluator.ExtensionDecision.Allowed(60), allowed60)
+    }
+
+    @Test
+    fun `in app ignores overlay quotas`() {
+        val strict = policy.copy(maxExtensionsPerDay = 1, maxConsecutiveExtensions = 1)
+        val allowed = ExtensionRequestEvaluator.evaluate(
+            policy = strict,
+            source = ExtensionGrantSource.inApp,
+            requestedMinutes = 15,
+            overridesToday = 5,
+            consecutiveInSession = 5,
+        )
+        assertEquals(ExtensionPolicyEvaluator.ExtensionDecision.Allowed(15), allowed)
     }
 
     @Test

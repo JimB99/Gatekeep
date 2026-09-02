@@ -34,6 +34,8 @@ object ExtensionPolicyEvaluator {
         overridesToday: Int,
         consecutiveInSession: Int,
         isNoLimitTodayRequest: Boolean = false,
+        requireConfiguredMinutes: Boolean = true,
+        enforceQuotas: Boolean = true,
     ): ExtensionDecision {
         if (isNoLimitTodayRequest) {
             if (!policy.showNoLimitToday) {
@@ -42,20 +44,22 @@ object ExtensionPolicyEvaluator {
             return ExtensionDecision.NoLimitToday
         }
 
-        if (!policy.optionMinutes.contains(requestedMinutes)) {
+        if (requireConfiguredMinutes && !policy.optionMinutes.contains(requestedMinutes)) {
             return ExtensionDecision.Denied(ExtensionDenialReason.extensionNotAllowed)
         }
 
-        val maxPerDay = policy.maxExtensionsPerDay
-        if (maxPerDay != null && maxPerDay > 0 && overridesToday >= maxPerDay) {
-            return ExtensionDecision.Denied(ExtensionDenialReason.dailyLimitReached)
-        }
+        if (enforceQuotas) {
+            val maxPerDay = policy.maxExtensionsPerDay
+            if (maxPerDay != null && maxPerDay > 0 && overridesToday >= maxPerDay) {
+                return ExtensionDecision.Denied(ExtensionDenialReason.dailyLimitReached)
+            }
 
-        val effectiveConsecutiveCap = effectiveConsecutiveCap(policy)
-        if (effectiveConsecutiveCap != null && effectiveConsecutiveCap > 0 &&
-            consecutiveInSession >= effectiveConsecutiveCap
-        ) {
-            return ExtensionDecision.Denied(ExtensionDenialReason.tooManyConsecutive)
+            val effectiveConsecutiveCap = effectiveConsecutiveCap(policy)
+            if (effectiveConsecutiveCap != null && effectiveConsecutiveCap > 0 &&
+                consecutiveInSession >= effectiveConsecutiveCap
+            ) {
+                return ExtensionDecision.Denied(ExtensionDenialReason.tooManyConsecutive)
+            }
         }
 
         return ExtensionDecision.Allowed(requestedMinutes)

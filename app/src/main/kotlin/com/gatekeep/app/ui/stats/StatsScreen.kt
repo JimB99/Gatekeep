@@ -334,23 +334,27 @@ fun StatsScreen(
 
             Card(
 
-                modifier = Modifier
-
-                    .fillMaxWidth()
-
-                    .periodSwipe(
-
-                        onPrevious = ::shiftPrevious,
-
-                        onNext = ::shiftNext,
-
-                        canGoNext = canGoForward,
-
-                    ),
+                modifier = Modifier.fillMaxWidth(),
 
             ) {
 
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(
+
+                    modifier = Modifier
+
+                        .padding(16.dp)
+
+                        .periodSwipe(
+
+                            onPrevious = ::shiftPrevious,
+
+                            onNext = ::shiftNext,
+
+                            canGoNext = canGoForward,
+
+                        ),
+
+                ) {
 
                     Text(stringResource(R.string.screen_time), style = MaterialTheme.typography.labelMedium)
 
