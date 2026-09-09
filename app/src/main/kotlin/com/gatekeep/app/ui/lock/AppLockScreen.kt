@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.gatekeep.app.R
@@ -44,7 +45,10 @@ fun AppLockScreen(
             label = stringResource(R.string.pin),
             isError = error,
             requestInitialFocus = true,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp)
+                .testTag(AppLockTestTags.PIN_FIELD),
         )
         Button(
             onClick = {
@@ -54,7 +58,9 @@ fun AppLockScreen(
                     error = true
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(AppLockTestTags.UNLOCK_BUTTON),
         ) { Text(stringResource(R.string.unlock)) }
     }
 }

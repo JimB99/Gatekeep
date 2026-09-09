@@ -20,6 +20,7 @@ import androidx.lifecycle.lifecycleScope
 import com.gatekeep.app.enforcement.EnforcementCoordinator
 import com.gatekeep.app.ui.GatekeepNavHost
 import com.gatekeep.app.ui.Routes
+import com.gatekeep.app.ui.lock.AppLockController
 import com.gatekeep.app.ui.lock.AppLockScreen
 import com.gatekeep.app.ui.theme.GatekeepTheme
 import com.gatekeep.app.worker.UsageSyncWorker
@@ -60,30 +61,35 @@ class MainActivity : AppCompatActivity() {
             val settings by settingsRepository.settings.collectAsState(
                 initial = com.gatekeep.data.repository.AppSettings(),
             )
-            val hasAppPin = settings.hasAppPin()
-            var unlocked by remember {
-                mutableStateOf(!settings.appLockEnabled || !hasAppPin)
-            }
+            val lockRequired = AppLockController.isLockRequired(settings)
+            var sessionUnlocked by remember { mutableStateOf(false) }
             val lifecycleOwner = LocalLifecycleOwner.current
-            DisposableEffect(lifecycleOwner, settings.appLockEnabled, settings.appPasswordHash) {
+            DisposableEffect(lifecycleOwner, lockRequired) {
                 val observer = LifecycleEventObserver { _, event ->
                     if (event == Lifecycle.Event.ON_STOP &&
-                        !this@MainActivity.isChangingConfigurations &&
-                        settings.appLockEnabled &&
-                        settings.hasAppPin()
+                        AppLockController.shouldLockOnStop(
+                            lockRequired = lockRequired,
+                            isChangingConfigurations = this@MainActivity.isChangingConfigurations,
+                        )
                     ) {
-                        unlocked = false
+                        sessionUnlocked = false
                     }
                 }
                 lifecycleOwner.lifecycle.addObserver(observer)
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
             val startDest = if (settings.onboardingComplete) Routes.DASHBOARD else Routes.ONBOARDING
+            val showLockScreen = AppLockController.shouldShowLockScreen(
+                lockRequired = lockRequired,
+                sessionUnlocked = sessionUnlocked,
+            )
 
             GatekeepTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    if (!unlocked && settings.appLockEnabled && settings.hasAppPin()) {
-                        AppLockScreen(passwordHash = settings.appPasswordHash) { unlocked = true }
+                    if (showLockScreen) {
+                        AppLockScreen(passwordHash = settings.appPasswordHash) {
+                            sessionUnlocked = true
+                        }
                     } else {
                         GatekeepNavHost(
                             startDestination = startDest,

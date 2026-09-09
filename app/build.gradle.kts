@@ -17,6 +17,7 @@ android {
         targetSdk = 35
         versionCode = 19
         versionName = "3.6.2"
+        testInstrumentationRunner = "com.gatekeep.app.HiltTestRunner"
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -42,6 +43,10 @@ android {
     buildTypes {
         debug {
             signingConfigs.findByName("debugShared")?.let { signingConfig = it }
+            ndk {
+                abiFilters.clear()
+                abiFilters += listOf("arm64-v8a", "x86_64")
+            }
         }
         release {
             isMinifyEnabled = true
@@ -72,6 +77,10 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+
+    testOptions {
+        animationsDisabled = true
     }
 }
 
@@ -109,7 +118,12 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.ext)
     androidTestImplementation(libs.androidx.test.espresso)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.uiautomator)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test)
+    androidTestImplementation(libs.hilt.android.testing)
+    kspAndroidTest(libs.hilt.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling.debug)
 }
