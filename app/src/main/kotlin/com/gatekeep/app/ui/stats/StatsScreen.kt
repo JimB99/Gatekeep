@@ -79,6 +79,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 
 import androidx.compose.ui.text.font.FontWeight
 
@@ -93,6 +94,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
 import com.gatekeep.app.data.AppUsageStat
+import com.gatekeep.app.ui.GatekeepTestTags
 
 import com.gatekeep.app.data.ProfileStatsOverview
 
@@ -189,6 +191,7 @@ fun StatsScreen(
         val contentModifier = Modifier
 
             .fillMaxSize()
+            .testTag(GatekeepTestTags.STATS_ROOT)
 
             .padding(padding)
 

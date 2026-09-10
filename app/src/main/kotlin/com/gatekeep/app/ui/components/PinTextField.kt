@@ -17,7 +17,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import com.gatekeep.app.ui.GatekeepTestTags
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.KeyboardType
@@ -33,6 +35,7 @@ fun PinTextField(
     modifier: Modifier = Modifier.fillMaxWidth(),
     isError: Boolean = false,
     requestInitialFocus: Boolean = false,
+    testTag: String? = null,
 ) {
     var visible by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
@@ -48,7 +51,9 @@ fun PinTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
-        modifier = modifier.focusRequester(focusRequester),
+        modifier = modifier
+            .focusRequester(focusRequester)
+            .then(if (testTag != null) Modifier.testTag(testTag) else Modifier),
         isError = isError,
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),

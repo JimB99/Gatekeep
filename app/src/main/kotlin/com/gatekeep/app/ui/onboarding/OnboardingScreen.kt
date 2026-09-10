@@ -27,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import com.gatekeep.app.ui.GatekeepTestTags
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -80,6 +82,7 @@ fun OnboardingScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .testTag(GatekeepTestTags.ONBOARDING_ROOT)
             .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
@@ -140,7 +143,9 @@ fun OnboardingScreen(
                 viewModel.completeOnboarding()
                 onComplete()
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(GatekeepTestTags.ONBOARDING_GET_STARTED),
             enabled = usageGranted && accessibilityGranted && overlayGranted,
         ) { Text(stringResource(R.string.get_started)) }
 
@@ -149,7 +154,9 @@ fun OnboardingScreen(
                 viewModel.completeOnboarding()
                 onComplete()
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(GatekeepTestTags.ONBOARDING_SKIP),
         ) { Text(stringResource(R.string.skip_for_now)) }
     }
 }

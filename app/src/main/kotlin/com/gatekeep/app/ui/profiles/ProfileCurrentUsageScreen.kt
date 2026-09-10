@@ -32,7 +32,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import com.gatekeep.app.ui.GatekeepTestTags
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -255,6 +257,7 @@ private fun CurrentUsageExtensionActions(
             GatekeepFilterChip(
                 selected = false,
                 onClick = { onExtendMinutes(minutes) },
+                modifier = Modifier.testTag(GatekeepTestTags.CURRENT_USAGE_EXTEND_PREFIX + minutes),
                 label = {
                     Text(
                         if (minutes == 60) {
@@ -272,6 +275,7 @@ private fun CurrentUsageExtensionActions(
     GatekeepFilterChip(
         selected = false,
         onClick = onNoLimitToday,
+        modifier = Modifier.testTag(GatekeepTestTags.CURRENT_USAGE_NO_LIMIT),
         label = {
             Text(
                 stringResource(R.string.no_limit_today_short),

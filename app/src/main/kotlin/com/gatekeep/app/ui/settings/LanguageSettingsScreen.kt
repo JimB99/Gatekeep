@@ -10,7 +10,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import com.gatekeep.app.ui.GatekeepTestTags
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.R
 import com.gatekeep.app.ui.viewmodel.SettingsViewModel
@@ -45,6 +47,7 @@ fun LanguageSettingsScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .testTag(GatekeepTestTags.LANGUAGE_OPTION_PREFIX + tag)
                     .clickable(enabled = !selected) {
                         scope.launch {
                             viewModel.setLanguage(tag)

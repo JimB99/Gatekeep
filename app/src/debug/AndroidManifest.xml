@@ -3,7 +3,13 @@
 
     <application>
         <activity
-            android:name="androidx.activity.ComponentActivity"
-            android:exported="false" />
+            android:name=".testsupport.EnforcementTargetActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Gatekeep" />
+        <activity
+            android:name=".testsupport.EnforcementTargetActivityB"
+            android:exported="true"
+            android:theme="@style/Theme.Gatekeep" />
     </application>
+
 </manifest>

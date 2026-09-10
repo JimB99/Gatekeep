@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -19,6 +20,7 @@ internal fun SettingToggle(
     checked: Boolean,
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
+    switchTestTag: String? = null,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -26,7 +28,16 @@ internal fun SettingToggle(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, modifier = Modifier.weight(1f).padding(end = 8.dp))
-        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            modifier = if (switchTestTag != null) {
+                Modifier.testTag(switchTestTag)
+            } else {
+                Modifier
+            },
+        )
     }
 }
 
@@ -37,6 +48,7 @@ internal fun SettingToggleWithHelp(
     checked: Boolean,
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
+    switchTestTag: String? = null,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         SettingToggle(
@@ -44,6 +56,7 @@ internal fun SettingToggleWithHelp(
             checked = checked,
             enabled = enabled,
             onCheckedChange = onCheckedChange,
+            switchTestTag = switchTestTag,
         )
         Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }

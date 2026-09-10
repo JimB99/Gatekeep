@@ -17,7 +17,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import com.gatekeep.app.ui.GatekeepTestTags
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.gatekeep.app.R
@@ -61,7 +63,9 @@ fun DurationActionGrid(
                 isDraft = draftChoice is DurationChoice.PresetMinutes && draftChoice.minutes == 5,
                 onClick = { onDraftSelect(DurationChoice.PresetMinutes(5)) },
                 enabled = enabled,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(GatekeepTestTags.PAUSE_FIVE_MIN),
             )
             DurationChoiceButton(
                 label = stringResource(R.string.duration_15_min),

@@ -15,8 +15,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 
 import androidx.compose.ui.Modifier
-
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import com.gatekeep.app.ui.GatekeepTestTags
 
 import androidx.compose.ui.unit.dp
 
@@ -114,6 +115,8 @@ fun ProfilePinEditor(
 
             label = label,
 
+            testTag = GatekeepTestTags.PROFILE_PIN_FIELD,
+
         )
 
         hint?.let {
@@ -136,7 +139,10 @@ fun ProfilePinEditor(
 
                 onClick = { savePin() },
 
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .testTag(GatekeepTestTags.PROFILE_PIN_SAVE),
 
             ) { Text(stringResource(R.string.save_profile_pin)) }
 

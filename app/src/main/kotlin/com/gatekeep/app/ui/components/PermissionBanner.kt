@@ -10,6 +10,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import com.gatekeep.app.ui.GatekeepTestTags
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.gatekeep.app.R
@@ -25,7 +27,9 @@ fun PermissionBanner(
     if (!state.showBanner) return
     val context = LocalContext.current
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(GatekeepTestTags.PERMISSION_BANNER),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer,
         ),
@@ -77,7 +81,10 @@ fun PermissionBanner(
                 if (!state.accessibilityGranted) {
                     Button(
                         onClick = { context.startActivity(PermissionHelper.accessibilityIntent(context)) },
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .testTag(GatekeepTestTags.PERMISSION_ACCESSIBILITY_BUTTON),
                     ) { Text(stringResource(R.string.open_accessibility_settings)) }
                 }
             }

@@ -478,6 +478,7 @@ fun NotificationSettingsScreen(
             label = stringResource(R.string.usage_hud),
             help = stringResource(R.string.usage_hud_help),
             checked = settings.showSessionTimerNotification,
+            switchTestTag = com.gatekeep.app.ui.GatekeepTestTags.SETTINGS_SESSION_TIMER_TOGGLE,
         ) {
             viewModel.update { s -> s.copy(showSessionTimerNotification = it, hudEnabled = it) }
         }
@@ -492,6 +493,7 @@ fun NotificationSettingsScreen(
             label = stringResource(R.string.weekly_report),
             help = stringResource(R.string.weekly_report_help),
             checked = settings.weeklyReportEnabled,
+            switchTestTag = com.gatekeep.app.ui.GatekeepTestTags.SETTINGS_WEEKLY_REPORT_TOGGLE,
         ) {
             viewModel.update { s -> s.copy(weeklyReportEnabled = it) }
         }
@@ -557,6 +559,8 @@ fun EnforcementSettingsScreen(
             help = stringResource(R.string.enforcement_enabled_help),
 
             checked = settings.enforcementEnabled,
+
+            switchTestTag = com.gatekeep.app.ui.GatekeepTestTags.SETTINGS_ENFORCEMENT_TOGGLE,
 
         ) {
 
