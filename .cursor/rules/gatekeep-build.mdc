@@ -11,24 +11,24 @@ JDK and the Android SDK are **not** on global PATH. They live under the **Privat
 
 | Tool | Path |
 |------|------|
-| **JDK 17** | `c:/Users/JimBuisman/Desktop/Private/.tools/jdk-17.0.14+7` |
-| **Android SDK** | `c:/Users/JimBuisman/Desktop/Private/.tools/android-sdk` |
+| **JDK 17** | `../.tools/jdk-17.0.14+7` |
+| **Android SDK** | `../.tools/android-sdk` |
 
 `Gatekeep/local.properties` already points `sdk.dir` at the Android SDK.
 
 Before Gradle, set:
 
 ```bash
-export JAVA_HOME="c:/Users/JimBuisman/Desktop/Private/.tools/jdk-17.0.14+7"
-export ANDROID_HOME="c:/Users/JimBuisman/Desktop/Private/.tools/android-sdk"
+export JAVA_HOME="../.tools/jdk-17.0.14+7"
+export ANDROID_HOME="../.tools/android-sdk"
 ```
 
 From `Gatekeep/`:
 
 ```bash
 cd Gatekeep
-export JAVA_HOME="c:/Users/JimBuisman/Desktop/Private/.tools/jdk-17.0.14+7"
-export ANDROID_HOME="c:/Users/JimBuisman/Desktop/Private/.tools/android-sdk"
+export JAVA_HOME="../.tools/jdk-17.0.14+7"
+export ANDROID_HOME="../.tools/android-sdk"
 ./gradlew :core-domain:test :core-data:test :app:testDebugUnitTest :app:assembleRelease
 ```
 

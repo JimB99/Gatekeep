@@ -15,7 +15,7 @@ The About screen reads these via `BuildConfig.VERSION_NAME` and `BuildConfig.VER
 
 Bump **before shipping** when the task includes user-facing or release-worthy changes (UI, behavior, fixes users would notice).
 
-**Do not bump** for internal-only work (refactors, tests, docs, tooling) unless Jim asks.
+**Do not bump** for internal-only work (refactors, tests, docs, tooling) unless explicitly requested.
 
 ## How to choose the bump
 

@@ -6,8 +6,8 @@ Regression catalog for automated and manual testing. Each scenario ID maps to on
 
 ```bash
 cd Gatekeep
-export JAVA_HOME="c:/Users/JimBuisman/Desktop/Private/.tools/jdk-17.0.14+7"
-export ANDROID_HOME="c:/Users/JimBuisman/Desktop/Private/.tools/android-sdk"
+export JAVA_HOME="../.tools/jdk-17.0.14+7"
+export ANDROID_HOME="../.tools/android-sdk"
 
 # JVM unit tests (fast)
 ./gradlew :core-domain:test :app:testDebugUnitTest

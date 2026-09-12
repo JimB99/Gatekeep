@@ -22,8 +22,8 @@ An Android app that helps you manage screen time with profiles, session limits, 
 Requirements: JDK 17, Android SDK 35
 
 ```bash
-export JAVA_HOME="c:/Users/JimBuisman/Desktop/Private/.tools/jdk-17.0.14+7"
-export ANDROID_HOME="c:/Users/JimBuisman/Desktop/Private/.tools/android-sdk"
+export JAVA_HOME="../.tools/jdk-17.0.14+7"
+export ANDROID_HOME="../.tools/android-sdk"
 ./gradlew :core-domain:test :core-data:test :app:testDebugUnitTest :app:assembleRelease
 ```
 
