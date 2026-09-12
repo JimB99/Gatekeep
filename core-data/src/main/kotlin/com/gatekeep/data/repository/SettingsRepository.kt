@@ -13,6 +13,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.gatekeep.data.locale.LocalePreferences
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "gatekeep_settings")
@@ -76,6 +77,22 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs ->
             writeSettings(prefs, transform(readSettings(prefs)))
         }
+    }
+
+    /** Persists default language to DataStore and applies locale prefs on first launch. */
+    suspend fun ensureLocalePersisted() {
+        context.dataStore.edit { prefs ->
+            if (prefs[Keys.LANGUAGE] == null) {
+                val tag = LocalePreferences.normalizeTag(LocalePreferences.read(context))
+                prefs[Keys.LANGUAGE] = tag
+                LocalePreferences.write(context, tag)
+            }
+        }
+    }
+
+    suspend fun currentLanguageTag(): String {
+        ensureLocalePersisted()
+        return settings.first().languageTag
     }
 
     private fun readSettings(prefs: Preferences) = AppSettings(

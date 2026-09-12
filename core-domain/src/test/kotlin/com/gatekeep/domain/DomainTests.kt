@@ -151,6 +151,27 @@ class RuleEngineTest {
     }
 
     @Test
+    fun `user pause bypasses schedule block`() {
+        val pause = PauseManager.createPause(
+            type = com.gatekeep.domain.model.PauseType.sixtyMin,
+            nowEpochMs = 1_000_000L,
+            profileId = profile.id,
+        )
+        val result = RuleEngine.evaluate(
+            baseContext(
+                resolvedSchedulePolicy = ResolvedSchedulePolicy(
+                    mode = SchedulePolicyMode.block,
+                    limits = null,
+                    enforcementConfig = null,
+                    source = PolicySource.segment,
+                ),
+                pauses = listOf(pause),
+            ),
+        )
+        assertTrue(result is RuleResult.Allowed)
+    }
+
+    @Test
     fun `allow policy bypasses limits`() {
         val result = RuleEngine.evaluate(
             baseContext(

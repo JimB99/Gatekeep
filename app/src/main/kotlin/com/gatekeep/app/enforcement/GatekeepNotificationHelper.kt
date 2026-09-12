@@ -118,14 +118,26 @@ class GatekeepNotificationHelper @Inject constructor(
             .build()
     }
 
+    fun resetCountdownDismissState() {
+        CountdownNotificationState.reset()
+    }
+
     fun showCountdown(
         title: String,
         hud: UsageHudInfo,
         lastBody: String? = null,
         onBodyPosted: (String) -> Unit = {},
     ): Boolean {
+        if (CountdownNotificationState.dismissedByUser) return false
+
         val intent = Intent(context, MainActivity::class.java)
         val pending = PendingIntent.getActivity(context, 1, intent, PendingIntent.FLAG_IMMUTABLE)
+        val dismissIntent = PendingIntent.getBroadcast(
+            context,
+            COUNTDOWN_DISMISS_REQUEST_CODE,
+            Intent(context, CountdownNotificationDismissReceiver::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         val parts = hud.countdownLines().map { line ->
             when (line) {
                 is UsageHudLine.Session -> localizedContext.getString(
@@ -157,9 +169,11 @@ class GatekeepNotificationHelper @Inject constructor(
             .setStyle(NotificationCompat.BigTextStyle().bigText(parts.joinToString("\n")))
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentIntent(pending)
-            .setOngoing(true)
+            .setDeleteIntent(dismissIntent)
+            .setOngoing(false)
             .setSilent(true)
             .setOnlyAlertOnce(true)
+            .setAutoCancel(false)
         notificationManager.notify(COUNTDOWN_NOTIFICATION_ID, builder.build())
         onBodyPosted(body)
         return true
@@ -213,6 +227,7 @@ class GatekeepNotificationHelper @Inject constructor(
         const val CHANNEL_WARNINGS = "warnings"
         const val SERVICE_NOTIFICATION_ID = 1001
         const val COUNTDOWN_NOTIFICATION_ID = 1003
+        const val COUNTDOWN_DISMISS_REQUEST_CODE = 2003
         const val WARNING_ID = 1002
         const val ACCESSIBILITY_REVOKED_ID = 1004
 

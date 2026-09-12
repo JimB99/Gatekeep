@@ -1370,6 +1370,7 @@ class EnforcementCoordinator @Inject constructor(
         showCountdownNotification = showNotification
 
         if (showNotification) {
+            notificationHelper.resetCountdownDismissState()
             refreshCountdownNotification()
         }
 

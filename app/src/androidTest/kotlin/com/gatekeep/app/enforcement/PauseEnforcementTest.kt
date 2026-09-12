@@ -141,6 +141,7 @@ class PauseEnforcementTest : EnforcementCrossAppTestBase() {
             GatekeepTestFixtures.seedPause(usageRepository, PauseType.sixtyMin, seeded.profileId)
         }
         harness.launchTargetA()
+        assertAllowedWithoutBlockingOverlay()
     }
 
     @Test

@@ -27,8 +27,8 @@ class GatekeepApplication : Application(), Configuration.Provider {
         super.onCreate()
         runCatching {
             runBlocking {
-                val languageTag = settingsRepository.settings.first().languageTag
-                LocaleController.apply(languageTag)
+                settingsRepository.ensureLocalePersisted()
+                LocaleController.apply(settingsRepository.currentLanguageTag())
             }
         }
     }

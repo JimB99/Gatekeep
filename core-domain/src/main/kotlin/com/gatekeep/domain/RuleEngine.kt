@@ -30,8 +30,6 @@ object RuleEngine {
             return RuleEvaluation()
         }
 
-        val schedulePolicy = context.resolvedSchedulePolicy
-
         val focusBlock = FocusBlockManager.isBlocked(
             pauses = context.pauses,
             profileId = context.profile.id,
@@ -55,6 +53,17 @@ object RuleEngine {
             )
         }
 
+        val pauseCheck = PauseManager.isFullEnforcementPaused(
+            pauses = context.pauses,
+            profileId = context.profile.id,
+            packageName = context.packageName,
+            nowEpochMs = context.nowEpochMs,
+        )
+        if (pauseCheck is PauseManager.PauseCheck.Paused) {
+            return RuleEvaluation()
+        }
+
+        val schedulePolicy = context.resolvedSchedulePolicy
         if (schedulePolicy != null) {
             when (schedulePolicy.mode) {
                 SchedulePolicyMode.allow -> return RuleEvaluation()
@@ -76,16 +85,6 @@ object RuleEngine {
         }
 
         val config = context.enforcementConfig
-
-        val pauseCheck = PauseManager.isFullEnforcementPaused(
-            pauses = context.pauses,
-            profileId = context.profile.id,
-            packageName = context.packageName,
-            nowEpochMs = context.nowEpochMs,
-        )
-        if (pauseCheck is PauseManager.PauseCheck.Paused) {
-            return RuleEvaluation()
-        }
 
         val sessionAxis = evaluateSessionAxis(
             config = config,

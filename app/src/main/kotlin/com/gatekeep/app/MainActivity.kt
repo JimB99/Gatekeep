@@ -1,5 +1,6 @@
 package com.gatekeep.app
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -7,6 +8,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,7 +28,9 @@ import com.gatekeep.app.ui.viewmodel.SettingsViewModel
 import com.gatekeep.app.ui.lock.AppLockController
 import com.gatekeep.app.ui.lock.AppLockScreen
 import com.gatekeep.app.ui.theme.GatekeepTheme
+import com.gatekeep.app.util.LocaleController
 import com.gatekeep.app.util.PermissionHelper
+import com.gatekeep.data.locale.LocalePreferences
 import com.gatekeep.app.worker.UsageSyncWorker
 import com.gatekeep.app.worker.WeeklyReportWorker
 import com.gatekeep.data.repository.ProfileRepository
@@ -34,6 +38,7 @@ import com.gatekeep.data.repository.SettingsRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -43,7 +48,16 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var coordinator: EnforcementCoordinator
     @Inject lateinit var profileRepository: ProfileRepository
 
+    override fun attachBaseContext(newBase: Context) {
+        LocaleController.apply(LocalePreferences.read(newBase))
+        super.attachBaseContext(newBase)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        runBlocking {
+            settingsRepository.ensureLocalePersisted()
+            LocaleController.apply(settingsRepository.currentLanguageTag())
+        }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
@@ -65,6 +79,9 @@ class MainActivity : AppCompatActivity() {
             val settings by settingsRepository.settings.collectAsState(
                 initial = com.gatekeep.data.repository.AppSettings(),
             )
+            LaunchedEffect(settings.languageTag) {
+                LocaleController.apply(settings.languageTag)
+            }
             val lockRequired = AppLockController.isLockRequired(settings)
             var sessionUnlocked by remember { mutableStateOf(false) }
             val lifecycleOwner = LocalLifecycleOwner.current
