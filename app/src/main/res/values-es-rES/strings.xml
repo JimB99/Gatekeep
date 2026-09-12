@@ -319,6 +319,9 @@
     <string name="permissions_needed">Permisos necesarios</string>
     <string name="usage_not_granted">Acceso de uso no concedido</string>
     <string name="accessibility_not_enabled">Servicio de accesibilidad no activado</string>
+    <string name="accessibility_revoked_by_system">Android desactivó el servicio de accesibilidad. Vuelve a activarlo para la mejor aplicación de límites; los límites siguen aplicándose con estadísticas de uso.</string>
+    <string name="accessibility_revoked_notification_title">Servicio de accesibilidad desactivado</string>
+    <string name="accessibility_revoked_notification_body">Android desactivó el servicio de accesibilidad de Gatekeep. Toca para reactivarlo. Los límites siguen aplicándose con estadísticas de uso hasta entonces.</string>
     <string name="overlay_not_granted">Mostrar sobre otras apps no concedido</string>
     <string name="open_accessibility_settings">Abrir ajustes de accesibilidad</string>
 

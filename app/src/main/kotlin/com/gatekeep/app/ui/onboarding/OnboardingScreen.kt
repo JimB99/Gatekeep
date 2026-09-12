@@ -20,10 +20,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,14 +42,24 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.gatekeep.app.R
 import com.gatekeep.app.ui.viewmodel.SettingsViewModel
 import com.gatekeep.app.util.PermissionHelper
+import kotlinx.coroutines.launch
 
 @Composable
 fun OnboardingScreen(
     onComplete: () -> Unit,
+    onFinishOnboarding: suspend () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
-    viewModel.settings.collectAsState()
+    val scope = rememberCoroutineScope()
+    val settings by viewModel.settings.collectAsState()
+    var enforcementLaunchHandled by remember { mutableStateOf(false) }
+    LaunchedEffect(settings.onboardingComplete) {
+        if (settings.onboardingComplete && !enforcementLaunchHandled) {
+            enforcementLaunchHandled = true
+            onComplete()
+        }
+    }
     var permissionRefreshKey by remember { mutableIntStateOf(0) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -139,10 +152,7 @@ fun OnboardingScreen(
 
         Spacer(Modifier.height(8.dp))
         Button(
-            onClick = {
-                viewModel.completeOnboarding()
-                onComplete()
-            },
+            onClick = { scope.launch { onFinishOnboarding() } },
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(GatekeepTestTags.ONBOARDING_GET_STARTED),
@@ -150,10 +160,7 @@ fun OnboardingScreen(
         ) { Text(stringResource(R.string.get_started)) }
 
         Button(
-            onClick = {
-                viewModel.completeOnboarding()
-                onComplete()
-            },
+            onClick = { scope.launch { onFinishOnboarding() } },
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(GatekeepTestTags.ONBOARDING_SKIP),

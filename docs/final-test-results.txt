@@ -1,0 +1,93 @@
+Gatekeep Final Test Run 2026-09-12T09:08:38Z
+JVM: PASS (verified earlier)
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2m 21s
+98 actionable tasks: 9 executed, 89 up-to-date
+--- RulesCrossEnforcementTest ---
+RulesCrossEnforcementTest: FAIL
+com.gatekeep.app.enforcement.RulesCrossEnforcementTest > rInt04_noLimitToday_sessionHardBlock_stillBlocks[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.RulesCrossEnforcementTest > r14_mandatoryBreak_showsCountdown[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.RulesCrossEnforcementTest > rInt02_openWait_dailyExtensions_openFirst[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.RulesCrossEnforcementTest > r06_pinGate_hardBlock_notifyOnly[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+--- OpenGateTest ---
+OpenGateTest: FAIL
+com.gatekeep.app.enforcement.OpenGateTest > g02_mathCorrect_proceeds[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.OpenGateTest > g07_password_onOverlay[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.OpenGateTest > g05_holdButton_duration[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.OpenGateTest > g10_noneFriction_extensionBypass[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+--- OverlayStabilityTest ---
+OverlayStabilityTest: FAIL
+com.gatekeep.app.enforcement.OverlayStabilityTest > o02_switchApps_overlayFollows[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.OverlayStabilityTest > o09_delayOpenCountdown_dismisses[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+Tests on Medium_Phone_API_36.0(AVD) - 16 failed: There was 2 failure(s).
+> Task :app:connectedDebugAndroidTest FAILED
+BUILD FAILED in 1m 48s
+--- TimeLimitEnforcementTest ---
+TimeLimitEnforcementTest: FAIL
+com.gatekeep.app.enforcement.TimeLimitEnforcementTest > tl_inactiveProfile_notEnforced[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.TimeLimitEnforcementTest > tl_emptyMonitored_notEnforced[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+Tests on Medium_Phone_API_36.0(AVD) - 16 failed: There was 2 failure(s).
+> Task :app:connectedDebugAndroidTest FAILED
+BUILD FAILED in 1m 54s
+--- PauseEnforcementTest ---
+PauseEnforcementTest: FAIL
+com.gatekeep.app.enforcement.PauseEnforcementTest > pa02_appOnlyPause_otherAppsLimited[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.PauseEnforcementTest > pa05_noLimitToday_perApp[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+Tests on Medium_Phone_API_36.0(AVD) - 16 failed: There was 2 failure(s).
+> Task :app:connectedDebugAndroidTest FAILED
+BUILD FAILED in 1m 41s
+--- NotificationEnforcementTest ---
+NotificationEnforcementTest: FAIL
+com.gatekeep.app.enforcement.NotificationEnforcementTest > n01_serviceNotification_present[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+Tests on Medium_Phone_API_36.0(AVD) - 16 failed: There was 1 failure(s).
+> Task :app:connectedDebugAndroidTest FAILED
+BUILD FAILED in 1m 40s
+--- ExtensionEnforcementTest ---
+ExtensionEnforcementTest: FAIL
+com.gatekeep.app.enforcement.ExtensionEnforcementTest > e09_afterHardBlock_denied[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.ExtensionEnforcementTest > e04_maxConsecutive_denied[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.ExtensionEnforcementTest > e01_grantFromOverlay_extendsSession[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.ExtensionEnforcementTest > e07_surfaceOverlayOnly[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+--- ScheduleEnforcementTest ---
+ScheduleEnforcementTest: FAIL
+com.gatekeep.app.enforcement.ScheduleEnforcementTest > s02_blockWindow_scheduleBlock[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.ScheduleEnforcementTest > s03_outsideWindow_noMatchBehavior[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.ScheduleEnforcementTest > s06_overlappingSegments_sortOrder[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.ScheduleEnforcementTest > s10_copySegment_labelInEnforcement[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+--- PollingConsistencyTest ---
+PollingConsistencyTest: FAIL
+com.gatekeep.app.enforcement.PollingConsistencyTest > pol05_overlayBreakTimer_accurate[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+com.gatekeep.app.enforcement.PollingConsistencyTest > pol04_farLimit_blocksBefore30s[Medium_Phone_API_36.0(AVD) - 16] [31mFAILED [0m
+	java.lang.AssertionError
+Tests on Medium_Phone_API_36.0(AVD) - 16 failed: There was 2 failure(s).
+> Task :app:connectedDebugAndroidTest FAILED
+BUILD FAILED in 1m 54s
+--- MultiProfileEnforcementTest ---
+MultiProfileEnforcementTest: PASS
+DONE

@@ -69,7 +69,15 @@ fun PermissionBanner(
                     )
                 }
                 if (!state.usageGranted) Text(stringResource(R.string.usage_not_granted))
-                if (!state.accessibilityGranted) Text(stringResource(R.string.accessibility_not_enabled))
+                if (!state.accessibilityGranted) {
+                    Text(
+                        if (state.accessibilityRevokedBySystem) {
+                            stringResource(R.string.accessibility_revoked_by_system)
+                        } else {
+                            stringResource(R.string.accessibility_not_enabled)
+                        },
+                    )
+                }
                 if (!state.overlayGranted) Text(stringResource(R.string.overlay_not_granted))
                 state.lastError?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 if (state.lastError != null && state.allGranted && onDismissError != null) {
@@ -98,6 +106,7 @@ data class PermissionState(
     val overlayGranted: Boolean,
     val lastError: String?,
     val enforcementEnabled: Boolean = true,
+    val accessibilityRevokedBySystem: Boolean = false,
 ) {
     val allGranted: Boolean get() = usageGranted && accessibilityGranted && overlayGranted
     val showBanner: Boolean get() = !enforcementEnabled || !allGranted || lastError != null
@@ -107,11 +116,15 @@ fun buildPermissionState(
     context: android.content.Context,
     enforcementLog: EnforcementLog,
     enforcementEnabled: Boolean = true,
-): PermissionState =
-    PermissionState(
+    accessibilityOptedIn: Boolean = false,
+): PermissionState {
+    val accessibilityGranted = PermissionHelper.isAccessibilityEnabled(context)
+    return PermissionState(
         usageGranted = PermissionHelper.hasUsageStatsPermission(context),
-        accessibilityGranted = PermissionHelper.isAccessibilityEnabled(context),
+        accessibilityGranted = accessibilityGranted,
         overlayGranted = PermissionHelper.hasOverlayPermission(context),
         lastError = enforcementLog.getLastError(),
         enforcementEnabled = enforcementEnabled,
+        accessibilityRevokedBySystem = accessibilityOptedIn && !accessibilityGranted,
     )
+}

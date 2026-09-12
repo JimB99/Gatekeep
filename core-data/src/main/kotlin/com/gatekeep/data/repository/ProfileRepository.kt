@@ -40,6 +40,9 @@ class ProfileRepository(
     fun observeActiveProfiles(): Flow<List<Profile>> =
         profileDao.observeActiveProfiles().map { list -> list.map { it.toDomain() } }
 
+    suspend fun getActiveProfiles(): List<Profile> =
+        profileDao.getAll().filter { it.isActive }.map { it.toDomain() }
+
     fun observeActiveProfile(): Flow<Profile?> =
         profileDao.observeActive().map { it?.toDomain() }
 
@@ -125,6 +128,9 @@ class ProfileRepository(
 
     fun observeMonitoredApps(profileId: Long): Flow<List<MonitoredApp>> =
         monitoredAppDao.observeForProfile(profileId).map { list -> list.map { it.toDomain() } }
+
+    suspend fun getMonitoredApps(profileId: Long): List<MonitoredApp> =
+        monitoredAppDao.getForProfile(profileId).map { it.toDomain() }
 
     suspend fun addMonitoredApp(app: MonitoredApp) {
         monitoredAppDao.upsert(

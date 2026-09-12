@@ -30,28 +30,52 @@ class UsageStatsCollector(private val context: Context) {
     }
 
     fun queryEvents(fromMs: Long, toMs: Long): List<UsageEvent> {
+        if (!PermissionHelper.hasUsageStatsPermission(context)) return emptyList()
         val events = mutableListOf<UsageEvent>()
-        val usageEvents = usageStatsManager.queryEvents(fromMs, toMs)
+        val usageEvents = try {
+            usageStatsManager.queryEvents(fromMs, toMs)
+        } catch (_: SecurityException) {
+            return emptyList()
+        }
         val event = UsageEvents.Event()
         while (usageEvents.hasNextEvent()) {
             usageEvents.getNextEvent(event)
             when (event.eventType) {
                 UsageEvents.Event.ACTIVITY_RESUMED,
                 UsageEvents.Event.MOVE_TO_FOREGROUND,
-                -> events.add(UsageEvent(event.packageName, event.timeStamp, ForegroundEventType.RESUMED))
+                -> events.add(
+                    UsageEvent(
+                        event.packageName,
+                        event.timeStamp,
+                        ForegroundEventType.RESUMED,
+                        event.className,
+                    ),
+                )
                 UsageEvents.Event.ACTIVITY_PAUSED,
                 UsageEvents.Event.MOVE_TO_BACKGROUND,
-                -> events.add(UsageEvent(event.packageName, event.timeStamp, ForegroundEventType.PAUSED))
+                -> events.add(
+                    UsageEvent(
+                        event.packageName,
+                        event.timeStamp,
+                        ForegroundEventType.PAUSED,
+                        event.className,
+                    ),
+                )
             }
         }
         return events
     }
 
-    fun getForegroundPackageFallback(): String? {
+    fun getForegroundPackageFallback(): String? =
+        getLastForegroundResumeEvent()?.packageName
+
+    fun getForegroundActivityClassFallback(): String? =
+        getLastForegroundResumeEvent()?.className
+
+    private fun getLastForegroundResumeEvent(): UsageEvent? {
         val now = System.currentTimeMillis()
         return queryEvents(now - 60_000, now)
             .lastOrNull { it.type == ForegroundEventType.RESUMED }
-            ?.packageName
     }
 
     fun getLastResumeTimeMs(
@@ -265,6 +289,7 @@ data class UsageEvent(
     val packageName: String,
     val timestamp: Long,
     val type: ForegroundEventType,
+    val className: String? = null,
 )
 
 enum class ForegroundEventType {

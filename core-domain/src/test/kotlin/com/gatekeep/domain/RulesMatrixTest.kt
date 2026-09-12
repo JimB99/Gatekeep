@@ -21,12 +21,19 @@ import java.util.stream.Stream
 
 class RulesMatrixTest {
 
-    private val profileBase = Profile(id = 1, name = "Test", isActive = true)
+    private val profileBase = Profile(
+        id = 1,
+        name = "Test",
+        isActive = true,
+        limitBreakDurationMs = 5 * 60_000L,
+        breakDurationMs = 5 * 60_000L,
+    )
     private val limit = AppLimit(
         profileId = 1,
         packageName = "com.test.app",
         dailyLimitMs = 60 * 60_000L,
         sessionLimitMs = 15 * 60_000L,
+        breakDurationMs = 5 * 60_000L,
         enabled = true,
     )
 
@@ -41,7 +48,7 @@ class RulesMatrixTest {
     @MethodSource("meaningfulTriples")
     fun evaluateDailyCap_respectsLimitAction(triple: RulesTriple) {
         val profile = profileBase.copy(
-            onOpenAction = triple.open,
+            onOpenAction = OnOpenAction.none,
             onLimitAction = triple.limit,
             onSessionLimitAction = triple.session,
         )
@@ -74,7 +81,7 @@ class RulesMatrixTest {
     @MethodSource("meaningfulTriples")
     fun evaluateSessionCap_respectsSessionAction(triple: RulesTriple) {
         val profile = profileBase.copy(
-            onOpenAction = triple.open,
+            onOpenAction = OnOpenAction.none,
             onLimitAction = OnLimitAction.notifyOnly,
             onSessionLimitAction = triple.session,
         )

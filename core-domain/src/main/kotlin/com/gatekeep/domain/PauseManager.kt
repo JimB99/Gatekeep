@@ -5,15 +5,33 @@ import com.gatekeep.domain.model.PauseType
 
 object PauseManager {
 
-    fun isPaused(
+    /** User-initiated pauses that bypass all enforcement axes (open, session, period). */
+    fun isFullEnforcementPaused(
         pauses: List<Pause>,
         profileId: Long,
         packageName: String,
         nowEpochMs: Long,
     ): PauseCheck {
         val active = pauses.filter {
-            it.untilEpochMs > nowEpochMs && !isFocusOrBlockType(it.type)
+            it.untilEpochMs > nowEpochMs &&
+                !isFocusOrBlockType(it.type) &&
+                !isPeriodOnlyPauseType(it.type)
         }
+        return resolvePauseCheck(active, profileId, packageName)
+    }
+
+    fun isPaused(
+        pauses: List<Pause>,
+        profileId: Long,
+        packageName: String,
+        nowEpochMs: Long,
+    ): PauseCheck = isFullEnforcementPaused(pauses, profileId, packageName, nowEpochMs)
+
+    private fun resolvePauseCheck(
+        active: List<Pause>,
+        profileId: Long,
+        packageName: String,
+    ): PauseCheck {
 
         val globalPause = active.firstOrNull { it.profileId == null && it.packageName == null }
         if (globalPause != null) {
@@ -72,4 +90,7 @@ object PauseManager {
 
     private fun isFocusOrBlockType(type: PauseType): Boolean =
         type == PauseType.focusBlock || type == PauseType.focusMode
+
+    private fun isPeriodOnlyPauseType(type: PauseType): Boolean =
+        type == PauseType.noLimitToday || type == PauseType.extensionGrace
 }

@@ -1,6 +1,8 @@
 package com.gatekeep.app.enforcement
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
+import dagger.hilt.android.testing.HiltAndroidTest
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
 import com.gatekeep.app.util.PasswordHasher
@@ -10,7 +12,10 @@ import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@HiltAndroidTest
+@RunWith(AndroidJUnit4::class)
 @LargeTest
 class OpenGateTest : EnforcementCrossAppTestBase() {
 
@@ -54,12 +59,12 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
                     onOpenAction = OnOpenAction.deterrentWait,
-                    openWaitDurationSeconds = 2,
+                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.OPEN_WAIT_SEC,
                 ),
             )
         }
         harness.launchTargetA()
-        harness.sleepMs(3_000)
+        harness.waitForElapsedMs(GatekeepTestFixtures.TestDurations.msAfterTimer(GatekeepTestFixtures.TestDurations.OPEN_WAIT_SEC))
     }
 
     @Test
@@ -69,12 +74,14 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
                     onOpenAction = OnOpenAction.deterrentWait,
-                    openWaitDurationSeconds = 30,
+                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.CANCELLED_OPEN_WAIT_SEC,
                 ),
             )
         }
         harness.launchTargetA()
+        assertTrue(harness.waitForOpenFriction())
         harness.pressHome()
+        assertOverlayHidden()
     }
 
     @Test
@@ -148,13 +155,13 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
                     onOpenAction = OnOpenAction.deterrentWait,
-                    openWaitDurationSeconds = 2,
-                    sessionWaitDurationSeconds = 4,
+                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.OPEN_WAIT_SEC,
+                    sessionWaitDurationSeconds = GatekeepTestFixtures.TestDurations.SESSION_WAIT_SEC,
                 ),
             )
         }
         harness.launchTargetA()
-        harness.sleepMs(2_500)
+        harness.waitForElapsedMs(GatekeepTestFixtures.TestDurations.msAfterTimer(GatekeepTestFixtures.TestDurations.OPEN_WAIT_SEC))
     }
 
     @Test

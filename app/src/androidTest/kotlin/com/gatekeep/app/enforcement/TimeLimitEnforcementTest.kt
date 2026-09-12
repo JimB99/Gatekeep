@@ -1,6 +1,8 @@
 package com.gatekeep.app.enforcement
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
+import dagger.hilt.android.testing.HiltAndroidTest
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
 import com.gatekeep.domain.model.LimitUsageScope
@@ -10,7 +12,10 @@ import com.gatekeep.domain.model.PauseType
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@HiltAndroidTest
+@RunWith(AndroidJUnit4::class)
 @LargeTest
 class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
 
@@ -20,7 +25,7 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
-                    sessionLimitMs = 60_000L,
+                    sessionLimitMs = GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS,
                     onSessionLimitAction = OnSessionLimitAction.hardBlock,
                 ),
             )
@@ -30,7 +35,7 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
                 seeded.packageName,
                 sessionState = com.gatekeep.domain.model.SessionState(
                     packageName = seeded.packageName,
-                    sessionStartEpochMs = System.currentTimeMillis() - 61_000L,
+                    sessionStartEpochMs = System.currentTimeMillis() - GatekeepTestFixtures.TestDurations.SESSION_OVER_CAP_MS,
                 ),
             )
         }
@@ -44,13 +49,16 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
-                    dailyLimitMs = 60 * 60_000L,
-                    sessionLimitMs = 15 * 60_000L,
+                    dailyLimitMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
+                    sessionLimitMs = GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS,
                     onLimitAction = OnLimitAction.hardBlock,
                 ),
             )
             GatekeepTestFixtures.seedUsageAtCap(
-                usageRepository, seeded.profileId, seeded.packageName, dailyMs = 60 * 60_000L + 1,
+                usageRepository,
+                seeded.profileId,
+                seeded.packageName,
+                dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS + 1,
             )
         }
         harness.launchTargetA()
@@ -63,12 +71,15 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
-                    hourlyLimitMs = 30 * 60_000L,
+                    hourlyLimitMs = GatekeepTestFixtures.TestDurations.HOURLY_LIMIT_MS,
                     onLimitAction = OnLimitAction.hardBlock,
                 ),
             )
             GatekeepTestFixtures.seedUsageAtCap(
-                usageRepository, seeded.profileId, seeded.packageName, hourlyMs = 31 * 60_000L,
+                usageRepository,
+                seeded.profileId,
+                seeded.packageName,
+                hourlyMs = GatekeepTestFixtures.TestDurations.HOURLY_LIMIT_MS + 1_000L,
             )
         }
         harness.launchTargetA()
@@ -81,12 +92,15 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
-                    weeklyLimitMs = 7 * 60 * 60_000L,
+                    weeklyLimitMs = GatekeepTestFixtures.TestDurations.WEEKLY_LIMIT_MS,
                     onLimitAction = OnLimitAction.hardBlock,
                 ),
             )
             GatekeepTestFixtures.seedUsageAtCap(
-                usageRepository, seeded.profileId, seeded.packageName, weeklyMs = 7 * 60 * 60_000L + 1,
+                usageRepository,
+                seeded.profileId,
+                seeded.packageName,
+                weeklyMs = GatekeepTestFixtures.TestDurations.WEEKLY_LIMIT_MS + 1,
             )
         }
         harness.launchTargetA()
@@ -100,13 +114,16 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
                 profileRepository = profileRepository,
                 extraPackages = listOf(EnforcementTestPackages.TARGET_B to EnforcementTestPackages.TARGET_B_LABEL),
                 config = GatekeepTestFixtures.ProfileSeedConfig(
-                    dailyLimitMs = 60 * 60_000L,
+                    dailyLimitMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
                     limitUsageScope = LimitUsageScope.sharedPool,
                     onLimitAction = OnLimitAction.hardBlock,
                 ),
             )
             GatekeepTestFixtures.seedUsageAtCap(
-                usageRepository, seeded.profileId, EnforcementTestPackages.TARGET_A, dailyMs = 60 * 60_000L,
+                usageRepository,
+                seeded.profileId,
+                EnforcementTestPackages.TARGET_A,
+                dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS + 1,
             )
         }
         harness.launchTargetB()
@@ -119,18 +136,21 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
-                    dailyLimitMs = 60 * 60_000L,
+                    dailyLimitMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
                     onLimitAction = OnLimitAction.limitWithExtensions,
                 ),
             )
             GatekeepTestFixtures.seedUsageAtCap(
-                usageRepository, seeded.profileId, seeded.packageName, dailyMs = 60 * 60_000L,
+                usageRepository,
+                seeded.profileId,
+                seeded.packageName,
+                dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
             )
             usageRepository.logOverride(
                 seeded.packageName,
                 seeded.profileId,
                 com.gatekeep.domain.model.OverrideMethod.extension,
-                15 * 60_000L,
+                GatekeepTestFixtures.TestDurations.EXTENSION_BONUS_MS,
             )
         }
         harness.launchTargetA()
@@ -148,27 +168,33 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
                 PauseType.noLimitToday,
                 profileId = seeded.profileId,
                 packageName = seeded.packageName,
-                untilMs = System.currentTimeMillis() + 60 * 60_000L,
+                untilMs = System.currentTimeMillis() + GatekeepTestFixtures.TestDurations.FUTURE_OFFSET_MS,
             )
         }
         harness.launchTargetA()
-        assertTrue(harness.waitForOverlayGone(timeoutMs = 5_000) || !harness.waitForOverlay(timeoutMs = 2_000))
+        assertAllowedWithoutBlockingOverlay()
     }
 
     @Test
     fun tl09_gradualTightening_reducesLimit() {
         runSeed {
-            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
-                    dailyLimitMs = 120 * 60_000L,
+                    dailyLimitMs = GatekeepTestFixtures.TestDurations.GRADUAL_TIGHTENING_LIMIT_MS,
                     gradualTighteningEnabled = true,
                     onLimitAction = OnLimitAction.hardBlock,
                 ),
             )
-            seedHardBlockProfile()
+            GatekeepTestFixtures.seedUsageAtCap(
+                usageRepository,
+                seeded.profileId,
+                seeded.packageName,
+                dailyMs = GatekeepTestFixtures.TestDurations.GRADUAL_TIGHTENING_LIMIT_MS + 1,
+            )
         }
         harness.launchTargetA()
+        assertTrue(harness.waitForOverlay())
         assertNotNull(harness.overlayMessageText())
     }
 
@@ -185,7 +211,7 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
             )
         }
         harness.launchTargetA()
-        assertTrue(harness.waitForOverlayGone(timeoutMs = 3_000))
+        assertAllowedWithoutBlockingOverlay()
     }
 
     @Test
@@ -198,7 +224,7 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
             )
         }
         harness.launchTargetA()
-        assertTrue(harness.waitForOverlayGone(timeoutMs = 3_000))
+        assertOverlayHidden()
     }
 
     @Test
@@ -208,6 +234,6 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
             profileRepository.toggleProfileActive(id, true)
         }
         harness.launchTargetA()
-        assertTrue(harness.waitForOverlayGone(timeoutMs = 3_000))
+        assertOverlayHidden()
     }
 }

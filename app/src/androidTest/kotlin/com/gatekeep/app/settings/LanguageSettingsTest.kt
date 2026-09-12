@@ -2,13 +2,16 @@ package com.gatekeep.app.settings
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.MainActivity
+import androidx.test.platform.app.InstrumentationRegistry
 import com.gatekeep.app.support.GatekeepTestFixtures
+import com.gatekeep.app.support.GatekeepUiTest
+import com.gatekeep.app.support.GatekeepUiTest.openSettings
+import com.gatekeep.app.util.LocaleController
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.SettingsRepository
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -37,16 +40,18 @@ class LanguageSettingsTest {
     @Before
     fun setUp() {
         hiltRule.inject()
-        runBlocking { GatekeepTestFixtures.seedEnforcementReady(settingsRepository) }
+        runBlocking { GatekeepTestFixtures.seedEnforcementReady(settingsRepository, onboardingComplete = true) }
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            LocaleController.apply("en-GB")
+        }
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
         openLanguageSettings()
     }
 
     private fun openLanguageSettings() {
-        composeRule.onNodeWithContentDescription("Settings").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithText("Language", substring = true, ignoreCase = true).performClick()
+        composeRule.openSettings()
+        composeRule.onNodeWithTag(GatekeepTestTags.SETTINGS_LANGUAGE).performClick()
         composeRule.waitForIdle()
     }
 
@@ -60,9 +65,9 @@ class LanguageSettingsTest {
     fun l02_switchToEachSupportedLocale() {
         listOf("en-GB", "de-AT", "es-ES").forEach { tag ->
             composeRule.onNodeWithTag(GatekeepTestTags.LANGUAGE_OPTION_PREFIX + tag).performClick()
-            composeRule.waitForIdle()
-            val saved = runBlocking { settingsRepository.settings.first().languageTag }
-            assertEquals(tag, saved)
+            composeRule.waitUntil(timeoutMillis = 5_000) {
+                runBlocking { settingsRepository.settings.first().languageTag } == tag
+            }
         }
     }
 

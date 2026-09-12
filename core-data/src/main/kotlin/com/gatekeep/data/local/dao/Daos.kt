@@ -123,6 +123,9 @@ interface PauseDao {
     @Query("SELECT * FROM pauses WHERE untilEpochMs > :now")
     fun observeActive(now: Long): Flow<List<PauseEntity>>
 
+    @Query("SELECT * FROM pauses WHERE untilEpochMs > :now")
+    suspend fun getActive(now: Long): List<PauseEntity>
+
     @Insert
     suspend fun insert(pause: PauseEntity): Long
 

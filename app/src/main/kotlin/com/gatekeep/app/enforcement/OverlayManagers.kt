@@ -31,6 +31,8 @@ import com.gatekeep.domain.model.FrictionDifficulty
 import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.MathChallenge
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -151,6 +153,21 @@ class BlockOverlayManager @Inject constructor(
             clearOverlayState()
             removeOverlayOnly()
         }
+    }
+
+    fun removeOverlaySynchronously(timeoutMs: Long = 3_000L) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            clearOverlayState()
+            removeOverlayOnly()
+            return
+        }
+        val latch = CountDownLatch(1)
+        mainHandler.post {
+            clearOverlayState()
+            removeOverlayOnly()
+            latch.countDown()
+        }
+        latch.await(timeoutMs, TimeUnit.MILLISECONDS)
     }
 
     private fun clearOverlayTimers() {

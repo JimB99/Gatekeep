@@ -36,6 +36,8 @@ data class AppSettings(
     val weeklyReportDayOfWeek: Int = 0,
     val weeklyReportMinuteOfDay: Int = 10 * 60,
     val languageTag: String = "en-GB",
+    /** User previously enabled the foreground-monitor accessibility service. */
+    val accessibilityOptedIn: Boolean = false,
 ) {
     fun hasAppPin(): Boolean = !appPasswordHash.isNullOrBlank()
 }
@@ -61,6 +63,7 @@ class SettingsRepository(private val context: Context) {
         val WEEKLY_REPORT_DAY = intPreferencesKey("weekly_report_day")
         val WEEKLY_REPORT_MINUTE = intPreferencesKey("weekly_report_minute")
         val LANGUAGE = stringPreferencesKey("language_tag")
+        val ACCESSIBILITY_OPTED_IN = booleanPreferencesKey("accessibility_opted_in")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs -> readSettings(prefs) }
@@ -97,6 +100,7 @@ class SettingsRepository(private val context: Context) {
         weeklyReportMinuteOfDay = prefs[Keys.WEEKLY_REPORT_MINUTE] ?: (10 * 60),
         languageTag = prefs[Keys.LANGUAGE]?.takeIf { it in LocalePreferences.SUPPORTED_TAGS }
             ?: LocalePreferences.read(context),
+        accessibilityOptedIn = prefs[Keys.ACCESSIBILITY_OPTED_IN] ?: false,
     )
 
     private fun writeSettings(prefs: MutablePreferences, updated: AppSettings) {
@@ -124,5 +128,6 @@ class SettingsRepository(private val context: Context) {
         val languageTag = LocalePreferences.normalizeTag(updated.languageTag)
         prefs[Keys.LANGUAGE] = languageTag
         LocalePreferences.write(context, languageTag)
+        prefs[Keys.ACCESSIBILITY_OPTED_IN] = updated.accessibilityOptedIn
     }
 }

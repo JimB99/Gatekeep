@@ -40,6 +40,7 @@ class PermissionBannerTest {
     @Before
     fun setUp() {
         hiltRule.inject()
+        enforcementLog.clear()
         runBlocking { GatekeepTestFixtures.seedEnforcementReady(settingsRepository) }
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
@@ -50,11 +51,18 @@ class PermissionBannerTest {
         harness.grantEnforcementPermissions()
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
+        if (!harness.waitForPermissionGrants(timeoutMs = 5_000)) {
+            org.junit.Assume.assumeTrue(
+                "Skipping: emulator did not report all enforcement permission grants.",
+                false,
+            )
+        }
         composeRule.onNodeWithTag(GatekeepTestTags.PERMISSION_BANNER).assertIsNotDisplayed()
     }
 
     @Test
     fun p02_missingUsage_showsBanner() {
+        harness.grantEnforcementPermissions()
         harness.revokeUsagePermission()
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
@@ -108,6 +116,12 @@ class PermissionBannerTest {
         harness.grantEnforcementPermissions()
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
+        if (!harness.waitForPermissionGrants(timeoutMs = 5_000)) {
+            org.junit.Assume.assumeTrue(
+                "Skipping: emulator did not report all enforcement permission grants.",
+                false,
+            )
+        }
         composeRule.onNodeWithTag(GatekeepTestTags.PERMISSION_BANNER).assertIsNotDisplayed()
     }
 

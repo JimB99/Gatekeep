@@ -1,6 +1,8 @@
 package com.gatekeep.app.enforcement
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
+import dagger.hilt.android.testing.HiltAndroidTest
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
 import com.gatekeep.domain.model.OnLimitAction
@@ -9,7 +11,10 @@ import com.gatekeep.domain.model.SchedulePolicyMode
 import com.gatekeep.domain.ScheduleTestWindows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@HiltAndroidTest
+@RunWith(AndroidJUnit4::class)
 @LargeTest
 class MultiProfileEnforcementTest : EnforcementCrossAppTestBase() {
 
@@ -20,7 +25,7 @@ class MultiProfileEnforcementTest : EnforcementCrossAppTestBase() {
                 profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
                     name = "Strict",
-                    dailyLimitMs = 30 * 60_000L,
+                    dailyLimitMs = GatekeepTestFixtures.TestDurations.STRICT_PROFILE_LIMIT_MS,
                     onLimitAction = OnLimitAction.hardBlock,
                 ),
             )
@@ -28,7 +33,7 @@ class MultiProfileEnforcementTest : EnforcementCrossAppTestBase() {
                 profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
                     name = "Loose",
-                    dailyLimitMs = 120 * 60_000L,
+                    dailyLimitMs = GatekeepTestFixtures.TestDurations.LOOSE_PROFILE_LIMIT_MS,
                     onLimitAction = OnLimitAction.hardBlock,
                 ),
             )
@@ -41,7 +46,10 @@ class MultiProfileEnforcementTest : EnforcementCrossAppTestBase() {
                 ),
             )
             GatekeepTestFixtures.seedUsageAtCap(
-                usageRepository, strict.profileId, EnforcementTestPackages.TARGET_A, dailyMs = 31 * 60_000L,
+                usageRepository,
+                strict.profileId,
+                EnforcementTestPackages.TARGET_A,
+                dailyMs = GatekeepTestFixtures.TestDurations.STRICT_OVER_CAP_MS,
             )
         }
         harness.launchTargetA()
@@ -61,7 +69,10 @@ class MultiProfileEnforcementTest : EnforcementCrossAppTestBase() {
             )
             GatekeepTestFixtures.seedPause(usageRepository, PauseType.sixtyMin, paused.profileId)
             GatekeepTestFixtures.seedUsageAtCap(
-                usageRepository, paused.profileId, EnforcementTestPackages.TARGET_A, dailyMs = 60 * 60_000L,
+                usageRepository,
+                paused.profileId,
+                EnforcementTestPackages.TARGET_A,
+                dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
             )
         }
         harness.launchTargetA()

@@ -319,6 +319,9 @@
     <string name="permissions_needed">Berechtigungen erforderlich</string>
     <string name="usage_not_granted">Nutzungszugriff nicht erteilt</string>
     <string name="accessibility_not_enabled">Bedienungshilfen-Dienst nicht aktiviert</string>
+    <string name="accessibility_revoked_by_system">Android hat den Bedienungshilfen-Dienst deaktiviert. Aktiviere ihn wieder für schnellste Durchsetzung; Limits gelten weiter per Nutzungsstatistik.</string>
+    <string name="accessibility_revoked_notification_title">Bedienungshilfen-Dienst deaktiviert</string>
+    <string name="accessibility_revoked_notification_body">Android hat Gatekeeps Bedienungshilfen-Dienst deaktiviert. Tippe, um ihn wieder zu aktivieren. Limits gelten bis dahin per Nutzungsstatistik.</string>
     <string name="overlay_not_granted">Anzeige über anderen Apps nicht erteilt</string>
     <string name="open_accessibility_settings">Bedienungshilfen-Einstellungen öffnen</string>
 

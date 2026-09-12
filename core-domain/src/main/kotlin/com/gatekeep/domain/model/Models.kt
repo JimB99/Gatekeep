@@ -294,6 +294,14 @@ data class RuleEvaluationContext(
     val lastEmergencyBypassEpochMs: Long? = null,
     val enforcementConfig: ProfileEnforcementConfig = profile.enforcementConfig(),
     val limitExtensionBonus: LimitExtensionBonus = LimitExtensionBonus(),
+    val periodLimitsDisabled: Boolean = false,
+)
+
+/** Independent per-axis rule outcomes before presentation merge. */
+data class RuleEvaluation(
+    val open: RuleResult? = null,
+    val session: RuleResult? = null,
+    val period: RuleResult? = null,
 )
 
 sealed class RuleResult {

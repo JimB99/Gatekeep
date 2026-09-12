@@ -1,6 +1,8 @@
 package com.gatekeep.domain
 
 import com.gatekeep.domain.model.AppLimit
+import com.gatekeep.domain.model.ExtensionPolicy
+import com.gatekeep.domain.model.ExtensionSurfaceMode
 import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.ProfileEnforcementConfig
@@ -119,8 +121,36 @@ object ProfileMergeEngine {
             limitWaitDurationSeconds = configs.maxOf { it.limitWaitDurationSeconds },
             sessionBreakDurationMs = configs.mapNotNull { it.sessionBreakDurationMs }.maxOrNull(),
             limitBreakDurationMs = configs.mapNotNull { it.limitBreakDurationMs }.maxOrNull(),
-            limitExtensionPolicy = configs.first().limitExtensionPolicy,
-            sessionExtensionPolicy = configs.first().sessionExtensionPolicy,
+            limitExtensionPolicy = mergeExtensionPolicies(configs.map { it.limitExtensionPolicy }),
+            sessionExtensionPolicy = mergeExtensionPolicies(configs.map { it.sessionExtensionPolicy }),
+        )
+    }
+
+    private fun mergeExtensionPolicies(policies: List<ExtensionPolicy>): ExtensionPolicy {
+        if (policies.isEmpty()) return ExtensionPolicy()
+        if (policies.size == 1) return policies.first()
+        val optionMinutes = policies
+            .map { it.optionMinutes.toSet() }
+            .reduce { acc, set -> acc.intersect(set) }
+            .sorted()
+        val maxPerDay = policies.mapNotNull { it.maxExtensionsPerDay }.minOrNull()
+        val maxConsecutive = policies.mapNotNull { it.maxConsecutiveExtensions }.minOrNull()
+        val surfaceMode = when {
+            policies.any { it.surfaceMode == ExtensionSurfaceMode.none } -> ExtensionSurfaceMode.none
+            policies.any { it.surfaceMode == ExtensionSurfaceMode.overlay } &&
+                policies.any { it.surfaceMode == ExtensionSurfaceMode.inApp } -> ExtensionSurfaceMode.both
+            policies.all { it.surfaceMode == ExtensionSurfaceMode.overlay } -> ExtensionSurfaceMode.overlay
+            policies.all { it.surfaceMode == ExtensionSurfaceMode.inApp } -> ExtensionSurfaceMode.inApp
+            else -> ExtensionSurfaceMode.both
+        }
+        return ExtensionPolicy(
+            optionMinutes = optionMinutes,
+            maxExtensionsPerDay = maxPerDay,
+            maxConsecutiveExtensions = maxConsecutive,
+            showNoLimitToday = policies.all { it.showNoLimitToday },
+            customMinutes = policies.mapNotNull { it.customMinutes }.minOrNull(),
+            customEnabled = policies.all { it.customEnabled },
+            surfaceMode = surfaceMode,
         )
     }
 

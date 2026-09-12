@@ -44,6 +44,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -51,6 +52,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.gatekeep.app.R
 import com.gatekeep.app.data.ProfileUsageSummary
+import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.app.ui.components.AppIcon
 import com.gatekeep.app.ui.components.PermissionBanner
 import com.gatekeep.app.ui.viewmodel.ProfilesHomeViewModel
@@ -103,17 +105,27 @@ fun ProfilesHomeScreen(
     }
 
     Scaffold(
+        modifier = Modifier.testTag(GatekeepTestTags.DASHBOARD_ROOT),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
-                    IconButton(onClick = onNavigateStats) {
+                    IconButton(
+                        onClick = onNavigateStats,
+                        modifier = Modifier.testTag(GatekeepTestTags.NAV_STATS),
+                    ) {
                         Icon(Icons.Default.BarChart, stringResource(R.string.stats))
                     }
-                    IconButton(onClick = onNavigatePause) {
+                    IconButton(
+                        onClick = onNavigatePause,
+                        modifier = Modifier.testTag(GatekeepTestTags.NAV_PAUSE),
+                    ) {
                         Icon(Icons.Default.Pause, stringResource(R.string.pause))
                     }
-                    IconButton(onClick = onNavigateSettings) {
+                    IconButton(
+                        onClick = onNavigateSettings,
+                        modifier = Modifier.testTag(GatekeepTestTags.NAV_SETTINGS),
+                    ) {
                         Icon(Icons.Default.Settings, stringResource(R.string.settings))
                     }
                 },
@@ -212,7 +224,7 @@ private fun ProfileHomeCard(
     var menuExpanded by remember { mutableStateOf(false) }
     Card(
         onClick = onOpen,
-        modifier = modifier,
+        modifier = modifier.testTag(GatekeepTestTags.profileCard(profile.name)),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(

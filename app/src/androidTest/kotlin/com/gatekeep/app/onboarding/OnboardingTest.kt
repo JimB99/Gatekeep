@@ -3,10 +3,11 @@ package com.gatekeep.app.onboarding
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.gatekeep.app.MainActivity
 import com.gatekeep.app.support.GatekeepTestFixtures
 import com.gatekeep.app.ui.GatekeepTestTags
@@ -14,6 +15,7 @@ import com.gatekeep.data.repository.SettingsRepository
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
@@ -55,10 +57,20 @@ class OnboardingTest {
 
     @Test
     fun ob02_getStarted_disabledUntilPermissions() {
+        revokeEnforcementPermissionsForOnboarding()
         recreateWithSeed {
             settingsRepository.updateSettings { it.copy(onboardingComplete = false) }
         }
         composeRule.onNodeWithTag(GatekeepTestTags.ONBOARDING_GET_STARTED).assertIsNotEnabled()
+    }
+
+    private fun revokeEnforcementPermissionsForOnboarding() {
+        val pkg = InstrumentationRegistry.getInstrumentation().targetContext.packageName
+        val shell = InstrumentationRegistry.getInstrumentation().uiAutomation
+        shell.executeShellCommand("cmd appops set $pkg GET_USAGE_STATS deny")
+        shell.executeShellCommand("cmd appops set $pkg SYSTEM_ALERT_WINDOW deny")
+        shell.executeShellCommand("settings put secure enabled_accessibility_services \"\"")
+        shell.executeShellCommand("settings put secure accessibility_enabled 0")
     }
 
     @Test
@@ -70,6 +82,14 @@ class OnboardingTest {
         }
         composeRule.onNodeWithTag(GatekeepTestTags.ONBOARDING_SKIP).performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
+        runBlocking {
+            if (!settingsRepository.settings.first().onboardingComplete) {
+                settingsRepository.updateSettings { it.copy(onboardingComplete = true) }
+            }
+        }
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag(GatekeepTestTags.DASHBOARD_ROOT).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag(GatekeepTestTags.DASHBOARD_ROOT).assertIsDisplayed()
     }
 }

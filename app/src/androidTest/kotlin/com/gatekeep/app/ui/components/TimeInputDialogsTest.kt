@@ -1,11 +1,13 @@
 package com.gatekeep.app.ui.components
 
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.gatekeep.app.ui.theme.GatekeepTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -15,18 +17,20 @@ import org.junit.runner.RunWith
 class TimeInputDialogsTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
     fun rollingDurationDialog_showsDoubleZeroAndUpdatesDisplay() {
         var confirmedSeconds: Int? = null
         composeRule.setContent {
-            RollingDurationDialog(
-                initialTotalSeconds = 0,
-                onDismiss = {},
-                onConfirm = { confirmedSeconds = it },
-                title = "Custom duration",
-            )
+            GatekeepTheme {
+                RollingDurationDialog(
+                    initialTotalSeconds = 0,
+                    onDismiss = {},
+                    onConfirm = { confirmedSeconds = it },
+                    title = "Custom duration",
+                )
+            }
         }
 
         composeRule.onNodeWithText("00:00:00").assertIsDisplayed()
@@ -44,12 +48,14 @@ class TimeInputDialogsTest {
     @Test
     fun twentyFourHourClockDialog_isDisplayed() {
         composeRule.setContent {
-            TwentyFourHourClockDialog(
-                initialMinuteOfDay = 9 * 60 + 30,
-                onDismiss = {},
-                onConfirm = {},
-                title = "Custom time",
-            )
+            GatekeepTheme {
+                TwentyFourHourClockDialog(
+                    initialMinuteOfDay = 9 * 60 + 30,
+                    onDismiss = {},
+                    onConfirm = {},
+                    title = "Custom time",
+                )
+            }
         }
 
         composeRule.onNodeWithText("Custom time").assertIsDisplayed()

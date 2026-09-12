@@ -51,6 +51,8 @@ fun DurationActionGrid(
     onUntilDate: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier,
+    fiveMinTestTag: String = GatekeepTestTags.PAUSE_ALLOW_FIVE_MIN,
+    fifteenMinTestTag: String? = GatekeepTestTags.PAUSE_ALLOW_FIFTEEN_MIN,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -65,7 +67,7 @@ fun DurationActionGrid(
                 enabled = enabled,
                 modifier = Modifier
                     .weight(1f)
-                    .testTag(GatekeepTestTags.PAUSE_FIVE_MIN),
+                    .testTag(fiveMinTestTag),
             )
             DurationChoiceButton(
                 label = stringResource(R.string.duration_15_min),
@@ -73,7 +75,15 @@ fun DurationActionGrid(
                 isDraft = draftChoice is DurationChoice.PresetMinutes && draftChoice.minutes == 15,
                 onClick = { onDraftSelect(DurationChoice.PresetMinutes(15)) },
                 enabled = enabled,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .then(
+                        if (fifteenMinTestTag != null) {
+                            Modifier.testTag(fifteenMinTestTag)
+                        } else {
+                            Modifier
+                        },
+                    ),
             )
             DurationChoiceButton(
                 label = stringResource(R.string.duration_60_min),
@@ -192,6 +202,7 @@ fun PauseResetBlock(
     title: String = stringResource(R.string.pause_reset_title),
     help: String = stringResource(R.string.pause_reset_help),
     action: String = stringResource(R.string.pause_reset_action),
+    actionTestTag: String = GatekeepTestTags.PAUSE_RESET_ACTION,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
@@ -206,7 +217,9 @@ fun PauseResetBlock(
         OutlinedButton(
             onClick = onReset,
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(actionTestTag),
         ) {
             Text(action)
         }

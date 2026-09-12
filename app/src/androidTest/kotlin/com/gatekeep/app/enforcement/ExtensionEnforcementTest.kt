@@ -1,14 +1,19 @@
 package com.gatekeep.app.enforcement
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
 import com.gatekeep.app.support.GatekeepTestFixtures
+import dagger.hilt.android.testing.HiltAndroidTest
 import com.gatekeep.domain.model.ExtensionPolicy
 import com.gatekeep.domain.model.ExtensionSurfaceMode
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.PauseType
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@HiltAndroidTest
+@RunWith(AndroidJUnit4::class)
 @LargeTest
 class ExtensionEnforcementTest : EnforcementCrossAppTestBase() {
 
@@ -38,7 +43,12 @@ class ExtensionEnforcementTest : EnforcementCrossAppTestBase() {
                     limitExtensionPolicy = ExtensionPolicy(maxExtensionsPerDay = 0),
                 ),
             )
-            GatekeepTestFixtures.seedUsageAtCap(usageRepository, seeded.profileId, seeded.packageName, dailyMs = 60 * 60_000L)
+            GatekeepTestFixtures.seedUsageAtCap(
+                usageRepository,
+                seeded.profileId,
+                seeded.packageName,
+                dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
+            )
         }
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())
@@ -69,7 +79,7 @@ class ExtensionEnforcementTest : EnforcementCrossAppTestBase() {
             )
             GatekeepTestFixtures.seedPause(
                 usageRepository, PauseType.noLimitToday, seeded.profileId, seeded.packageName,
-                untilMs = System.currentTimeMillis() + 60 * 60_000L,
+                untilMs = System.currentTimeMillis() + GatekeepTestFixtures.TestDurations.FUTURE_OFFSET_MS,
             )
         }
         harness.launchTargetA()
@@ -81,7 +91,8 @@ class ExtensionEnforcementTest : EnforcementCrossAppTestBase() {
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(profileRepository)
             usageRepository.addExtensionGracePause(
                 seeded.profileId, seeded.packageName,
-                System.currentTimeMillis() + 60_000L, System.currentTimeMillis(),
+                System.currentTimeMillis() + GatekeepTestFixtures.TestDurations.EXTENSION_GRACE_MS,
+                System.currentTimeMillis(),
             )
         }
         harness.launchTargetA()

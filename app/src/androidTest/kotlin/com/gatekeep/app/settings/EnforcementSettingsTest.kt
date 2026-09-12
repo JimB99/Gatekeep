@@ -2,13 +2,14 @@ package com.gatekeep.app.settings
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.MainActivity
 import com.gatekeep.app.support.GatekeepTestFixtures
+import com.gatekeep.app.support.GatekeepUiTest
+import com.gatekeep.app.support.GatekeepUiTest.openSettings
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.SettingsRepository
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -44,15 +45,13 @@ class EnforcementSettingsTest {
     }
 
     private fun openEnforcementSettings() {
-        composeRule.onNodeWithContentDescription("Settings").performClick()
-        composeRule.waitForIdle()
+        composeRule.openSettings()
         composeRule.onNodeWithText("Enforcement", substring = true, ignoreCase = true).performClick()
         composeRule.waitForIdle()
     }
 
     private fun openNotificationSettings() {
-        composeRule.onNodeWithContentDescription("Settings").performClick()
-        composeRule.waitForIdle()
+        composeRule.openSettings()
         composeRule.onNodeWithText("Notifications", substring = true, ignoreCase = true).performClick()
         composeRule.waitForIdle()
     }
@@ -88,11 +87,12 @@ class EnforcementSettingsTest {
 
     @Test
     fun set02_weeklyReportToggle() {
+        val initial = runBlocking { settingsRepository.settings.first().weeklyReportEnabled }
         openNotificationSettings()
         composeRule.onNodeWithTag(GatekeepTestTags.SETTINGS_WEEKLY_REPORT_TOGGLE).performClick()
         composeRule.waitForIdle()
-        val on = runBlocking { settingsRepository.settings.first().weeklyReportEnabled }
-        assertFalse(on)
+        val after = runBlocking { settingsRepository.settings.first().weeklyReportEnabled }
+        assertTrue(initial != after)
     }
 
     @Test

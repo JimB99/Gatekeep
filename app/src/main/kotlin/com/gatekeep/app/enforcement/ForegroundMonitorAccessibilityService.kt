@@ -14,17 +14,18 @@ class ForegroundMonitorAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+        val eventType = event.eventType
+        val packageName = event.packageName?.toString()
+        val className = event.className?.toString()
+        // Keep the accessibility thread light; coordinator work runs asynchronously.
         try {
-            when (event.eventType) {
+            when (eventType) {
                 AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                    val packageName = event.packageName?.toString() ?: return
-                    val className = event.className?.toString()
+                    if (packageName == null) return
                     coordinator.onForegroundAppChanged(packageName, className)
                 }
                 AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
-                    val packageName = event.packageName?.toString() ?: return
-                    // Overlay windows emit package-level windows-changed events without
-                    // activity class; real navigation is reported via WINDOW_STATE_CHANGED.
+                    if (packageName == null) return
                     if (packageName == applicationContext.packageName) return
                     coordinator.onForegroundAppChanged(packageName, windowClassName = null)
                 }

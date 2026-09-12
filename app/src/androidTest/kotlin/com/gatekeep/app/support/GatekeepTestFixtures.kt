@@ -32,6 +32,36 @@ object GatekeepTestFixtures {
     const val TEST_PIN = "1234"
     const val PROFILE_PIN = "4321"
 
+    /** Compact durations for instrumented tests — limits are scaled down; only relative values matter. */
+    object TestDurations {
+        const val DAILY_LIMIT_MS = 60_000L
+        const val HOURLY_LIMIT_MS = 30_000L
+        const val WEEKLY_LIMIT_MS = 70_000L
+        const val SESSION_LIMIT_MS = 3_000L
+        const val SESSION_OVER_CAP_MS = SESSION_LIMIT_MS + 500L
+        const val BREAK_MS = 1_500L
+        const val LIMIT_BREAK_MS = 1_500L
+        const val OPEN_WAIT_SEC = 1
+        const val SESSION_WAIT_SEC = 2
+        const val DELAY_OPEN_SEC = 1
+        const val CANCELLED_OPEN_WAIT_SEC = 2
+        const val PAUSE_EXPIRY_MS = 800L
+        const val FUTURE_OFFSET_MS = 30_000L
+        const val EXTENSION_GRACE_MS = 2_000L
+        const val EXTENSION_BONUS_MS = 5_000L
+        const val STRICT_PROFILE_LIMIT_MS = 20_000L
+        const val LOOSE_PROFILE_LIMIT_MS = 60_000L
+        const val STRICT_OVER_CAP_MS = STRICT_PROFILE_LIMIT_MS + 500L
+        const val EIGHTY_PERCENT_LIMIT_MS = 10_000L
+        const val EIGHTY_PERCENT_USAGE_MS = 8_100L
+        const val GRADUAL_TIGHTENING_LIMIT_MS = 30_000L
+        const val TIMER_BUFFER_MS = 200L
+        const val SESSION_TIMER_ELAPSED_MS = 2_000L
+
+        fun msAfterTimer(seconds: Int): Long = seconds * 1_000L + TIMER_BUFFER_MS
+        fun msAfterTimerMs(durationMs: Long): Long = durationMs + TIMER_BUFFER_MS
+    }
+
     data class SeededProfile(
         val profileId: Long,
         val packageName: String,
@@ -39,19 +69,19 @@ object GatekeepTestFixtures {
 
     data class ProfileSeedConfig(
         val name: String = "Test Profile",
-        val dailyLimitMs: Long? = 60 * 60_000L,
+        val dailyLimitMs: Long? = TestDurations.DAILY_LIMIT_MS,
         val hourlyLimitMs: Long? = null,
         val weeklyLimitMs: Long? = null,
-        val sessionLimitMs: Long? = 15 * 60_000L,
+        val sessionLimitMs: Long? = TestDurations.SESSION_LIMIT_MS,
         val onOpenAction: OnOpenAction = OnOpenAction.none,
         val onLimitAction: OnLimitAction = OnLimitAction.hardBlock,
         val onSessionLimitAction: OnSessionLimitAction = OnSessionLimitAction.hardBlock,
         val defaultFrictionMethod: FrictionMethod = FrictionMethod.math,
         val defaultFrictionDifficulty: FrictionDifficulty = FrictionDifficulty.easy,
         val delayOpenSeconds: Int = 0,
-        val openWaitDurationSeconds: Int = 3,
-        val sessionWaitDurationSeconds: Int = 3,
-        val limitWaitDurationSeconds: Int = 3,
+        val openWaitDurationSeconds: Int = TestDurations.OPEN_WAIT_SEC,
+        val sessionWaitDurationSeconds: Int = TestDurations.SESSION_WAIT_SEC,
+        val limitWaitDurationSeconds: Int = TestDurations.OPEN_WAIT_SEC,
         val passwordHash: String? = null,
         val lockEnabled: Boolean = false,
         val limitUsageScope: LimitUsageScope = LimitUsageScope.perApp,
@@ -66,8 +96,8 @@ object GatekeepTestFixtures {
         val noScheduleMatchMode: SchedulePolicyMode = SchedulePolicyMode.default,
         val noScheduleMatchOverrides: SchedulePolicyOverrides = SchedulePolicyOverrides(),
         val gradualTighteningEnabled: Boolean = false,
-        val breakDurationMs: Long? = 5 * 60_000L,
-        val limitBreakDurationMs: Long? = 5 * 60_000L,
+        val breakDurationMs: Long? = TestDurations.BREAK_MS,
+        val limitBreakDurationMs: Long? = TestDurations.LIMIT_BREAK_MS,
     )
 
     suspend fun seedAppLockEnabled(
@@ -122,10 +152,28 @@ object GatekeepTestFixtures {
                 appLockEnabled = false,
                 appPasswordHash = null,
                 enforcementEnabled = enforcementEnabled,
+                accessibilityOptedIn = false,
+                focusModeUntilMs = null,
+                lastEmergencyBypassEpochMs = null,
+                languageTag = "en-GB",
                 showSessionTimerNotification = true,
                 warningAlertsEnabled = true,
             )
         }
+    }
+
+    suspend fun clearAllProfiles(profileRepository: ProfileRepository) {
+        profileRepository.observeProfiles().first().forEach { profile ->
+            profileRepository.deleteProfile(profile.id)
+        }
+    }
+
+    suspend fun resetInstrumentedUiState(
+        settingsRepository: SettingsRepository,
+        profileRepository: ProfileRepository,
+    ) {
+        clearAllProfiles(profileRepository)
+        seedEnforcementReady(settingsRepository)
     }
 
     suspend fun seedProfileWithMonitoredApp(

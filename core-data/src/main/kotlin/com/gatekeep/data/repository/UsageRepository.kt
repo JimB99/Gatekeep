@@ -92,6 +92,9 @@ class UsageRepository(
     fun observeActivePauses(now: Long): Flow<List<Pause>> =
         pauseDao.observeActive(now).map { list -> list.map { it.toDomain() } }
 
+    suspend fun getActivePauses(now: Long): List<Pause> =
+        pauseDao.getActive(now).map { it.toDomain() }
+
     suspend fun addPause(
         type: PauseType,
         nowEpochMs: Long,

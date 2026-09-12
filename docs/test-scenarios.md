@@ -257,7 +257,19 @@ Gradle uses JDK 21 via `org.gradle.java.home` in `gradle.properties` (Studio JBR
 | R-19 | open gate none skips friction | `RulesCrossEnforcementTest.r19_openNone_skipsFriction` |
 | R-20 | session notify only allowed flag | `RulesCrossEnforcementTest.r20_sessionNotify_allowedFlag` |
 
-Full combinatorial matrix: `RulesMatrixTest` (JVM).
+Full combinatorial matrix: `RulesMatrixTest` (JVM) + `RulesInteractionTest` (JVM combined triples).
+
+### R-INT — Rule interaction (open / session / period orthogonality)
+
+| ID | Scenario | Automated test | Status |
+|----|----------|----------------|--------|
+| R-INT-01 | Open wait + daily hardBlock skips open wait | `RulesCrossEnforcementTest.rInt01_openWait_dailyHardBlock_skipsOpenWait` | pass |
+| R-INT-02 | Open wait before daily extension block | `RulesCrossEnforcementTest.rInt02_openWait_dailyExtensions_openFirst` | pass |
+| R-INT-03 | Open wait under limits then proceed | `RulesCrossEnforcementTest.rInt03_openWait_underLimits_proceeds` | weak |
+| R-INT-04 | noLimitToday + session hardBlock | `RulesCrossEnforcementTest.rInt04_noLimitToday_sessionHardBlock_stillBlocks` | pass |
+| R-INT-06 | noLimitToday bypasses period only | `RulesCrossEnforcementTest.rInt06_noLimitToday_periodBypass_noDailyBlock` | weak (engine pass; UI overlay parity) |
+
+See also `docs/test-run-report.md` for latest run summary.
 
 ---
 

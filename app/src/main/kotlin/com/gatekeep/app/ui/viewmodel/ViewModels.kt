@@ -95,6 +95,7 @@ class ProfilesHomeViewModel @Inject constructor(
                     context,
                     enforcementLog,
                     enforcementEnabled = settings.enforcementEnabled,
+                    accessibilityOptedIn = settings.accessibilityOptedIn,
                 )
             }
         }
@@ -107,6 +108,7 @@ class ProfilesHomeViewModel @Inject constructor(
                 context,
                 enforcementLog,
                 enforcementEnabled = settings.enforcementEnabled,
+                accessibilityOptedIn = settings.accessibilityOptedIn,
             )
         }
     }
@@ -1033,7 +1035,11 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun completeOnboarding() {
-        viewModelScope.launch { settingsRepository.setOnboardingComplete(true) }
+        viewModelScope.launch { completeOnboardingAndWait() }
+    }
+
+    suspend fun completeOnboardingAndWait() {
+        settingsRepository.updateSettings { it.copy(onboardingComplete = true) }
     }
 
     suspend fun setLanguage(languageTag: String) {

@@ -2,6 +2,7 @@ package com.gatekeep.app.profiles
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -9,6 +10,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.MainActivity
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
+import com.gatekeep.app.support.GatekeepUiTest
+import com.gatekeep.app.support.GatekeepUiTest.openCurrentUsage
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
@@ -40,7 +43,7 @@ class CurrentUsageActionsTest {
     fun setUp() {
         hiltRule.inject()
         runBlocking {
-            GatekeepTestFixtures.seedEnforcementReady(settingsRepository)
+            GatekeepTestFixtures.resetInstrumentedUiState(settingsRepository, profileRepository)
             profileId = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository,
                 packageName = EnforcementTestPackages.TARGET_A,
@@ -52,10 +55,13 @@ class CurrentUsageActionsTest {
     }
 
     private fun openCurrentUsage() {
-        composeRule.onNodeWithText("Test Profile", substring = true).performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithText("Current usage", substring = true, ignoreCase = true).performClick()
-        composeRule.waitForIdle()
+        composeRule.openCurrentUsage()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule
+                .onAllNodesWithTag(GatekeepTestTags.CURRENT_USAGE_EXTEND_PREFIX + "5")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
     }
 
     @Test
@@ -71,7 +77,7 @@ class CurrentUsageActionsTest {
 
     @Test
     fun cu03_resetUsage_inApp() {
-        composeRule.onNodeWithText("Reset", substring = true, ignoreCase = true).performClick()
+        composeRule.onNodeWithTag(GatekeepTestTags.CURRENT_USAGE_RESET).performClick()
         composeRule.waitForIdle()
     }
 

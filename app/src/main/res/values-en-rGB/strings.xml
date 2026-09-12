@@ -331,6 +331,9 @@
     <string name="permissions_needed">Permissions needed</string>
     <string name="usage_not_granted">Usage access not granted</string>
     <string name="accessibility_not_enabled">Accessibility service not enabled</string>
+    <string name="accessibility_revoked_by_system">Android turned off the accessibility service. Re-enable it for fastest enforcement, or limits will continue via usage stats.</string>
+    <string name="accessibility_revoked_notification_title">Accessibility service disabled</string>
+    <string name="accessibility_revoked_notification_body">Android turned off Gatekeep\'s accessibility service. Tap to re-enable for best enforcement. Limits still apply via usage stats until then.</string>
     <string name="overlay_not_granted">Display over other apps not granted</string>
     <string name="open_accessibility_settings">Open Accessibility Settings</string>
 

@@ -35,8 +35,13 @@ object ScheduleTestWindows {
         val now = ZonedDateTime.ofInstant(Instant.ofEpochMilli(System.currentTimeMillis()), zoneId)
         val dayOfWeek = now.dayOfWeek.value
         val nowMinute = now.hour * 60 + now.minute
-        val startMinute = (nowMinute + 60).coerceAtMost(23 * 60)
-        val endMinute = (startMinute + 60).coerceAtMost(24 * 60 - 1)
+        val (startMinute, endMinute) = if (nowMinute < 12 * 60) {
+            val start = (nowMinute + 180).coerceAtMost(23 * 60)
+            val end = (start + 60).coerceAtMost(24 * 60 - 1)
+            start to end
+        } else {
+            0 to 59
+        }
         return ScheduleWindow(
             profileId = profileId,
             segmentId = segmentId,

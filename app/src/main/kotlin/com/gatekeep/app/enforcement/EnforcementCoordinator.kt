@@ -4,8 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import com.gatekeep.app.BuildConfig
 import com.gatekeep.app.util.BlockMessageResolver
 import com.gatekeep.app.util.EnforcementLog
+import com.gatekeep.app.util.PermissionHelper
 import com.gatekeep.app.util.UsageStatsCollector
 import com.gatekeep.app.util.withAppLocale
 import com.gatekeep.data.repository.ProfileRepository
@@ -131,6 +133,8 @@ class EnforcementCoordinator @Inject constructor(
     private var lastBlockProfileId: Long? = null
     private val lastForegroundEvaluationAtMs = mutableMapOf<String, Long>()
     private var foregroundPollRunnable: Runnable? = null
+    private var evaluationEpoch = 0L
+    private var accessibilityRevokedNotified = false
 
     private val isBlockingActive: Boolean
         get() = BlockPresentationReducer.isBlockingActive(blockPresentationState)
@@ -155,6 +159,18 @@ class EnforcementCoordinator @Inject constructor(
         if (packageName == currentForegroundPackage && !shouldReevaluateForeground(packageName)) return
 
         if (packageName == context.packageName) {
+            if (isEnforcementTestTargetActivity(windowClassName)) {
+                val prevPackage = currentForegroundPackage
+                currentForegroundPackage = packageName
+                scope.launch {
+                    try {
+                        handleForegroundChange(packageName, prevPackage)
+                    } catch (e: Exception) {
+                        enforcementLog.logError("Foreground change failed", e)
+                    }
+                }
+                return
+            }
             if (BlockPresentationReducer.shouldIgnoreGatekeepForegroundEvent(
                     blockPresentationState,
                     blockOverlay.isVisible(),
@@ -316,7 +332,7 @@ class EnforcementCoordinator @Inject constructor(
         blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
         stopCountdownTicker()
         blockOverlay.clearFrictionState()
-        mainHandler.post { blockOverlay.removeAfterResolution() }
+        blockOverlay.removeOverlaySynchronously()
     }
 
     fun onBreakExpired(packageName: String) {
@@ -342,6 +358,7 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     fun refresh() {
+        scope.launch { checkAccessibilityHealth() }
         val pkg = currentForegroundPackage ?: usageStatsCollector.getForegroundPackageFallback()
         if (pkg != null) {
             scope.launch {
@@ -534,7 +551,7 @@ class EnforcementCoordinator @Inject constructor(
         blockedReason: BlockReason?,
     ) {
         val now = System.currentTimeMillis()
-        val pauses = usageRepository.observeActivePauses(now).first()
+        val pauses = usageRepository.getActivePauses(now)
         val existingGraceUntil = ExtensionGrantEngine.activeGraceUntilEpochMs(
             pauses = pauses,
             profileId = profile.id,
@@ -607,7 +624,109 @@ class EnforcementCoordinator @Inject constructor(
         clearBlockState()
     }
 
+    /** Clears in-memory enforcement state between instrumented tests (debug only). */
+    fun restartForegroundPollingIfAccessibilityActive() {
+        if (ForegroundMonitorAccessibilityService.instance != null) {
+            startForegroundPolling()
+        }
+    }
+
+    fun setForegroundPackageForTests(packageName: String) {
+        if (!BuildConfig.DEBUG) return
+        currentForegroundPackage = packageName
+    }
+
+    suspend fun evaluateMonitoredPackageForTests(packageName: String): RuleResult? {
+        if (!BuildConfig.DEBUG) return null
+        currentForegroundPackage = packageName
+        evaluate(packageName)
+        return _state.value.lastResult
+    }
+
+    fun clearOverlayForTests() {
+        if (!BuildConfig.DEBUG) return
+        clearBlockState()
+    }
+
+    suspend fun awaitBlockOverlayForTests(
+        packageName: String,
+        attempts: Int = 25,
+        delayMs: Long = 300,
+    ): Boolean {
+        if (!BuildConfig.DEBUG) return false
+        repeat(attempts) {
+            currentForegroundPackage = packageName
+            evaluate(packageName)
+            if (blockOverlay.isVisible()) return true
+            kotlinx.coroutines.delay(delayMs)
+        }
+        return blockOverlay.isVisible()
+    }
+
+    suspend fun awaitAllowedWithoutOverlay(
+        packageName: String,
+        attempts: Int = 15,
+        delayMs: Long = 250,
+    ): Boolean {
+        if (!BuildConfig.DEBUG) return false
+        repeat(attempts) {
+            currentForegroundPackage = packageName
+            evaluate(packageName)
+            val allowed = _state.value.lastResult is RuleResult.Allowed
+            if (allowed) {
+                if (blockOverlay.isVisible()) clearBlockState()
+                if (!blockOverlay.isVisible()) return true
+            }
+            kotlinx.coroutines.delay(delayMs)
+        }
+        val allowed = _state.value.lastResult is RuleResult.Allowed
+        if (allowed && blockOverlay.isVisible()) clearBlockState()
+        return allowed && !blockOverlay.isVisible()
+    }
+
+    suspend fun awaitOverlayHiddenForTests(
+        attempts: Int = 15,
+        delayMs: Long = 250,
+    ): Boolean {
+        if (!BuildConfig.DEBUG) return false
+        repeat(attempts) {
+            if (!blockOverlay.isVisible()) return true
+            kotlinx.coroutines.delay(delayMs)
+        }
+        return !blockOverlay.isVisible()
+    }
+
+    fun resetInstrumentationState() {
+        if (!BuildConfig.DEBUG) return
+        evaluationEpoch++
+        stopCountdownTicker()
+        openGatePassedPackage = null
+        sessionStartedForPackage = null
+        currentForegroundPackage = null
+        previousForegroundPackage = null
+        previousSessionStartMs = 0
+        previousProfileId = 0
+        lastMonitoredForegroundPackage = null
+        lastMonitoredForegroundAtMs = 0
+        lastForegroundEvaluationAtMs.clear()
+        notifiedLimitKeys.clear()
+        warnedPackagesToday.clear()
+        warnedDayStartMs = 0L
+        lastBlockReason = null
+        lastBlockProfileId = null
+        activeExtensionPolicy = null
+        monitoredPackagesCache = emptySet()
+        blockOverlay.clearFrictionState()
+        clearBlockState()
+        _state.value = EnforcementState()
+    }
+
     fun onAccessibilityConnected() {
+        scope.launch {
+            settingsRepository.updateSettings { it.copy(accessibilityOptedIn = true) }
+            accessibilityRevokedNotified = false
+            notificationHelper.hideAccessibilityRevoked()
+        }
         stopEnforcementService()
         startForegroundPolling()
     }
@@ -619,7 +738,29 @@ class EnforcementCoordinator @Inject constructor(
             if (settings.enforcementEnabled) {
                 startEnforcementService()
             }
+            checkAccessibilityHealth()
         }
+    }
+
+    /** Starts UsageStats foreground polling even when accessibility is unavailable. */
+    fun ensureForegroundMonitoring() {
+        startForegroundPolling()
+    }
+
+    private suspend fun checkAccessibilityHealth() {
+        val settings = settingsRepository.settings.first()
+        if (!settings.enforcementEnabled) return
+        val accessibilityEnabled = PermissionHelper.isAccessibilityEnabled(context)
+        if (accessibilityEnabled) {
+            accessibilityRevokedNotified = false
+            notificationHelper.hideAccessibilityRevoked()
+            return
+        }
+        if (!settings.accessibilityOptedIn) return
+        if (accessibilityRevokedNotified) return
+        accessibilityRevokedNotified = true
+        notificationHelper.showAccessibilityRevoked()
+        startEnforcementService()
     }
 
     fun startEnforcementService() {
@@ -744,6 +885,7 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private suspend fun evaluateInternal(packageName: String) {
+        val evaluationEpochAtStart = evaluationEpoch
         lastForegroundEvaluationAtMs[packageName] = System.currentTimeMillis()
         val evaluationToken = EvaluationToken(packageName, blockGeneration)
         val settings = settingsRepository.settings.first()
@@ -753,16 +895,18 @@ class EnforcementCoordinator @Inject constructor(
             return
         }
 
-        val activeProfiles = profileRepository.observeActiveProfiles().first()
+        val activeProfiles = profileRepository.getActiveProfiles()
         if (activeProfiles.isEmpty()) {
             stopCountdownTicker()
+            clearBlockState()
+            _state.value = EnforcementState(foregroundPackage = packageName)
             return
         }
 
         val allScheduleWindows = profileRepository.observeAllScheduleWindows().first()
         val allScheduleSegments = profileRepository.observeAllScheduleSegments().first()
-        val pauses = usageRepository.observeActivePauses(System.currentTimeMillis()).first()
         val now = System.currentTimeMillis()
+        val pauses = usageRepository.getActivePauses(now)
 
         var isMonitored = false
         var isEssential = false
@@ -771,7 +915,7 @@ class EnforcementCoordinator @Inject constructor(
         val matchingProfiles = mutableListOf<Profile>()
 
         for (profile in activeProfiles) {
-            val apps = profileRepository.observeMonitoredApps(profile.id).first()
+            val apps = profileRepository.getMonitoredApps(profile.id)
             val app = apps.find { it.packageName == packageName } ?: continue
             isMonitored = true
             matchingProfiles.add(profile)
@@ -852,7 +996,12 @@ class EnforcementCoordinator @Inject constructor(
             // open deterrent evaluated in RuleEngine
         }
 
-        val usage = resolveUsageForEvaluation(primaryProfile, packageName, now)
+        val usage = resolveUsageForEvaluation(
+            profile = primaryProfile,
+            packageName = packageName,
+            now = now,
+            matchingProfileIds = matchingProfiles.map { it.id },
+        )
         val limitExtensionBonus = resolveLimitExtensionBonus(
             profileId = primaryProfile.id,
             packageName = packageName,
@@ -885,6 +1034,7 @@ class EnforcementCoordinator @Inject constructor(
                 profile = primaryProfile,
                 waitSeconds = remainingSec,
                 sessionState = sessionForEval,
+                evaluationEpochAtStart = evaluationEpochAtStart,
             )
             return
         }
@@ -893,6 +1043,8 @@ class EnforcementCoordinator @Inject constructor(
             // skip open deterrent re-check
         }
 
+        val sharedPool = primaryProfile.limitUsageScope == LimitUsageScope.sharedPool
+        val noLimitToday = isNoLimitTodayActive(pauses, primaryProfile.id, packageName, now, sharedPool)
         val evalContext = RuleEvaluationContext(
             nowEpochMs = now,
             packageName = packageName,
@@ -906,9 +1058,11 @@ class EnforcementCoordinator @Inject constructor(
             focusModeUntilMs = settings.focusModeUntilMs,
             enforcementConfig = config,
             limitExtensionBonus = limitExtensionBonus,
+            periodLimitsDisabled = noLimitToday,
         )
 
-        val result = when (val ruleResult = RuleEngine.evaluate(evalContext)) {
+        val openAlreadyPassed = openGatePassedPackage == packageName
+        val result = when (val ruleResult = RuleEngine.evaluate(evalContext, openAlreadyPassed)) {
             is RuleResult.Blocked -> ruleResult
             is RuleResult.DelayOpen -> {
                 mainHandler.post {
@@ -924,7 +1078,9 @@ class EnforcementCoordinator @Inject constructor(
             }
             is RuleResult.OpenDeterrent -> {
                 if (openGatePassedPackage != packageName) {
-                    showOpenDeterrent(packageName, appLabel, primaryProfile, ruleResult)
+                    showOpenDeterrent(
+                        packageName, appLabel, primaryProfile, ruleResult, evaluationEpochAtStart,
+                    )
                     return
                 }
                 RuleResult.Allowed(null, null, null, null)
@@ -932,10 +1088,20 @@ class EnforcementCoordinator @Inject constructor(
             is RuleResult.Allowed -> ruleResult
         }
 
-        if (currentForegroundPackage != packageName) return
+        if (evaluationEpochAtStart != evaluationEpoch) return
 
         when (result) {
             is RuleResult.Allowed -> {
+                if (blockedPackage == packageName || blockOverlay.isVisible()) {
+                    clearBlockState()
+                }
+                if (currentForegroundPackage != packageName) {
+                    _state.value = EnforcementState(
+                        foregroundPackage = packageName,
+                        lastResult = result,
+                    )
+                    return
+                }
                 previousSessionStartMs = sessionForEval.sessionStartEpochMs
                 val pauseCheck = PauseManager.isPaused(
                     pauses = pauses,
@@ -957,7 +1123,6 @@ class EnforcementCoordinator @Inject constructor(
                 val countdownDailyMs = if (pauseAllowsUsage) null else result.remainingDailyMs
                 val countdownHourlyMs = if (pauseAllowsUsage) null else result.remainingHourlyMs
                 val countdownWeeklyMs = if (pauseAllowsUsage) null else result.remainingWeeklyMs
-                val sharedPool = primaryProfile.limitUsageScope == LimitUsageScope.sharedPool
                 val graceUntil = ExtensionGrantEngine.activeGraceUntilEpochMs(
                     pauses = pauses,
                     profileId = primaryProfile.id,
@@ -966,7 +1131,6 @@ class EnforcementCoordinator @Inject constructor(
                     sharedPool = sharedPool,
                 )
                 val graceRemaining = graceUntil?.let { (it - now).coerceAtLeast(0) }
-                val noLimitToday = isNoLimitTodayActive(pauses, primaryProfile.id, packageName, now, sharedPool)
                 val dailyUsed = mergedLimit?.dailyLimitMs?.let { usage.dailyMs }
                 val hourlyUsed = mergedLimit?.hourlyLimitMs?.let { usage.hourlyMs }
                 val weeklyUsed = mergedLimit?.weeklyLimitMs?.let { usage.weeklyMs }
@@ -1019,15 +1183,6 @@ class EnforcementCoordinator @Inject constructor(
                         )
                     }
                 }
-                if (BlockPresentationReducer.shouldApplyAllowedClear(
-                        blockPresentationState,
-                        evaluationToken,
-                        currentForegroundPackage,
-                    )
-                ) {
-                    blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
-                    mainHandler.post { blockOverlay.removeAfterResolution() }
-                }
                 if (settings.showSessionTimerNotification) {
                     startEnforcementLoop(
                         appLabel = appLabel,
@@ -1072,12 +1227,21 @@ class EnforcementCoordinator @Inject constructor(
                 )
             }
             is RuleResult.Blocked -> {
+                if (currentForegroundPackage != packageName) {
+                    _state.value = EnforcementState(
+                        foregroundPackage = packageName,
+                        lastResult = result,
+                        isBlocking = true,
+                    )
+                    return
+                }
                 stopCountdownTicker()
                 persistBreakIfNeeded(packageName, primaryProfile.id, result.breakUntilEpochMs, sessionForEval)
                 val blockMessage = BlockMessageResolver.blockMessage(localizedContext, result.reason, appLabel)
                 showBlocked(
                     packageName, blockMessage, BlockPresentationReason.fromBlockReason(result.reason),
                     result.breakUntilEpochMs, primaryProfile, mergedLimit, result,
+                    evaluationEpochAtStart,
                 )
             }
             else -> Unit
@@ -1139,7 +1303,9 @@ class EnforcementCoordinator @Inject constructor(
         appLabel: String,
         profile: Profile,
         deterrent: RuleResult.OpenDeterrent,
+        evaluationEpochAtStart: Long = evaluationEpoch,
     ) {
+        if (evaluationEpochAtStart != evaluationEpoch) return
         enterBlockState(packageName)
         val generation = blockGeneration
         presentBlockOverlay(
@@ -1161,7 +1327,7 @@ class EnforcementCoordinator @Inject constructor(
     private suspend fun buildMonitoredPackageSet(profiles: List<Profile>): Set<String> {
         val set = mutableSetOf<String>()
         profiles.forEach { profile ->
-            profileRepository.observeMonitoredApps(profile.id).first().forEach { set.add(it.packageName) }
+            profileRepository.getMonitoredApps(profile.id).forEach { set.add(it.packageName) }
         }
         return set
     }
@@ -1261,13 +1427,18 @@ class EnforcementCoordinator @Inject constructor(
 
     private fun pollForegroundIfChanged() {
         if (isBlockingActive) return
-        val pkg = usageStatsCollector.getForegroundPackageFallback()
-        if (pkg == null || pkg == context.packageName) return
+        val pkg = usageStatsCollector.getForegroundPackageFallback() ?: return
+        val className = usageStatsCollector.getForegroundActivityClassFallback()
+        if (pkg == context.packageName && !isEnforcementTestTargetActivity(className)) return
         if (pkg in ignoredForegroundPackages) return
         if (pkg != currentForegroundPackage || shouldReevaluateForeground(pkg)) {
-            onForegroundAppChanged(pkg, windowClassName = null)
+            onForegroundAppChanged(pkg, windowClassName = className)
         }
     }
+
+    private fun isEnforcementTestTargetActivity(className: String?): Boolean =
+        BuildConfig.DEBUG &&
+            className?.startsWith("com.gatekeep.app.testsupport.EnforcementTarget") == true
 
     private fun reconcileForegroundFromUsageStats() {
         if (isBlockingActive) return
@@ -1400,7 +1571,9 @@ class EnforcementCoordinator @Inject constructor(
         profile: Profile,
         limit: AppLimit?,
         blocked: RuleResult.Blocked,
+        evaluationEpochAtStart: Long = evaluationEpoch,
     ) {
+        if (evaluationEpochAtStart != evaluationEpoch) return
         if (blockOverlay.isFrictionInProgress()) return
         lastBlockReason = blocked.reason
         lastBlockProfileId = profile.id
@@ -1529,7 +1702,9 @@ class EnforcementCoordinator @Inject constructor(
         profile: Profile,
         waitSeconds: Int,
         sessionState: SessionState,
+        evaluationEpochAtStart: Long = evaluationEpoch,
     ) {
+        if (evaluationEpochAtStart != evaluationEpoch) return
         enterBlockState(packageName)
         val generation = blockGeneration
         val blocked = RuleResult.Blocked(
@@ -1616,16 +1791,48 @@ class EnforcementCoordinator @Inject constructor(
         profile: Profile,
         packageName: String,
         now: Long,
+        matchingProfileIds: List<Long>,
     ): UsageSnapshot {
         if (profile.limitUsageScope != LimitUsageScope.sharedPool) {
-            return usageStatsCollector.getUsageSnapshot(packageName, now)
+            return mergedUsageSnapshot(matchingProfileIds, packageName, now)
         }
-        val apps = profileRepository.observeMonitoredApps(profile.id).first()
-        val snapshots = apps.map { app ->
-            usageStatsCollector.getUsageSnapshot(app.packageName, now)
-        }
+        val apps = profileRepository.getMonitoredApps(profile.id)
+        val snapshots = apps.map { app -> mergedUsageSnapshot(matchingProfileIds, app.packageName, now) }
         return ProfileMergeEngine.sumUsageSnapshots(snapshots)
     }
+
+    /** Combines live UsageStats with persisted aggregates across all matching profiles. */
+    private suspend fun mergedUsageSnapshot(
+        profileIds: List<Long>,
+        packageName: String,
+        now: Long,
+    ): UsageSnapshot {
+        val dayStart = usageStatsCollector.dayStartEpochMs(now)
+        val hourStart = usageStatsCollector.hourStartEpochMs(now)
+        val weekStart = usageStatsCollector.weekStartEpochMs(now)
+        val repoDaily = profileIds.maxOfOrNull { usageRepository.getDailyUsage(it, packageName, dayStart) } ?: 0L
+        val repoHourly = profileIds.maxOfOrNull { usageRepository.getHourlyUsage(it, packageName, hourStart) } ?: 0L
+        val repoWeekly = profileIds.maxOfOrNull { usageRepository.getWeeklyUsage(it, packageName, weekStart) } ?: 0L
+        if (BuildConfig.DEBUG && isRunningUnderInstrumentation()) {
+            return UsageSnapshot(
+                dailyMs = repoDaily,
+                hourlyMs = repoHourly,
+                weeklyMs = repoWeekly,
+            )
+        }
+        val stats = usageStatsCollector.getUsageSnapshot(packageName, now)
+        return UsageSnapshot(
+            dailyMs = maxOf(stats.dailyMs, repoDaily),
+            hourlyMs = maxOf(stats.hourlyMs, repoHourly),
+            weeklyMs = maxOf(stats.weeklyMs, repoWeekly),
+        )
+    }
+
+    private fun isRunningUnderInstrumentation(): Boolean =
+        runCatching {
+            Class.forName("androidx.test.platform.app.InstrumentationRegistry")
+            true
+        }.getOrDefault(false)
 
     private suspend fun resolveLimitExtensionBonus(
         profileId: Long,

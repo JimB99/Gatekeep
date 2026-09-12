@@ -9,6 +9,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.MainActivity
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
+import com.gatekeep.app.support.GatekeepUiTest
+import com.gatekeep.app.support.GatekeepUiTest.openProfile
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
@@ -44,7 +46,7 @@ class ProfilePinScreenTest {
     fun setUp() {
         hiltRule.inject()
         runBlocking {
-            GatekeepTestFixtures.seedEnforcementReady(settingsRepository)
+            GatekeepTestFixtures.resetInstrumentedUiState(settingsRepository, profileRepository)
             profileId = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository,
                 packageName = EnforcementTestPackages.TARGET_A,
@@ -56,8 +58,7 @@ class ProfilePinScreenTest {
     }
 
     private fun openProfilePin() {
-        composeRule.onNodeWithText("Test Profile", substring = true).performClick()
-        composeRule.waitForIdle()
+        composeRule.openProfile("Test Profile")
         composeRule.onNodeWithText("Profile PIN", substring = true, ignoreCase = true).performClick()
         composeRule.waitForIdle()
     }

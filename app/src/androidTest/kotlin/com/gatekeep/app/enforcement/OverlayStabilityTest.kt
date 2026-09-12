@@ -1,6 +1,8 @@
 package com.gatekeep.app.enforcement
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
+import dagger.hilt.android.testing.HiltAndroidTest
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
 import com.gatekeep.domain.model.ExtensionPolicy
@@ -10,7 +12,10 @@ import com.gatekeep.domain.model.OnOpenAction
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@HiltAndroidTest
+@RunWith(AndroidJUnit4::class)
 @LargeTest
 class OverlayStabilityTest : EnforcementCrossAppTestBase() {
 
@@ -33,18 +38,18 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
             ).also { seeded ->
                 GatekeepTestFixtures.seedUsageAtCap(
                     usageRepository, seeded.profileId, EnforcementTestPackages.TARGET_A,
-                    dailyMs = 60 * 60_000L,
+                    dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS + 1,
                 )
                 GatekeepTestFixtures.seedUsageAtCap(
                     usageRepository, seeded.profileId, EnforcementTestPackages.TARGET_B,
-                    dailyMs = 60 * 60_000L,
+                    dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS + 1,
                 )
             }
         }
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())
         harness.launchTargetB()
-        assertTrue(harness.waitForOverlay())
+        assertBlockedWithOverlay(EnforcementTestPackages.TARGET_B)
     }
 
     @Test
@@ -53,7 +58,7 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())
         harness.launchUnmonitored()
-        assertTrue(harness.waitForOverlayGone())
+        assertOverlayHidden()
     }
 
     @Test
@@ -64,21 +69,17 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
                 usageRepository,
                 seeded.profileId,
                 seeded.packageName,
-                dailyMs = 60 * 60_000L,
+                dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
                 sessionState = com.gatekeep.domain.model.SessionState(
                     packageName = seeded.packageName,
                     sessionStartEpochMs = System.currentTimeMillis(),
-                    breakUntilEpochMs = System.currentTimeMillis() + 60_000L,
+                    breakUntilEpochMs = System.currentTimeMillis() + GatekeepTestFixtures.TestDurations.BREAK_MS,
                 ),
             )
         }
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())
-        val first = harness.overlayMessageText()
-        harness.sleepMs(1_500)
-        val second = harness.overlayMessageText()
-        assertNotNull(first)
-        assertNotNull(second)
+        assertTrue(harness.assertOverlayStable(stableMs = 500, maxTextChanges = 2))
     }
 
     @Test
@@ -127,13 +128,16 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
             GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
-                    delayOpenSeconds = 2,
+                    delayOpenSeconds = GatekeepTestFixtures.TestDurations.DELAY_OPEN_SEC,
                     onLimitAction = OnLimitAction.hardBlock,
                 ),
             )
         }
         harness.launchTargetA()
-        harness.sleepMs(3_000)
+        harness.waitForElapsedMs(
+            GatekeepTestFixtures.TestDurations.msAfterTimer(GatekeepTestFixtures.TestDurations.DELAY_OPEN_SEC),
+        )
+        assertAllowedWithoutBlockingOverlay()
     }
 
     @Test
@@ -152,7 +156,7 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
                 usageRepository,
                 seeded.profileId,
                 seeded.packageName,
-                dailyMs = 60 * 60_000L,
+                dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
             )
         }
         harness.launchTargetA()

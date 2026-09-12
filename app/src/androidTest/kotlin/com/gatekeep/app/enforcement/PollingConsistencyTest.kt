@@ -1,12 +1,17 @@
 package com.gatekeep.app.enforcement
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
+import dagger.hilt.android.testing.HiltAndroidTest
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
 import com.gatekeep.domain.model.OnLimitAction
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@HiltAndroidTest
+@RunWith(AndroidJUnit4::class)
 @LargeTest
 class PollingConsistencyTest : EnforcementCrossAppTestBase() {
 
@@ -35,7 +40,7 @@ class PollingConsistencyTest : EnforcementCrossAppTestBase() {
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
-                    sessionLimitMs = 5_000L,
+                    sessionLimitMs = GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS,
                     onLimitAction = OnLimitAction.hardBlock,
                 ),
             )
@@ -45,7 +50,8 @@ class PollingConsistencyTest : EnforcementCrossAppTestBase() {
                 seeded.packageName,
                 sessionState = com.gatekeep.domain.model.SessionState(
                     packageName = seeded.packageName,
-                    sessionStartEpochMs = System.currentTimeMillis() - 4_500L,
+                    sessionStartEpochMs = System.currentTimeMillis() -
+                        (GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS - 500L),
                 ),
             )
         }
@@ -57,7 +63,7 @@ class PollingConsistencyTest : EnforcementCrossAppTestBase() {
     fun pol04_farLimit_blocksBefore30s() {
         seedHardBlockProfile()
         harness.launchTargetA()
-        assertTrue(harness.waitForOverlay(timeoutMs = 15_000))
+        assertTrue(harness.waitForOverlay())
     }
 
     @Test
@@ -68,17 +74,17 @@ class PollingConsistencyTest : EnforcementCrossAppTestBase() {
                 usageRepository,
                 seeded.profileId,
                 seeded.packageName,
-                dailyMs = 60 * 60_000L,
+                dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
                 sessionState = com.gatekeep.domain.model.SessionState(
                     packageName = seeded.packageName,
                     sessionStartEpochMs = System.currentTimeMillis(),
-                    breakUntilEpochMs = System.currentTimeMillis() + 5_000L,
+                    breakUntilEpochMs = System.currentTimeMillis() + GatekeepTestFixtures.TestDurations.BREAK_MS,
                 ),
             )
         }
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())
-        harness.sleepMs(2_000)
+        harness.waitForElapsedMs(500)
     }
 
     @Test
@@ -88,13 +94,13 @@ class PollingConsistencyTest : EnforcementCrossAppTestBase() {
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
                     onOpenAction = com.gatekeep.domain.model.OnOpenAction.deterrentWait,
-                    openWaitDurationSeconds = 10,
+                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.SESSION_WAIT_SEC,
                 ),
             )
         }
         harness.launchTargetA()
         harness.sleepDevice()
-        harness.sleepMs(1_000)
+        harness.waitForElapsedMs(300)
     }
 
     @Test
@@ -105,7 +111,12 @@ class PollingConsistencyTest : EnforcementCrossAppTestBase() {
                 extraPackages = listOf(EnforcementTestPackages.TARGET_B to EnforcementTestPackages.TARGET_B_LABEL),
                 config = GatekeepTestFixtures.ProfileSeedConfig(onLimitAction = OnLimitAction.hardBlock),
             )
-            GatekeepTestFixtures.seedUsageAtCap(usageRepository, seeded.profileId, EnforcementTestPackages.TARGET_A, dailyMs = 60 * 60_000L)
+            GatekeepTestFixtures.seedUsageAtCap(
+                usageRepository,
+                seeded.profileId,
+                EnforcementTestPackages.TARGET_A,
+                dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
+            )
         }
         repeat(3) {
             harness.launchTargetA()

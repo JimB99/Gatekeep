@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -117,11 +118,13 @@ fun GatekeepNavHost(
         startDestination = startDestination,
     ) {
         composable(Routes.ONBOARDING) {
+            val settingsViewModel: com.gatekeep.app.ui.viewmodel.SettingsViewModel = hiltViewModel()
             OnboardingScreen(
                 onComplete = {
                     onEnforcementStart()
                     navController.navigate(Routes.DASHBOARD) { popUpTo(Routes.ONBOARDING) { inclusive = true } }
                 },
+                onFinishOnboarding = { settingsViewModel.completeOnboardingAndWait() },
             )
         }
         composable(Routes.DASHBOARD) {

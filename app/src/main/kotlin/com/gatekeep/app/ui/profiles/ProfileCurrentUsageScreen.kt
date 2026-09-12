@@ -124,6 +124,7 @@ fun ProfileCurrentUsageScreen(
                 title = stringResource(R.string.extension_reset_title),
                 help = stringResource(R.string.extension_reset_help),
                 action = stringResource(R.string.extension_reset_action),
+                actionTestTag = GatekeepTestTags.CURRENT_USAGE_RESET,
             )
 
             val usage = currentUsage

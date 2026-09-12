@@ -67,6 +67,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 
 import androidx.compose.ui.platform.LocalContext
 
@@ -79,6 +80,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.BuildConfig
 
 import com.gatekeep.app.R
+import com.gatekeep.app.ui.GatekeepTestTags
 
 import com.gatekeep.app.admin.GatekeepDeviceAdminReceiver
 
@@ -160,6 +162,8 @@ fun SettingsHubScreen(
                     LocaleController.nativeLabelForTag(settings.languageTag),
 
                 onClick = onNavigateLanguage,
+
+                modifier = Modifier.testTag(GatekeepTestTags.SETTINGS_LANGUAGE),
 
             )
 
@@ -260,7 +264,12 @@ fun SettingsHubScreen(
 
 @Composable
 
-private fun SettingsNavItem(title: String, subtitle: String, onClick: () -> Unit) {
+private fun SettingsNavItem(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
 
     ListItem(
 
@@ -268,7 +277,7 @@ private fun SettingsNavItem(title: String, subtitle: String, onClick: () -> Unit
 
         supportingContent = { Text(subtitle) },
 
-        modifier = Modifier
+        modifier = modifier
 
             .fillMaxWidth()
 
@@ -318,19 +327,21 @@ fun SecuritySettingsScreen(
 
             enabled = settings.hasAppPin(),
 
-        ) { enabled ->
+            onCheckedChange = { enabled ->
 
-            if (enabled) {
+                if (enabled) {
 
-                viewModel.update { s -> s.copy(appLockEnabled = true) }
+                    viewModel.update { s -> s.copy(appLockEnabled = true) }
 
-            } else {
+                } else {
 
-                viewModel.update { s -> s.copy(appLockEnabled = false) }
+                    viewModel.update { s -> s.copy(appLockEnabled = false) }
 
-            }
+                }
 
-        }
+            },
+
+        )
 
         AppLockSection(viewModel, settings)
 
@@ -352,17 +363,19 @@ fun SecuritySettingsScreen(
 
             checked = settings.strictMode,
 
-        ) { enabled ->
+            onCheckedChange = { enabled ->
 
-            if (enabled && !settings.deviceAdminEnabled) {
+                if (enabled && !settings.deviceAdminEnabled) {
 
-                enableDeviceAdmin(context)
+                    enableDeviceAdmin(context)
 
-            }
+                }
 
-            viewModel.update { s -> s.copy(strictMode = enabled) }
+                viewModel.update { s -> s.copy(strictMode = enabled) }
 
-        }
+            },
+
+        )
 
         SettingToggle(
 
@@ -370,13 +383,15 @@ fun SecuritySettingsScreen(
 
             checked = settings.deviceAdminEnabled,
 
-        ) { enabled ->
+            onCheckedChange = { enabled ->
 
-            if (enabled) enableDeviceAdmin(context)
+                if (enabled) enableDeviceAdmin(context)
 
-            viewModel.update { it.copy(deviceAdminEnabled = enabled) }
+                viewModel.update { it.copy(deviceAdminEnabled = enabled) }
 
-        }
+            },
+
+        )
 
     }
 
@@ -479,24 +494,27 @@ fun NotificationSettingsScreen(
             help = stringResource(R.string.usage_hud_help),
             checked = settings.showSessionTimerNotification,
             switchTestTag = com.gatekeep.app.ui.GatekeepTestTags.SETTINGS_SESSION_TIMER_TOGGLE,
-        ) {
-            viewModel.update { s -> s.copy(showSessionTimerNotification = it, hudEnabled = it) }
-        }
+            onCheckedChange = { enabled ->
+                viewModel.update { s -> s.copy(showSessionTimerNotification = enabled, hudEnabled = enabled) }
+            },
+        )
         SettingToggleWithHelp(
             label = stringResource(R.string.limit_warnings),
             help = stringResource(R.string.limit_warnings_help),
             checked = settings.warningAlertsEnabled,
-        ) {
-            viewModel.update { s -> s.copy(warningAlertsEnabled = it) }
-        }
+            onCheckedChange = { enabled ->
+                viewModel.update { s -> s.copy(warningAlertsEnabled = enabled) }
+            },
+        )
         SettingToggleWithHelp(
             label = stringResource(R.string.weekly_report),
             help = stringResource(R.string.weekly_report_help),
             checked = settings.weeklyReportEnabled,
             switchTestTag = com.gatekeep.app.ui.GatekeepTestTags.SETTINGS_WEEKLY_REPORT_TOGGLE,
-        ) {
-            viewModel.update { s -> s.copy(weeklyReportEnabled = it) }
-        }
+            onCheckedChange = { enabled ->
+                viewModel.update { s -> s.copy(weeklyReportEnabled = enabled) }
+            },
+        )
         if (settings.weeklyReportEnabled) {
             Text(stringResource(R.string.weekly_report_schedule), style = MaterialTheme.typography.labelMedium)
             com.gatekeep.app.ui.components.SingleDayOfWeekSelector(
@@ -562,11 +580,13 @@ fun EnforcementSettingsScreen(
 
             switchTestTag = com.gatekeep.app.ui.GatekeepTestTags.SETTINGS_ENFORCEMENT_TOGGLE,
 
-        ) {
+            onCheckedChange = { enabled ->
 
-            viewModel.update { s -> s.copy(enforcementEnabled = it) }
+                viewModel.update { s -> s.copy(enforcementEnabled = enabled) }
 
-        }
+            },
+
+        )
 
     }
 

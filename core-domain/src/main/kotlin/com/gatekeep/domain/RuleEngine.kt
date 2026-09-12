@@ -8,24 +8,26 @@ import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.ProfileEnforcementConfig
-import com.gatekeep.domain.model.ResolvedSchedulePolicy
+import com.gatekeep.domain.model.RuleEvaluation
 import com.gatekeep.domain.model.RuleEvaluationContext
 import com.gatekeep.domain.model.RuleResult
 import com.gatekeep.domain.model.SchedulePolicyMode
-import com.gatekeep.domain.model.ScheduleSegment
-import com.gatekeep.domain.model.ScheduleWindow
 import com.gatekeep.domain.model.WarningLevel
 
 object RuleEngine {
 
-    fun evaluate(context: RuleEvaluationContext): RuleResult {
+    fun evaluate(context: RuleEvaluationContext, openAlreadyPassed: Boolean = false): RuleResult {
+        val evaluation = evaluateAll(context)
+        return mergeForPresentation(
+            evaluation = evaluation,
+            config = context.enforcementConfig,
+            openAlreadyPassed = openAlreadyPassed,
+        )
+    }
+
+    fun evaluateAll(context: RuleEvaluationContext): RuleEvaluation {
         if (!context.isMonitored) {
-            return RuleResult.Allowed(
-                remainingDailyMs = null,
-                remainingSessionMs = null,
-                remainingHourlyMs = null,
-                remainingWeeklyMs = null,
-            )
+            return RuleEvaluation()
         }
 
         val schedulePolicy = context.resolvedSchedulePolicy
@@ -36,28 +38,32 @@ object RuleEngine {
             nowEpochMs = context.nowEpochMs,
         )
         if (focusBlock is FocusBlockManager.BlockCheck.Blocked) {
-            return RuleResult.Blocked(
-                reason = BlockReason.focusMode,
-                bypassAllowed = false,
+            return RuleEvaluation(
+                session = RuleResult.Blocked(
+                    reason = BlockReason.focusMode,
+                    bypassAllowed = false,
+                ),
             )
         }
 
         if (context.focusModeUntilMs != null && context.nowEpochMs < context.focusModeUntilMs) {
-            return RuleResult.Blocked(
-                reason = BlockReason.focusMode,
-                bypassAllowed = false,
+            return RuleEvaluation(
+                session = RuleResult.Blocked(
+                    reason = BlockReason.focusMode,
+                    bypassAllowed = false,
+                ),
             )
         }
 
         if (schedulePolicy != null) {
             when (schedulePolicy.mode) {
-                SchedulePolicyMode.allow -> {
-                    return RuleResult.Allowed(null, null, null, null)
-                }
+                SchedulePolicyMode.allow -> return RuleEvaluation()
                 SchedulePolicyMode.block -> {
-                    return RuleResult.Blocked(
-                        reason = BlockReason.scheduleBlock,
-                        bypassAllowed = false,
+                    return RuleEvaluation(
+                        session = RuleResult.Blocked(
+                            reason = BlockReason.scheduleBlock,
+                            bypassAllowed = false,
+                        ),
                     )
                 }
                 SchedulePolicyMode.default, SchedulePolicyMode.customize -> { /* continue */ }
@@ -66,74 +72,230 @@ object RuleEngine {
 
         val limit = context.limit
         if (limit == null) {
-            return RuleResult.Allowed(null, null, null, null)
+            return RuleEvaluation()
         }
 
         val config = context.enforcementConfig
 
-        val pauseCheck = PauseManager.isPaused(
+        val pauseCheck = PauseManager.isFullEnforcementPaused(
             pauses = context.pauses,
             profileId = context.profile.id,
             packageName = context.packageName,
             nowEpochMs = context.nowEpochMs,
         )
         if (pauseCheck is PauseManager.PauseCheck.Paused) {
+            return RuleEvaluation()
+        }
+
+        val sessionAxis = evaluateSessionAxis(
+            config = config,
+            limit = limit,
+            sessionState = context.sessionState,
+            nowEpochMs = context.nowEpochMs,
+        )
+        val periodAxis = evaluatePeriodAxis(
+            config = config,
+            limit = limit,
+            usage = context.usage,
+            limitExtensionBonus = context.limitExtensionBonus,
+            periodLimitsDisabled = context.periodLimitsDisabled,
+            nowEpochMs = context.nowEpochMs,
+            sessionAllowed = sessionAxis as? SessionTracker.SessionCheckResult.Allowed,
+        )
+        val openAxis = evaluateOpenAxis(config, context.profile)
+
+        return RuleEvaluation(
+            open = openAxis,
+            session = sessionAxis.toRuleResult(config),
+            period = periodAxis,
+        )
+    }
+
+    fun mergeForPresentation(
+        evaluation: RuleEvaluation,
+        config: ProfileEnforcementConfig,
+        openAlreadyPassed: Boolean,
+    ): RuleResult {
+        val usageWinner = pickUsageWinner(
+            session = evaluation.session,
+            period = evaluation.period,
+            config = config,
+        )
+
+        if (usageWinner is RuleResult.Blocked && suppressesOpenGate(usageWinner, config)) {
+            return usageWinner
+        }
+
+        if (!openAlreadyPassed) {
+            val openResult = evaluation.open
+            if (openResult is RuleResult.OpenDeterrent || openResult is RuleResult.DelayOpen) {
+                val openStrictness = openResultStrictness(openResult)
+                val usageStrictness = when (usageWinner) {
+                    is RuleResult.Blocked -> blockedActionStrictness(usageWinner, config)
+                    is RuleResult.Allowed -> if (usageWinner.notifyLimitReached) 0 else -1
+                    else -> -1
+                }
+                if (usageWinner !is RuleResult.Blocked || openStrictness >= usageStrictness) {
+                    return openResult
+                }
+            }
+        }
+
+        return when (usageWinner) {
+            is RuleResult.Blocked -> usageWinner
+            is RuleResult.Allowed -> mergeAllowedResults(
+                session = evaluation.session,
+                period = evaluation.period,
+                usageWinner = usageWinner,
+            )
+            else -> usageWinner ?: RuleResult.Allowed(null, null, null, null)
+        }
+    }
+
+    private fun evaluateSessionAxis(
+        config: ProfileEnforcementConfig,
+        limit: AppLimit,
+        sessionState: com.gatekeep.domain.model.SessionState?,
+        nowEpochMs: Long,
+    ): SessionTracker.SessionCheckResult {
+        return SessionTracker.evaluateSession(
+            limit = limit,
+            session = sessionState,
+            nowEpochMs = nowEpochMs,
+        )
+    }
+
+    private fun evaluatePeriodAxis(
+        config: ProfileEnforcementConfig,
+        limit: AppLimit,
+        usage: com.gatekeep.domain.model.UsageSnapshot,
+        limitExtensionBonus: com.gatekeep.domain.model.LimitExtensionBonus,
+        periodLimitsDisabled: Boolean,
+        nowEpochMs: Long,
+        sessionAllowed: SessionTracker.SessionCheckResult.Allowed?,
+    ): RuleResult? {
+        if (periodLimitsDisabled) {
             return RuleResult.Allowed(
                 remainingDailyMs = null,
-                remainingSessionMs = null,
+                remainingSessionMs = sessionAllowed?.remainingSessionMs,
                 remainingHourlyMs = null,
                 remainingWeeklyMs = null,
             )
         }
 
-        val sessionResult = SessionTracker.evaluateSession(
-            limit = limit,
-            session = context.sessionState,
-            nowEpochMs = context.nowEpochMs,
+        val limitResult = LimitEvaluator.evaluate(limit, usage, limitExtensionBonus)
+        return when (limitResult) {
+            is LimitEvaluator.LimitCheckResult.Blocked -> applyLimitAction(
+                config = config,
+                reason = limitResult.reason,
+                nowEpochMs = nowEpochMs,
+                limit = limit,
+                usage = usage,
+            )
+            is LimitEvaluator.LimitCheckResult.Allowed -> RuleResult.Allowed(
+                remainingDailyMs = limitResult.remainingDailyMs,
+                remainingSessionMs = sessionAllowed?.remainingSessionMs,
+                remainingHourlyMs = limitResult.remainingHourlyMs,
+                remainingWeeklyMs = limitResult.remainingWeeklyMs,
+                warningLevel = limitResult.warningLevel,
+            )
+        }
+    }
+
+    private fun evaluateOpenAxis(
+        config: ProfileEnforcementConfig,
+        profile: Profile,
+    ): RuleResult? = evaluateOnOpen(config, profile)
+
+    private fun SessionTracker.SessionCheckResult.toRuleResult(
+        config: ProfileEnforcementConfig,
+    ): RuleResult? = when (this) {
+        is SessionTracker.SessionCheckResult.OnBreak -> applySessionLimitAction(
+            config = config,
+            reason = BlockReason.onBreak,
+            breakUntilEpochMs = breakUntilEpochMs,
         )
-        when (sessionResult) {
-            is SessionTracker.SessionCheckResult.OnBreak -> {
-                return applySessionLimitAction(
-                    config = config,
-                    reason = BlockReason.onBreak,
-                    breakUntilEpochMs = sessionResult.breakUntilEpochMs,
-                )
-            }
-            is SessionTracker.SessionCheckResult.SessionExceeded -> {
-                return applySessionLimitAction(
-                    config = config,
-                    reason = BlockReason.sessionLimit,
-                    breakUntilEpochMs = sessionResult.breakUntilEpochMs,
-                )
-            }
-            is SessionTracker.SessionCheckResult.Allowed -> { /* continue */ }
-        }
+        is SessionTracker.SessionCheckResult.SessionExceeded -> applySessionLimitAction(
+            config = config,
+            reason = BlockReason.sessionLimit,
+            breakUntilEpochMs = breakUntilEpochMs,
+        )
+        is SessionTracker.SessionCheckResult.Allowed -> RuleResult.Allowed(
+            remainingDailyMs = null,
+            remainingSessionMs = remainingSessionMs,
+            remainingHourlyMs = null,
+            remainingWeeklyMs = null,
+        )
+    }
 
-        val limitResult = LimitEvaluator.evaluate(limit, context.usage, context.limitExtensionBonus)
-        when (limitResult) {
-            is LimitEvaluator.LimitCheckResult.Blocked -> {
-                return applyLimitAction(
-                    config = config,
-                    reason = limitResult.reason,
-                    nowEpochMs = context.nowEpochMs,
-                    limit = limit,
-                    usage = context.usage,
-                )
-            }
-            is LimitEvaluator.LimitCheckResult.Allowed -> {
-                val sessionAllowed = sessionResult as SessionTracker.SessionCheckResult.Allowed
-                val openResult = evaluateOnOpen(config, context.profile)
-                if (openResult != null) return openResult
+    private fun pickUsageWinner(
+        session: RuleResult?,
+        period: RuleResult?,
+        config: ProfileEnforcementConfig,
+    ): RuleResult? {
+        val candidates = listOfNotNull(session, period)
+        if (candidates.isEmpty()) return null
 
-                return RuleResult.Allowed(
-                    remainingDailyMs = limitResult.remainingDailyMs,
-                    remainingSessionMs = sessionAllowed.remainingSessionMs,
-                    remainingHourlyMs = limitResult.remainingHourlyMs,
-                    remainingWeeklyMs = limitResult.remainingWeeklyMs,
-                    warningLevel = limitResult.warningLevel,
-                )
+        return candidates.maxBy { candidate ->
+            when (candidate) {
+                is RuleResult.Blocked -> blockedActionStrictness(candidate, config)
+                is RuleResult.Allowed -> if (candidate.notifyLimitReached) 0 else -1
+                else -> -1
             }
         }
+    }
+
+    private fun blockedActionStrictness(
+        blocked: RuleResult.Blocked,
+        config: ProfileEnforcementConfig,
+    ): Int = when (blocked.reason) {
+        BlockReason.sessionLimit, BlockReason.onBreak -> sessionActionStrictness(config.onSessionLimitAction)
+        BlockReason.dailyLimit, BlockReason.hourlyLimit, BlockReason.weeklyLimit ->
+            limitActionStrictness(config.onLimitAction)
+        else -> 5
+    }
+
+    private fun suppressesOpenGate(
+        blocked: RuleResult.Blocked,
+        config: ProfileEnforcementConfig,
+    ): Boolean {
+        val strictness = blockedActionStrictness(blocked, config)
+        return strictness >= limitActionStrictness(OnLimitAction.mandatoryBreak)
+    }
+
+    private fun openResultStrictness(result: RuleResult): Int = when (result) {
+        is RuleResult.DelayOpen -> 1
+        is RuleResult.OpenDeterrent -> when (result.method) {
+            FrictionMethod.waitOneMin -> 1
+            FrictionMethod.math -> 2
+            else -> 2
+        }
+        else -> -1
+    }
+
+    private fun mergeAllowedResults(
+        session: RuleResult?,
+        period: RuleResult?,
+        usageWinner: RuleResult.Allowed,
+    ): RuleResult.Allowed {
+        val sessionAllowed = session as? RuleResult.Allowed
+        val periodAllowed = period as? RuleResult.Allowed
+        val notifyLimitReached = (sessionAllowed?.notifyLimitReached == true) ||
+            (periodAllowed?.notifyLimitReached == true)
+        val notifyReason = when {
+            periodAllowed?.notifyLimitReached == true -> periodAllowed.notifyLimitReason
+            sessionAllowed?.notifyLimitReached == true -> sessionAllowed.notifyLimitReason
+            else -> null
+        }
+        return RuleResult.Allowed(
+            remainingDailyMs = periodAllowed?.remainingDailyMs ?: usageWinner.remainingDailyMs,
+            remainingSessionMs = sessionAllowed?.remainingSessionMs ?: usageWinner.remainingSessionMs,
+            remainingHourlyMs = periodAllowed?.remainingHourlyMs ?: usageWinner.remainingHourlyMs,
+            remainingWeeklyMs = periodAllowed?.remainingWeeklyMs ?: usageWinner.remainingWeeklyMs,
+            warningLevel = periodAllowed?.warningLevel ?: usageWinner.warningLevel,
+            notifyLimitReached = notifyLimitReached,
+            notifyLimitReason = notifyReason,
+        )
     }
 
     private fun applyLimitAction(
@@ -257,5 +419,23 @@ object RuleEngine {
         OnOpenAction.deterrentWait -> RuleResult.OpenDeterrent(
             method = FrictionMethod.waitOneMin,
         )
+    }
+
+    private fun limitActionStrictness(action: OnLimitAction): Int = when (action) {
+        OnLimitAction.notifyOnly -> 0
+        OnLimitAction.limitWithExtensions -> 1
+        OnLimitAction.deterrentWait -> 2
+        OnLimitAction.deterrentMath -> 3
+        OnLimitAction.mandatoryBreak -> 4
+        OnLimitAction.hardBlock -> 5
+    }
+
+    private fun sessionActionStrictness(action: OnSessionLimitAction): Int = when (action) {
+        OnSessionLimitAction.notifyOnly -> 0
+        OnSessionLimitAction.limitWithExtensions -> 1
+        OnSessionLimitAction.deterrentWait -> 2
+        OnSessionLimitAction.deterrentMath -> 3
+        OnSessionLimitAction.mandatoryBreak -> 4
+        OnSessionLimitAction.hardBlock -> 5
     }
 }

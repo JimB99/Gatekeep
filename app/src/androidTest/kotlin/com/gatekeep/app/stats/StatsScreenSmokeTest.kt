@@ -2,6 +2,7 @@ package com.gatekeep.app.stats
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -10,6 +11,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.MainActivity
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
+import com.gatekeep.app.support.GatekeepUiTest
+import com.gatekeep.app.support.GatekeepUiTest.openStats
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
@@ -41,7 +44,7 @@ class StatsScreenSmokeTest {
     fun setUp() {
         hiltRule.inject()
         runBlocking {
-            GatekeepTestFixtures.seedEnforcementReady(settingsRepository)
+            GatekeepTestFixtures.resetInstrumentedUiState(settingsRepository, profileRepository)
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository,
                 packageName = EnforcementTestPackages.TARGET_A,
@@ -50,13 +53,15 @@ class StatsScreenSmokeTest {
                 usageRepository,
                 seeded.profileId,
                 seeded.packageName,
-                dailyMs = 30 * 60_000L,
+                dailyMs = GatekeepTestFixtures.TestDurations.HOURLY_LIMIT_MS,
             )
         }
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
-        composeRule.onNodeWithContentDescription("Stats").performClick()
-        composeRule.waitForIdle()
+        composeRule.openStats()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(GatekeepTestTags.STATS_ROOT).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     @Test

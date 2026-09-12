@@ -10,6 +10,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.gatekeep.app.MainActivity
 import com.gatekeep.app.R
+import com.gatekeep.app.util.PermissionHelper
 import com.gatekeep.app.util.formatDurationMs
 import com.gatekeep.app.util.withAppLocale
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -177,6 +178,35 @@ class GatekeepNotificationHelper @Inject constructor(
         notificationManager.notify(WARNING_ID, builder.build())
     }
 
+    fun showAccessibilityRevoked() {
+        val settingsIntent = PermissionHelper.accessibilityIntent(context).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val pending = PendingIntent.getActivity(
+            context,
+            2,
+            settingsIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val builder = NotificationCompat.Builder(localizedContext, CHANNEL_WARNINGS)
+            .setContentTitle(localizedContext.getString(R.string.accessibility_revoked_notification_title))
+            .setContentText(localizedContext.getString(R.string.accessibility_revoked_notification_body))
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(localizedContext.getString(R.string.accessibility_revoked_notification_body)),
+            )
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentIntent(pending)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+        notificationManager.notify(ACCESSIBILITY_REVOKED_ID, builder.build())
+    }
+
+    fun hideAccessibilityRevoked() {
+        notificationManager.cancel(ACCESSIBILITY_REVOKED_ID)
+    }
+
     companion object {
         const val CHANNEL_SERVICE = "gatekeep_service"
         const val CHANNEL_SESSION_TIMER = "session_timer"
@@ -184,6 +214,7 @@ class GatekeepNotificationHelper @Inject constructor(
         const val SERVICE_NOTIFICATION_ID = 1001
         const val COUNTDOWN_NOTIFICATION_ID = 1003
         const val WARNING_ID = 1002
+        const val ACCESSIBILITY_REVOKED_ID = 1004
 
         @Deprecated("Use SERVICE_NOTIFICATION_ID", ReplaceWith("SERVICE_NOTIFICATION_ID"))
         const val NOTIFICATION_ID = SERVICE_NOTIFICATION_ID

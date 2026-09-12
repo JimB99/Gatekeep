@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -20,9 +21,12 @@ import androidx.lifecycle.lifecycleScope
 import com.gatekeep.app.enforcement.EnforcementCoordinator
 import com.gatekeep.app.ui.GatekeepNavHost
 import com.gatekeep.app.ui.Routes
+import com.gatekeep.app.ui.onboarding.OnboardingScreen
+import com.gatekeep.app.ui.viewmodel.SettingsViewModel
 import com.gatekeep.app.ui.lock.AppLockController
 import com.gatekeep.app.ui.lock.AppLockScreen
 import com.gatekeep.app.ui.theme.GatekeepTheme
+import com.gatekeep.app.util.PermissionHelper
 import com.gatekeep.app.worker.UsageSyncWorker
 import com.gatekeep.app.worker.WeeklyReportWorker
 import com.gatekeep.data.repository.ProfileRepository
@@ -78,11 +82,11 @@ class MainActivity : AppCompatActivity() {
                 lifecycleOwner.lifecycle.addObserver(observer)
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
-            val startDest = if (settings.onboardingComplete) Routes.DASHBOARD else Routes.ONBOARDING
             val showLockScreen = AppLockController.shouldShowLockScreen(
                 lockRequired = lockRequired,
                 sessionUnlocked = sessionUnlocked,
             )
+            val settingsViewModel: SettingsViewModel = hiltViewModel()
 
             GatekeepTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -90,9 +94,23 @@ class MainActivity : AppCompatActivity() {
                         AppLockScreen(passwordHash = settings.appPasswordHash) {
                             sessionUnlocked = true
                         }
+                    } else if (!settings.onboardingComplete) {
+                        OnboardingScreen(
+                            onComplete = { coordinator.startEnforcementService() },
+                            onFinishOnboarding = {
+                                val optedIn = PermissionHelper.isAccessibilityEnabled(this@MainActivity)
+                                settingsRepository.updateSettings {
+                                    it.copy(
+                                        onboardingComplete = true,
+                                        accessibilityOptedIn = optedIn || it.accessibilityOptedIn,
+                                    )
+                                }
+                            },
+                            viewModel = settingsViewModel,
+                        )
                     } else {
                         GatekeepNavHost(
-                            startDestination = startDest,
+                            startDestination = Routes.DASHBOARD,
                             onEnforcementStart = { coordinator.startEnforcementService() },
                         )
                     }

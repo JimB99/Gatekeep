@@ -1,6 +1,8 @@
 package com.gatekeep.app.enforcement
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
+import dagger.hilt.android.testing.HiltAndroidTest
 import com.gatekeep.app.support.GatekeepTestFixtures
 import com.gatekeep.domain.ScheduleTestWindows
 import com.gatekeep.domain.model.OnLimitAction
@@ -9,7 +11,10 @@ import com.gatekeep.domain.model.SchedulePolicyMode
 import com.gatekeep.domain.model.SchedulePolicyOverrides
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@HiltAndroidTest
+@RunWith(AndroidJUnit4::class)
 @LargeTest
 class ScheduleEnforcementTest : EnforcementCrossAppTestBase() {
 
@@ -24,7 +29,12 @@ class ScheduleEnforcementTest : EnforcementCrossAppTestBase() {
                 profileRepository, seeded.profileId, SchedulePolicyMode.allow,
                 windows = listOf(ScheduleTestWindows.aroundNow(seeded.profileId, null)),
             )
-            GatekeepTestFixtures.seedUsageAtCap(usageRepository, seeded.profileId, seeded.packageName, dailyMs = 60 * 60_000L)
+            GatekeepTestFixtures.seedUsageAtCap(
+                usageRepository,
+                seeded.profileId,
+                seeded.packageName,
+                dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
+            )
         }
         harness.launchTargetA()
     }
@@ -99,7 +109,7 @@ class ScheduleEnforcementTest : EnforcementCrossAppTestBase() {
             )
         }
         harness.launchTargetA()
-        assertTrue(harness.waitForOverlayGone(timeoutMs = 3_000))
+        assertAllowedWithoutBlockingOverlay()
     }
 
     @Test

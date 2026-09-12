@@ -36,9 +36,20 @@ object PermissionHelper {
         )
 
     fun isAccessibilityEnabled(context: Context): Boolean {
+        val enabledServices = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ) ?: return false
+        if (!enabledServices.contains(context.packageName)) return false
+        val accessibilityOn = Settings.Secure.getInt(
+            context.contentResolver,
+            Settings.Secure.ACCESSIBILITY_ENABLED,
+            0,
+        )
+        if (accessibilityOn != 1) return false
         val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-        val enabled = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_GENERIC)
-        return enabled.any { it.id.contains(context.packageName) }
+        val enabled = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        return enabled.any { it.id.contains(context.packageName) } || enabledServices.contains(context.packageName)
     }
 
     fun accessibilityIntent(context: Context): Intent {

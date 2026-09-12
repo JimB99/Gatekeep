@@ -38,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.R
+import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.app.ui.components.GatekeepFilterChip
 import com.gatekeep.app.ui.components.TwentyFourHourClockDialog
 import com.gatekeep.app.ui.viewmodel.PauseViewModel
@@ -254,6 +255,8 @@ fun PauseScreen(
                     pickerTarget = PickerTarget.Focus
                     showDatePicker = true
                 },
+                fiveMinTestTag = GatekeepTestTags.PAUSE_FOCUS_FIVE_MIN,
+                fifteenMinTestTag = null,
             )
         }
     }
