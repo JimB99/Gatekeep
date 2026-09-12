@@ -20,17 +20,18 @@ class ExtensionEnforcementTest : EnforcementCrossAppTestBase() {
     @Test
     fun e01_grantFromOverlay_extendsSession() {
         runSeed {
-            GatekeepTestFixtures.seedProfileWithMonitoredApp(
-                profileRepository = profileRepository,
+            seedBlockedProfile(
                 config = GatekeepTestFixtures.ProfileSeedConfig(
                     onLimitAction = OnLimitAction.limitWithExtensions,
                     limitExtensionPolicy = ExtensionPolicy(surfaceMode = ExtensionSurfaceMode.overlay),
                 ),
             )
-            seedHardBlockProfile()
         }
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())
+        assertTrue(harness.clickOverlayExtensionMinutes(5))
+        assertOverlayHidden()
+        assertAllowedWithoutBlockingOverlay()
     }
 
     @Test
@@ -83,12 +84,17 @@ class ExtensionEnforcementTest : EnforcementCrossAppTestBase() {
             )
         }
         harness.launchTargetA()
+        assertAllowedWithoutBlockingOverlay()
     }
 
     @Test
     fun e06_extensionGrace_pause() {
         runSeed {
-            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(profileRepository)
+            val seeded = seedBlockedProfile(
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onLimitAction = OnLimitAction.limitWithExtensions,
+                ),
+            )
             usageRepository.addExtensionGracePause(
                 seeded.profileId, seeded.packageName,
                 System.currentTimeMillis() + GatekeepTestFixtures.TestDurations.EXTENSION_GRACE_MS,
@@ -96,6 +102,7 @@ class ExtensionEnforcementTest : EnforcementCrossAppTestBase() {
             )
         }
         harness.launchTargetA()
+        assertAllowedWithoutBlockingOverlay()
     }
 
     @Test

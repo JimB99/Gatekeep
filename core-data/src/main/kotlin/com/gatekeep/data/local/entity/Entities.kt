@@ -163,6 +163,9 @@ data class OverrideEventEntity(
     val timestamp: Long,
     val method: String,
     val extensionMs: Long,
+    val dailyUsageAnchorMs: Long = 0L,
+    val hourlyUsageAnchorMs: Long = 0L,
+    val weeklyUsageAnchorMs: Long = 0L,
 )
 
 @Entity(

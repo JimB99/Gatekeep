@@ -14,7 +14,6 @@ import com.gatekeep.data.repository.AppSettings
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
-import com.gatekeep.domain.UsageSessionRecord
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
@@ -37,26 +36,23 @@ class UsageSyncWorker @AssistedInject constructor(
         if (profiles.isEmpty()) return Result.success()
 
         val dayStart = usageStatsCollector.dayStartEpochMs()
+        val hourStart = usageStatsCollector.hourStartEpochMs()
+        val weekStart = usageStatsCollector.weekStartEpochMs()
         val now = System.currentTimeMillis()
 
         profiles.forEach { profile ->
             val apps = profileRepository.observeMonitoredApps(profile.id).first()
             apps.forEach { app ->
-                val usageMs = usageStatsCollector.usageMsForPackage(app.packageName, dayStart, now)
-                if (usageMs > 0) {
-                    usageRepository.recordSession(
-                        packageName = app.packageName,
-                        profileId = profile.id,
-                        startEpochMs = dayStart,
-                        endEpochMs = dayStart + usageMs,
-                    )
-                }
+                val snapshot = usageStatsCollector.getUsageSnapshot(app.packageName, now)
+                usageRepository.replacePeriodTotalsFromStats(
+                    profileId = profile.id,
+                    packageName = app.packageName,
+                    snapshot = snapshot,
+                    dayStart = dayStart,
+                    hourStart = hourStart,
+                    weekStart = weekStart,
+                )
             }
-            val sessions = usageRepository.getRecentSessions(profile.id, 500)
-            val records = sessions.map {
-                UsageSessionRecord(it.packageName, it.profileId, it.startEpochMs, it.endEpochMs)
-            }
-            usageRepository.aggregateAndStore(records)
         }
         return Result.success()
     }

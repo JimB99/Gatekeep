@@ -93,4 +93,21 @@ object PauseManager {
 
     private fun isPeriodOnlyPauseType(type: PauseType): Boolean =
         type == PauseType.noLimitToday || type == PauseType.extensionGrace
+
+    fun isNoLimitTodayActive(
+        pauses: List<Pause>,
+        profileId: Long,
+        packageName: String,
+        nowEpochMs: Long,
+        sharedPool: Boolean,
+    ): Boolean {
+        val active = pauses.filter {
+            it.untilEpochMs > nowEpochMs && it.type == PauseType.noLimitToday
+        }
+        return if (sharedPool) {
+            active.any { it.profileId == profileId && it.packageName == null }
+        } else {
+            active.any { it.profileId == profileId && it.packageName == packageName }
+        }
+    }
 }

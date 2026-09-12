@@ -13,6 +13,8 @@ import com.gatekeep.data.mapper.toDomain
 import com.gatekeep.data.mapper.toEntity
 import com.gatekeep.domain.model.OverrideMethod
 import com.gatekeep.domain.PauseManager
+import com.gatekeep.domain.ExtensionDisplayAnchors
+import com.gatekeep.domain.ExtensionPeriodDisplay
 import com.gatekeep.domain.UsageAggregator
 import com.gatekeep.domain.UsageSessionRecord
 import com.gatekeep.domain.model.Pause
@@ -74,6 +76,39 @@ class UsageRepository(
     suspend fun getWeeklyUsage(profileId: Long, packageName: String, weekStart: Long): Long =
         usageAggregateDao.getTotal(profileId, packageName, UsagePeriod.week.name, weekStart)
 
+    suspend fun replacePeriodTotalsFromStats(
+        profileId: Long,
+        packageName: String,
+        snapshot: com.gatekeep.domain.model.UsageSnapshot,
+        dayStart: Long,
+        hourStart: Long,
+        weekStart: Long,
+    ) {
+        replacePeriodTotal(profileId, packageName, UsagePeriod.day, dayStart, snapshot.dailyMs)
+        replacePeriodTotal(profileId, packageName, UsagePeriod.hour, hourStart, snapshot.hourlyMs)
+        replacePeriodTotal(profileId, packageName, UsagePeriod.week, weekStart, snapshot.weeklyMs)
+    }
+
+    private suspend fun replacePeriodTotal(
+        profileId: Long,
+        packageName: String,
+        period: UsagePeriod,
+        periodStart: Long,
+        totalMs: Long,
+    ) {
+        usageAggregateDao.deleteForPeriod(profileId, packageName, period.name, periodStart)
+        if (totalMs <= 0L) return
+        usageAggregateDao.insert(
+            UsageAggregateEntity(
+                packageName = packageName,
+                profileId = profileId,
+                period = period.name,
+                periodStart = periodStart,
+                totalMs = totalMs,
+            ),
+        )
+    }
+
     suspend fun getSessionState(profileId: Long, packageName: String): SessionState? =
         sessionStateDao.get(profileId, packageName)?.toDomain()
 
@@ -130,6 +165,118 @@ class UsageRepository(
         )
     }
 
+    suspend fun logExtensionOverride(
+        packageName: String,
+        profileId: Long,
+        extensionMs: Long,
+        anchors: ExtensionDisplayAnchors,
+    ) {
+        overrideEventDao.insert(
+            OverrideEventEntity(
+                packageName = packageName,
+                profileId = profileId,
+                timestamp = System.currentTimeMillis(),
+                method = OverrideMethod.extension.storageValue,
+                extensionMs = extensionMs,
+                dailyUsageAnchorMs = anchors.dailyMs,
+                hourlyUsageAnchorMs = anchors.hourlyMs,
+                weeklyUsageAnchorMs = anchors.weeklyMs,
+            ),
+        )
+    }
+
+    suspend fun dailyExtensionDisplay(
+        profileId: Long,
+        packageName: String,
+        sinceMs: Long,
+        sharedPool: Boolean,
+    ): ExtensionPeriodDisplay = periodExtensionDisplay(
+        profileId = profileId,
+        packageName = packageName,
+        sinceMs = sinceMs,
+        sharedPool = sharedPool,
+        sumExtensionMs = {
+            if (sharedPool) {
+                sumExtensionMsForProfileSince(profileId, sinceMs)
+            } else {
+                sumExtensionMsForPackageSince(profileId, packageName, sinceMs)
+            }
+        },
+        maxAnchorMs = {
+            if (sharedPool) {
+                overrideEventDao.maxDailyAnchorForProfileSince(profileId, sinceMs)
+            } else {
+                overrideEventDao.maxDailyAnchorForPackageSince(profileId, packageName, sinceMs)
+            }
+        },
+    )
+
+    suspend fun hourlyExtensionDisplay(
+        profileId: Long,
+        packageName: String,
+        sinceMs: Long,
+        sharedPool: Boolean,
+    ): ExtensionPeriodDisplay = periodExtensionDisplay(
+        profileId = profileId,
+        packageName = packageName,
+        sinceMs = sinceMs,
+        sharedPool = sharedPool,
+        sumExtensionMs = {
+            if (sharedPool) {
+                sumExtensionMsForProfileSince(profileId, sinceMs)
+            } else {
+                sumExtensionMsForPackageSince(profileId, packageName, sinceMs)
+            }
+        },
+        maxAnchorMs = {
+            if (sharedPool) {
+                overrideEventDao.maxHourlyAnchorForProfileSince(profileId, sinceMs)
+            } else {
+                overrideEventDao.maxHourlyAnchorForPackageSince(profileId, packageName, sinceMs)
+            }
+        },
+    )
+
+    suspend fun weeklyExtensionDisplay(
+        profileId: Long,
+        packageName: String,
+        sinceMs: Long,
+        sharedPool: Boolean,
+    ): ExtensionPeriodDisplay = periodExtensionDisplay(
+        profileId = profileId,
+        packageName = packageName,
+        sinceMs = sinceMs,
+        sharedPool = sharedPool,
+        sumExtensionMs = {
+            if (sharedPool) {
+                sumExtensionMsForProfileSince(profileId, sinceMs)
+            } else {
+                sumExtensionMsForPackageSince(profileId, packageName, sinceMs)
+            }
+        },
+        maxAnchorMs = {
+            if (sharedPool) {
+                overrideEventDao.maxWeeklyAnchorForProfileSince(profileId, sinceMs)
+            } else {
+                overrideEventDao.maxWeeklyAnchorForPackageSince(profileId, packageName, sinceMs)
+            }
+        },
+    )
+
+    private suspend fun periodExtensionDisplay(
+        profileId: Long,
+        packageName: String,
+        sinceMs: Long,
+        sharedPool: Boolean,
+        sumExtensionMs: suspend () -> Long,
+        maxAnchorMs: suspend () -> Long,
+    ): ExtensionPeriodDisplay {
+        return ExtensionPeriodDisplay(
+            bonusMs = sumExtensionMs(),
+            anchorMs = maxAnchorMs(),
+        )
+    }
+
     suspend fun getOverrideCount(profileId: Long): Int =
         overrideEventDao.countForProfile(profileId)
 
@@ -175,9 +322,13 @@ class UsageRepository(
     ): List<OverrideEventEntity> =
         overrideEventDao.getRecentOverridesForPackage(profileId, packageName, limit)
 
+    suspend fun clearNoLimitTodayForProfile(profileId: Long) {
+        pauseDao.deleteNoLimitTodayForProfile(profileId)
+    }
+
     suspend fun addNoLimitTodayPause(
         profileId: Long,
-        packageName: String,
+        packageName: String?,
         dayEndMs: Long,
         nowEpochMs: Long,
     ) {

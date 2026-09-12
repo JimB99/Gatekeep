@@ -193,6 +193,23 @@ interface UsageAggregateDao {
     )
     suspend fun getTotal(profileId: Long, packageName: String, period: String, periodStart: Long): Long
 
+    @Query(
+        """
+        DELETE FROM usage_aggregates
+        WHERE profileId = :profileId AND packageName = :packageName
+        AND period = :period AND periodStart = :periodStart
+        """,
+    )
+    suspend fun deleteForPeriod(
+        profileId: Long,
+        packageName: String,
+        period: String,
+        periodStart: Long,
+    )
+
+    @Insert
+    suspend fun insert(aggregate: UsageAggregateEntity)
+
     @Query("DELETE FROM usage_aggregates WHERE profileId = :profileId")
     suspend fun deleteForProfile(profileId: Long)
 }
@@ -264,6 +281,69 @@ interface OverrideEventDao {
         profileId: Long,
         sinceMs: Long,
     ): Long
+
+    @Query(
+        """
+        SELECT COALESCE(MAX(dailyUsageAnchorMs), 0) FROM override_events
+        WHERE profileId = :profileId AND packageName = :packageName
+        AND timestamp >= :sinceMs AND method = 'extension'
+        """,
+    )
+    suspend fun maxDailyAnchorForPackageSince(
+        profileId: Long,
+        packageName: String,
+        sinceMs: Long,
+    ): Long
+
+    @Query(
+        """
+        SELECT COALESCE(MAX(hourlyUsageAnchorMs), 0) FROM override_events
+        WHERE profileId = :profileId AND packageName = :packageName
+        AND timestamp >= :sinceMs AND method = 'extension'
+        """,
+    )
+    suspend fun maxHourlyAnchorForPackageSince(
+        profileId: Long,
+        packageName: String,
+        sinceMs: Long,
+    ): Long
+
+    @Query(
+        """
+        SELECT COALESCE(MAX(weeklyUsageAnchorMs), 0) FROM override_events
+        WHERE profileId = :profileId AND packageName = :packageName
+        AND timestamp >= :sinceMs AND method = 'extension'
+        """,
+    )
+    suspend fun maxWeeklyAnchorForPackageSince(
+        profileId: Long,
+        packageName: String,
+        sinceMs: Long,
+    ): Long
+
+    @Query(
+        """
+        SELECT COALESCE(MAX(dailyUsageAnchorMs), 0) FROM override_events
+        WHERE profileId = :profileId AND timestamp >= :sinceMs AND method = 'extension'
+        """,
+    )
+    suspend fun maxDailyAnchorForProfileSince(profileId: Long, sinceMs: Long): Long
+
+    @Query(
+        """
+        SELECT COALESCE(MAX(hourlyUsageAnchorMs), 0) FROM override_events
+        WHERE profileId = :profileId AND timestamp >= :sinceMs AND method = 'extension'
+        """,
+    )
+    suspend fun maxHourlyAnchorForProfileSince(profileId: Long, sinceMs: Long): Long
+
+    @Query(
+        """
+        SELECT COALESCE(MAX(weeklyUsageAnchorMs), 0) FROM override_events
+        WHERE profileId = :profileId AND timestamp >= :sinceMs AND method = 'extension'
+        """,
+    )
+    suspend fun maxWeeklyAnchorForProfileSince(profileId: Long, sinceMs: Long): Long
 
     @Query(
         """

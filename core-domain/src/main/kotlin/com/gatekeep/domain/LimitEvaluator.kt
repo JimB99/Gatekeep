@@ -11,6 +11,7 @@ object LimitEvaluator {
         limit: AppLimit?,
         usage: UsageSnapshot,
         extensionBonus: LimitExtensionBonus = LimitExtensionBonus(),
+        graceRemainingMs: Long? = null,
     ): LimitCheckResult {
         if (limit == null || !limit.enabled) {
             return LimitCheckResult.Allowed(
@@ -22,13 +23,25 @@ object LimitEvaluator {
         }
 
         val dailyRemaining = remainingForPeriod(
-            limit.dailyLimitMs, usage.dailyMs, extensionBonus.dailyMs, PeriodDuration.dayMs,
+            limit.dailyLimitMs,
+            usage.dailyMs,
+            extensionBonus.dailyMs,
+            graceRemainingMs,
+            PeriodDuration.dayMs,
         )
         val hourlyRemaining = remainingForPeriod(
-            limit.hourlyLimitMs, usage.hourlyMs, extensionBonus.hourlyMs, PeriodDuration.hourMs,
+            limit.hourlyLimitMs,
+            usage.hourlyMs,
+            extensionBonus.hourlyMs,
+            graceRemainingMs,
+            PeriodDuration.hourMs,
         )
         val weeklyRemaining = remainingForPeriod(
-            limit.weeklyLimitMs, usage.weeklyMs, extensionBonus.weeklyMs, PeriodDuration.weekMs,
+            limit.weeklyLimitMs,
+            usage.weeklyMs,
+            extensionBonus.weeklyMs,
+            graceRemainingMs,
+            PeriodDuration.weekMs,
         )
 
         if (dailyRemaining != null && dailyRemaining <= 0) {
@@ -42,9 +55,27 @@ object LimitEvaluator {
         }
 
         val warning = when {
-            isNearLimit(limit.dailyLimitMs, usage.dailyMs, extensionBonus.dailyMs, PeriodDuration.dayMs) ||
-                isNearLimit(limit.hourlyLimitMs, usage.hourlyMs, extensionBonus.hourlyMs, PeriodDuration.hourMs) ||
-                isNearLimit(limit.weeklyLimitMs, usage.weeklyMs, extensionBonus.weeklyMs, PeriodDuration.weekMs) ->
+            isNearLimit(
+                limit.dailyLimitMs,
+                usage.dailyMs,
+                extensionBonus.dailyMs,
+                graceRemainingMs,
+                PeriodDuration.dayMs,
+            ) ||
+                isNearLimit(
+                    limit.hourlyLimitMs,
+                    usage.hourlyMs,
+                    extensionBonus.hourlyMs,
+                    graceRemainingMs,
+                    PeriodDuration.hourMs,
+                ) ||
+                isNearLimit(
+                    limit.weeklyLimitMs,
+                    usage.weeklyMs,
+                    extensionBonus.weeklyMs,
+                    graceRemainingMs,
+                    PeriodDuration.weekMs,
+                ) ->
                 WarningLevel.eightyPercent
             else -> WarningLevel.none
         }
@@ -61,22 +92,39 @@ object LimitEvaluator {
         limitMs: Long?,
         usedMs: Long,
         bonusMs: Long,
+        graceRemainingMs: Long?,
         periodMs: Long,
     ): Long? {
-        val effective = effectiveCap(limitMs, bonusMs, periodMs) ?: return null
+        val effective = effectiveCap(limitMs, usedMs, bonusMs, graceRemainingMs, periodMs) ?: return null
         return effective - usedMs
     }
 
-    private fun isNearLimit(limitMs: Long?, usedMs: Long, bonusMs: Long, periodMs: Long): Boolean {
-        val effectiveLimit = effectiveCap(limitMs, bonusMs, periodMs) ?: return false
+    private fun isNearLimit(
+        limitMs: Long?,
+        usedMs: Long,
+        bonusMs: Long,
+        graceRemainingMs: Long?,
+        periodMs: Long,
+    ): Boolean {
+        val effectiveLimit = effectiveCap(limitMs, usedMs, bonusMs, graceRemainingMs, periodMs) ?: return false
         if (effectiveLimit <= 0) return false
         return usedMs.toDouble() / effectiveLimit >= 0.8
     }
 
-    private fun effectiveCap(limitMs: Long?, bonusMs: Long, periodMs: Long): Long? {
-        if (limitMs == null || limitMs <= 0) return null
-        return PeriodDuration.unlimitedIfAtLeastPeriod(limitMs + bonusMs, periodMs)
-    }
+    private fun effectiveCap(
+        limitMs: Long?,
+        usedMs: Long,
+        bonusMs: Long,
+        graceRemainingMs: Long?,
+        periodMs: Long,
+    ): Long? = EffectiveLimitDisplay.effectiveLimitMs(
+        baseLimitMs = limitMs,
+        usageMs = usedMs,
+        extensionBonusMs = bonusMs,
+        graceRemainingMs = graceRemainingMs,
+        noLimitToday = false,
+        periodMs = periodMs,
+    )
 
     sealed class LimitCheckResult {
         data class Allowed(

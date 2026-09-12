@@ -286,6 +286,10 @@ See also `docs/test-run-report.md` for latest run summary.
 | E-07 | Surface overlay only | `ExtensionEnforcementTest.e07_surfaceOverlayOnly` |
 | E-08 | Custom minutes extension | `ExtensionEnforcementTest.e08_customMinutes_extension` |
 | E-09 | Extension after hard block denied | `ExtensionEnforcementTest.e09_afterHardBlock_denied` |
+| E-10 | Overlay +5m over daily cap dismisses overlay, no re-block loop | `ExtensionGraceEnforcementTest.e10_overlayExtend5_overDailyCap_dismissesOverlayAndStaysAllowed` |
+| E-11 | Over-cap usage + grace evaluates allowed | `ExtensionGraceEnforcementTest.e11_overDailyCap_programmaticGrace_evaluatesAllowed` |
+| E-12 | Grace over daily cap: HUD shows used / base+bonus (not ∞ or 289h-style) | `ExtensionGraceEnforcementTest.e12_overDailyCap_graceCountdown_showsFiniteLimitNotInfinity` |
+| E-13 | Overlay no-limit-today dismisses overlay | `ExtensionGraceEnforcementTest.e13_overlayNoLimitToday_dismissesOverlayAndStaysAllowed` |
 
 ---
 
@@ -301,6 +305,9 @@ See also `docs/test-run-report.md` for latest run summary.
 | CU-06 | Snackbar debounce on rapid taps | `CurrentUsageActionsTest.cu06_snackbar_debounceRapidTaps` |
 | CU-07 | Extension denied shows feedback | `CurrentUsageActionsTest.cu07_extensionDenied_feedback` |
 | CU-08 | Disabled when enforcement off | `CurrentUsageActionsTest.cu08_disabledWhenEnforcementOff` |
+| CU-09 | No limit today in-app with overlay-only policy shows ∞ + Applied | `CurrentUsageActionsTest.cu09_noLimitToday_overlayOnlyPolicy_showsInfinityAndApplied` |
+| CU-10 | No limit today shared pool shows ∞ in Current Usage | `CurrentUsageActionsTest.cu10_noLimitToday_sharedPool_showsInfinity` |
+| CU-11 | No limit today in-app works when session policy disables overlay option | `CurrentUsageActionsTest.cu11_noLimitToday_limitPolicyUsedWhenSessionPolicyDisables` |
 
 ---
 

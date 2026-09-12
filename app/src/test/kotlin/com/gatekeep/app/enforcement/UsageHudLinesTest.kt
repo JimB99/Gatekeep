@@ -70,13 +70,60 @@ class UsageHudLinesTest {
     }
 
     @Test
-    fun `advances used while remaining is missing such as extension grace`() {
+    fun `holds used steady when remaining exists but limit is unlimited`() {
+        assertEquals(
+            10 * 60_000L,
+            tickHudUsedMs(
+                currentUsedMs = 10 * 60_000L,
+                remainingMs = 15 * 60_000L,
+                limitMs = null,
+                elapsedMs = 60_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun `wall clock tick helper still exists for legacy callers`() {
         assertEquals(
             11 * 60_000L,
             tickHudUsedMs(
                 currentUsedMs = 10 * 60_000L,
                 remainingMs = null,
                 limitMs = 15 * 60_000L,
+                elapsedMs = 60_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun `deriving used from limit minus remaining inflates usage`() {
+        val inflatedUsed = tickHudUsedMs(
+            currentUsedMs = 14 * 60_000L,
+            remainingMs = 15 * 60_000L,
+            limitMs = 58 * 60_000L,
+            elapsedMs = 0L,
+        )
+        assertEquals(43 * 60_000L, inflatedUsed)
+    }
+
+    @Test
+    fun `display cap shows over cap usage against stable grace cap`() {
+        val usedMs = 65 * 60_000L
+        val displayLimitMs = 80 * 60_000L // 65m usage + 15m grace at grant
+        val lines = UsageHudInfo(
+            dailyUsedMs = usedMs,
+            dailyLimitMs = displayLimitMs,
+        ).countdownLines()
+        assertEquals(
+            listOf(UsageHudLine.UsedOverLimit(UsageHudBucket.daily, usedMs, displayLimitMs)),
+            lines,
+        )
+        assertEquals(
+            66 * 60_000L,
+            tickHudUsedMs(
+                currentUsedMs = usedMs,
+                remainingMs = null,
+                limitMs = displayLimitMs,
                 elapsedMs = 60_000L,
             ),
         )

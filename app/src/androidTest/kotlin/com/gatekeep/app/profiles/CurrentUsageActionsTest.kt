@@ -3,6 +3,7 @@ package com.gatekeep.app.profiles
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -15,6 +16,12 @@ import com.gatekeep.app.support.GatekeepUiTest.openCurrentUsage
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
+import com.gatekeep.data.repository.UsageRepository
+import com.gatekeep.domain.model.ExtensionPolicy
+import com.gatekeep.domain.model.ExtensionSurfaceMode
+import com.gatekeep.domain.model.LimitUsageScope
+import com.gatekeep.domain.model.OnLimitAction
+import com.gatekeep.domain.model.OnSessionLimitAction
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
@@ -36,6 +43,7 @@ class CurrentUsageActionsTest {
 
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var profileRepository: ProfileRepository
+    @Inject lateinit var usageRepository: UsageRepository
 
     private var profileId: Long = 0
 
@@ -51,10 +59,10 @@ class CurrentUsageActionsTest {
         }
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
-        openCurrentUsage()
+        openCurrentUsageScreen()
     }
 
-    private fun openCurrentUsage() {
+    private fun openCurrentUsageScreen() {
         composeRule.openCurrentUsage()
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule
@@ -62,6 +70,32 @@ class CurrentUsageActionsTest {
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         }
+    }
+
+    private fun reseedProfile(
+        config: GatekeepTestFixtures.ProfileSeedConfig = GatekeepTestFixtures.ProfileSeedConfig(),
+        dailyMs: Long = 0,
+    ) {
+        runBlocking {
+            GatekeepTestFixtures.resetInstrumentedUiState(settingsRepository, profileRepository)
+            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository,
+                packageName = EnforcementTestPackages.TARGET_A,
+                config = config,
+            )
+            profileId = seeded.profileId
+            if (dailyMs > 0) {
+                GatekeepTestFixtures.seedUsageAtCap(
+                    usageRepository,
+                    profileId,
+                    seeded.packageName,
+                    dailyMs = dailyMs,
+                )
+            }
+        }
+        composeRule.activityRule.scenario.recreate()
+        composeRule.waitForIdle()
+        openCurrentUsageScreen()
     }
 
     @Test
@@ -95,7 +129,7 @@ class CurrentUsageActionsTest {
         }
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
-        openCurrentUsage()
+        openCurrentUsageScreen()
         composeRule.onNodeWithTag(GatekeepTestTags.CURRENT_USAGE_EXTEND_PREFIX + "5").performClick()
     }
 
@@ -124,7 +158,73 @@ class CurrentUsageActionsTest {
         }
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
-        openCurrentUsage()
+        openCurrentUsageScreen()
         composeRule.onNodeWithTag(GatekeepTestTags.CURRENT_USAGE_EXTEND_PREFIX + "5").assertIsDisplayed()
+    }
+
+    @Test
+    fun cu09_noLimitToday_overlayOnlyPolicy_showsInfinityAndApplied() {
+        reseedProfile(
+            config = GatekeepTestFixtures.ProfileSeedConfig(
+                onLimitAction = OnLimitAction.limitWithExtensions,
+                limitExtensionPolicy = ExtensionPolicy(
+                    optionMinutes = listOf(5, 15),
+                    surfaceMode = ExtensionSurfaceMode.overlay,
+                    showNoLimitToday = true,
+                ),
+            ),
+            dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
+        )
+        composeRule.onNodeWithTag(GatekeepTestTags.CURRENT_USAGE_NO_LIMIT).performClick()
+        composeRule.waitUntil(timeoutMillis = 6_000) {
+            composeRule.onAllNodesWithText("∞").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.waitUntil(timeoutMillis = 6_000) {
+            composeRule.onAllNodesWithText("Applied", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    @Test
+    fun cu10_noLimitToday_sharedPool_showsInfinity() {
+        reseedProfile(
+            config = GatekeepTestFixtures.ProfileSeedConfig(
+                limitUsageScope = LimitUsageScope.sharedPool,
+                onLimitAction = OnLimitAction.limitWithExtensions,
+                limitExtensionPolicy = ExtensionPolicy(
+                    optionMinutes = listOf(5, 15),
+                    surfaceMode = ExtensionSurfaceMode.overlay,
+                    showNoLimitToday = true,
+                ),
+            ),
+            dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
+        )
+        composeRule.onNodeWithTag(GatekeepTestTags.CURRENT_USAGE_NO_LIMIT).performClick()
+        composeRule.waitUntil(timeoutMillis = 6_000) {
+            composeRule.onAllNodesWithText("∞").fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    @Test
+    fun cu11_noLimitToday_limitPolicyUsedWhenSessionPolicyDisables() {
+        reseedProfile(
+            config = GatekeepTestFixtures.ProfileSeedConfig(
+                onLimitAction = OnLimitAction.limitWithExtensions,
+                onSessionLimitAction = OnSessionLimitAction.limitWithExtensions,
+                sessionExtensionPolicy = ExtensionPolicy(
+                    showNoLimitToday = false,
+                    surfaceMode = ExtensionSurfaceMode.both,
+                ),
+                limitExtensionPolicy = ExtensionPolicy(
+                    optionMinutes = listOf(5, 15),
+                    surfaceMode = ExtensionSurfaceMode.overlay,
+                    showNoLimitToday = true,
+                ),
+            ),
+            dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
+        )
+        composeRule.onNodeWithTag(GatekeepTestTags.CURRENT_USAGE_NO_LIMIT).performClick()
+        composeRule.waitUntil(timeoutMillis = 6_000) {
+            composeRule.onAllNodesWithText("∞").fetchSemanticsNodes().isNotEmpty()
+        }
     }
 }

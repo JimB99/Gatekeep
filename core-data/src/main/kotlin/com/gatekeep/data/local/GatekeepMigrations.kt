@@ -19,6 +19,7 @@ object GatekeepMigrations {
             MIGRATION_10_11,
             MIGRATION_11_12,
             MIGRATION_12_13,
+            MIGRATION_13_14,
         )
 
     val MIGRATION_5_6 = object : Migration(5, 6) {
@@ -229,6 +230,20 @@ object GatekeepMigrations {
                 CREATE INDEX IF NOT EXISTS index_override_events_profileId_method_timestamp
                 ON override_events(profileId, method, timestamp)
                 """.trimIndent(),
+            )
+        }
+    }
+
+    val MIGRATION_13_14 = object : Migration(13, 14) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE override_events ADD COLUMN dailyUsageAnchorMs INTEGER NOT NULL DEFAULT 0",
+            )
+            db.execSQL(
+                "ALTER TABLE override_events ADD COLUMN hourlyUsageAnchorMs INTEGER NOT NULL DEFAULT 0",
+            )
+            db.execSQL(
+                "ALTER TABLE override_events ADD COLUMN weeklyUsageAnchorMs INTEGER NOT NULL DEFAULT 0",
             )
         }
     }

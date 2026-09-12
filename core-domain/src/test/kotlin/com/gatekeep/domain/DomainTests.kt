@@ -6,6 +6,7 @@ import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.LimitExtensionBonus
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
+import com.gatekeep.domain.model.Pause
 import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.ProfileEnforcementConfig
 import com.gatekeep.domain.model.RuleEvaluationContext
@@ -747,6 +748,51 @@ class LimitEvaluatorTest {
         assertTrue(result is LimitEvaluator.LimitCheckResult.Allowed)
         assertNull((result as LimitEvaluator.LimitCheckResult.Allowed).remainingWeeklyMs)
     }
+
+    @Test
+    fun `grace allows usage when over daily cap but within grace window`() {
+        val limit = AppLimit(1, "com.test", dailyLimitMs = 60 * 60_000L, enabled = true)
+        val result = LimitEvaluator.evaluate(
+            limit,
+            UsageSnapshot(dailyMs = 2 * 60 * 60_000L),
+            LimitExtensionBonus(dailyMs = 15 * 60_000L),
+            graceRemainingMs = 15 * 60_000L,
+        )
+        assertTrue(result is LimitEvaluator.LimitCheckResult.Allowed)
+        assertEquals(
+            15 * 60_000L,
+            (result as LimitEvaluator.LimitCheckResult.Allowed).remainingDailyMs,
+        )
+    }
+
+    @Test
+    fun `grace absent blocks when bonus alone is insufficient`() {
+        val limit = AppLimit(1, "com.test", dailyLimitMs = 60 * 60_000L, enabled = true)
+        val result = LimitEvaluator.evaluate(
+            limit,
+            UsageSnapshot(dailyMs = 2 * 60 * 60_000L),
+            LimitExtensionBonus(dailyMs = 15 * 60_000L),
+            graceRemainingMs = null,
+        )
+        assertTrue(result is LimitEvaluator.LimitCheckResult.Blocked)
+        assertEquals(BlockReason.dailyLimit, (result as LimitEvaluator.LimitCheckResult.Blocked).reason)
+    }
+
+    @Test
+    fun `stacked grace extends remaining from current usage`() {
+        val limit = AppLimit(1, "com.test", dailyLimitMs = 60 * 60_000L, enabled = true)
+        val result = LimitEvaluator.evaluate(
+            limit,
+            UsageSnapshot(dailyMs = 2 * 60 * 60_000L),
+            LimitExtensionBonus(dailyMs = 30 * 60_000L),
+            graceRemainingMs = 30 * 60_000L,
+        )
+        assertTrue(result is LimitEvaluator.LimitCheckResult.Allowed)
+        assertEquals(
+            30 * 60_000L,
+            (result as LimitEvaluator.LimitCheckResult.Allowed).remainingDailyMs,
+        )
+    }
 }
 
 class FocusBlockManagerTest {
@@ -772,6 +818,69 @@ class FocusBlockManagerTest {
         )
         val check = FocusBlockManager.isBlocked(listOf(pause), profileId = 2, nowEpochMs = 1500)
         assertTrue(check is FocusBlockManager.BlockCheck.NotBlocked)
+    }
+}
+
+class PauseManagerNoLimitTodayTest {
+
+    @Test
+    fun `shared pool recognizes profile scoped no limit today pause`() {
+        val now = 1_000_000L
+        val pause = Pause(
+            profileId = 1L,
+            packageName = null,
+            type = com.gatekeep.domain.model.PauseType.noLimitToday,
+            untilEpochMs = now + 60_000L,
+        )
+        assertTrue(
+            PauseManager.isNoLimitTodayActive(
+                pauses = listOf(pause),
+                profileId = 1L,
+                packageName = "com.test.app",
+                nowEpochMs = now,
+                sharedPool = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `shared pool ignores per app no limit today pause`() {
+        val now = 1_000_000L
+        val pause = Pause(
+            profileId = 1L,
+            packageName = "com.test.app",
+            type = com.gatekeep.domain.model.PauseType.noLimitToday,
+            untilEpochMs = now + 60_000L,
+        )
+        assertTrue(
+            !PauseManager.isNoLimitTodayActive(
+                pauses = listOf(pause),
+                profileId = 1L,
+                packageName = "com.test.app",
+                nowEpochMs = now,
+                sharedPool = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `per app recognizes package scoped no limit today pause`() {
+        val now = 1_000_000L
+        val pause = Pause(
+            profileId = 1L,
+            packageName = "com.test.app",
+            type = com.gatekeep.domain.model.PauseType.noLimitToday,
+            untilEpochMs = now + 60_000L,
+        )
+        assertTrue(
+            PauseManager.isNoLimitTodayActive(
+                pauses = listOf(pause),
+                profileId = 1L,
+                packageName = "com.test.app",
+                nowEpochMs = now,
+                sharedPool = false,
+            ),
+        )
     }
 }
 

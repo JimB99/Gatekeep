@@ -154,6 +154,28 @@ class RulesInteractionTest {
     }
 
     @Test
+    fun extensionGracePause_allowsDailyUsageWhenOverCap() {
+        val profile = profileBase.copy(onLimitAction = OnLimitAction.hardBlock)
+        val gracePause = Pause(
+            profileId = 1,
+            packageName = "com.test.app",
+            type = PauseType.extensionGrace,
+            untilEpochMs = 1_000_000L + 15 * 60_000L,
+        )
+        val result = RuleEngine.evaluate(
+            context(
+                profile = profile,
+                now = 1_000_000L,
+                usage = UsageSnapshot(dailyMs = 2 * 60 * 60_000L),
+                pauses = listOf(gracePause),
+                enforcementConfig = profile.enforcementConfig(),
+            ),
+        )
+        assertInstanceOf(RuleResult.Allowed::class.java, result)
+        assertEquals(15 * 60_000L, (result as RuleResult.Allowed).remainingDailyMs)
+    }
+
+    @Test
     fun extensionGracePause_doesNotBypassSessionLimit() {
         val profile = profileBase.copy(onSessionLimitAction = OnSessionLimitAction.hardBlock)
         val session = SessionTracker.startSession("com.test.app", 1_000_000L - 20 * 60_000L)

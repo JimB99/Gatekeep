@@ -49,6 +49,8 @@ object GatekeepTestFixtures {
         const val FUTURE_OFFSET_MS = 30_000L
         const val EXTENSION_GRACE_MS = 2_000L
         const val EXTENSION_BONUS_MS = 5_000L
+        /** Usage above the compact daily cap — exercises grace-cap display without hitting real 24h scale. */
+        const val OVER_DAILY_CAP_MS = DAILY_LIMIT_MS + 20_000L
         const val STRICT_PROFILE_LIMIT_MS = 20_000L
         const val LOOSE_PROFILE_LIMIT_MS = 60_000L
         const val STRICT_OVER_CAP_MS = STRICT_PROFILE_LIMIT_MS + 500L

@@ -100,6 +100,7 @@ class PauseEnforcementTest : EnforcementCrossAppTestBase() {
             )
         }
         harness.launchTargetA()
+        assertAllowedWithoutBlockingOverlay()
     }
 
     @Test

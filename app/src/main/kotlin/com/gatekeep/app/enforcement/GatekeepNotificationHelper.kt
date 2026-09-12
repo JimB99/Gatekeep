@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import com.gatekeep.app.MainActivity
 import com.gatekeep.app.R
 import com.gatekeep.app.util.PermissionHelper
+import com.gatekeep.app.util.formatDurationMinutes
 import com.gatekeep.app.util.formatDurationMs
 import com.gatekeep.app.util.withAppLocale
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -60,6 +61,9 @@ fun tickHudUsedMs(
 ): Long? {
     if (remainingMs != null && limitMs != null) {
         return (limitMs - remainingMs).coerceAtLeast(0)
+    }
+    if (remainingMs != null && limitMs == null) {
+        return currentUsedMs
     }
     if (currentUsedMs == null) return null
     val next = currentUsedMs + elapsedMs.coerceAtLeast(0)
@@ -145,8 +149,8 @@ class GatekeepNotificationHelper @Inject constructor(
                     formatDurationMs(context, line.remainingMs),
                 )
                 is UsageHudLine.UsedOverLimit -> {
-                    val used = formatDurationMs(context, line.usedMs)
-                    val limit = formatDurationMs(context, line.limitMs)
+                    val used = formatDurationMinutes(line.usedMs)
+                    val limit = formatDurationMinutes(line.limitMs)
                     when (line.bucket) {
                         UsageHudBucket.daily -> localizedContext.getString(R.string.hud_daily_used_format, used, limit)
                         UsageHudBucket.hourly -> localizedContext.getString(R.string.hud_hourly_format, used, limit)

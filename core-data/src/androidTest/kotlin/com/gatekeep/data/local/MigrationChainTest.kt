@@ -111,6 +111,33 @@ class MigrationChainTest {
     }
 
     @Test
+    fun migrate13To14_addsExtensionAnchorColumnsWithDefaults() {
+        LegacySchemaFixtures.createVersion12(context, TEST_DB)
+        LegacySchemaFixtures.insertOverrideEvent(
+            context = context,
+            dbName = TEST_DB,
+            packageName = "com.example",
+            profileId = 1,
+            timestamp = 1_000,
+            method = "extension",
+            extensionMs = 300_000,
+        )
+
+        val db = helper.runMigrationsAndValidate(
+            TEST_DB,
+            14,
+            true,
+            GatekeepMigrations.MIGRATION_12_13,
+            GatekeepMigrations.MIGRATION_13_14,
+        )
+
+        assertEquals(0L, db.singleLongOf("SELECT dailyUsageAnchorMs FROM override_events"))
+        assertEquals(0L, db.singleLongOf("SELECT hourlyUsageAnchorMs FROM override_events"))
+        assertEquals(0L, db.singleLongOf("SELECT weeklyUsageAnchorMs FROM override_events"))
+        db.close()
+    }
+
+    @Test
     fun migrate8To13_fullChainProducesValidSchema() {
         LegacySchemaFixtures.createVersion8(context, TEST_DB)
         LegacySchemaFixtures.insertProfileV8(context, TEST_DB, name = "Work")
@@ -123,7 +150,7 @@ class MigrationChainTest {
             endMinute = 17 * 60,
         )
 
-        val db = helper.runMigrationsAndValidate(TEST_DB, 13, true, *GatekeepMigrations.ALL)
+        val db = helper.runMigrationsAndValidate(TEST_DB, 14, true, *GatekeepMigrations.ALL)
 
         assertEquals("Work", db.singleTextOf("SELECT name FROM profiles"))
         assertEquals("perApp", db.singleTextOf("SELECT limitUsageScope FROM profiles"))
@@ -160,6 +187,12 @@ class MigrationChainTest {
         query(sql).use { cursor ->
             cursor.moveToFirst()
             cursor.getString(0)
+        }
+
+    private fun SupportSQLiteDatabase.singleLongOf(sql: String): Long =
+        query(sql).use { cursor ->
+            cursor.moveToFirst()
+            cursor.getLong(0)
         }
 
     private companion object {

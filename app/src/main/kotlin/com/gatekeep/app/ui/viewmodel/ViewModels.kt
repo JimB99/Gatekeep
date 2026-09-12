@@ -25,8 +25,7 @@ import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
 import com.gatekeep.domain.AppCategories
-import com.gatekeep.domain.EffectiveLimitDisplay
-import com.gatekeep.domain.ExtensionGrantEngine
+import com.gatekeep.domain.PauseManager
 import com.gatekeep.domain.PeriodDuration
 import com.gatekeep.domain.PolicyTimelineResolver
 import com.gatekeep.domain.ProfileMergeEngine
@@ -220,7 +219,7 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             val profile = profileRepository.observeProfiles().first().find { it.id == profileId } ?: return@launch
             val now = System.currentTimeMillis()
-            val pauses = usageRepository.observeActivePauses(now).first()
+            val pauses = usageRepository.getActivePauses(now)
             val segments = profileRepository.observeScheduleSegments(profileId).first()
             val windows = profileRepository.observeScheduleWindows(profileId).first()
             val policy = SchedulePolicyResolver.resolveForProfile(
@@ -345,12 +344,28 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    suspend fun grantNoLimitTodayInAppAwait(profileId: Long, packageNames: List<String>) {
-        if (packageNames.isEmpty()) return
-        packageNames.forEach { pkg ->
-            enforcementCoordinator.grantNoLimitTodayForProfileAwait(profileId, pkg, fromInApp = true)
+    suspend fun grantNoLimitTodayInAppAwait(profileId: Long, packageNames: List<String>): Boolean {
+        if (packageNames.isEmpty()) return false
+        val profile = profileRepository.observeProfiles().first().find { it.id == profileId } ?: return false
+        val granted = if (profile.limitUsageScope == com.gatekeep.domain.model.LimitUsageScope.sharedPool) {
+            enforcementCoordinator.grantNoLimitTodayForProfileAwait(
+                profileId,
+                packageNames.first(),
+                fromInApp = true,
+            )
+        } else {
+            var anyGranted = false
+            packageNames.forEach { pkg ->
+                if (enforcementCoordinator.grantNoLimitTodayForProfileAwait(profileId, pkg, fromInApp = true)) {
+                    anyGranted = true
+                }
+            }
+            anyGranted
         }
-        refreshCurrentUsage(profileId)
+        if (granted) {
+            loadCurrentUsage(profileId)
+        }
+        return granted
     }
 
     fun resetExtensionsForProfile(profileId: Long) {
@@ -411,7 +426,7 @@ class ProfileViewModel @Inject constructor(
             return
         }
         val now = System.currentTimeMillis()
-        val pauses = usageRepository.observeActivePauses(now).first()
+        val pauses = usageRepository.getActivePauses(now)
         val dayStart = usageStatsCollector.dayStartEpochMs(now)
         val hourStart = usageStatsCollector.hourStartEpochMs(now)
         val weekStart = usageStatsCollector.weekStartEpochMs(now)
@@ -422,30 +437,18 @@ class ProfileViewModel @Inject constructor(
             limit: AppLimit,
             usage: com.gatekeep.domain.model.UsageSnapshot,
         ): List<CurrentUsageLimitRow> {
-            val dailyBonus = if (sharedPool) {
-                usageRepository.sumExtensionMsForProfileSince(profileId, dayStart)
-            } else {
-                usageRepository.sumExtensionMsForPackageSince(profileId, packageName, dayStart)
-            }
-            val hourlyBonus = if (sharedPool) {
-                usageRepository.sumExtensionMsForProfileSince(profileId, hourStart)
-            } else {
-                usageRepository.sumExtensionMsForPackageSince(profileId, packageName, hourStart)
-            }
-            val weeklyBonus = if (sharedPool) {
-                usageRepository.sumExtensionMsForProfileSince(profileId, weekStart)
-            } else {
-                usageRepository.sumExtensionMsForPackageSince(profileId, packageName, weekStart)
-            }
-            val graceUntil = ExtensionGrantEngine.activeGraceUntilEpochMs(
-                pauses = pauses,
-                profileId = profileId,
-                packageName = packageName,
-                nowEpochMs = now,
-                sharedPool = sharedPool,
+            val noLimitToday = PauseManager.isNoLimitTodayActive(
+                pauses, profileId, packageName, now, sharedPool,
             )
-            val graceRemaining = graceUntil?.let { (it - now).coerceAtLeast(0) }
-            val noLimitToday = isNoLimitTodayActive(pauses, profileId, packageName, now, sharedPool)
+            val dailyExtension = usageRepository.dailyExtensionDisplay(
+                profileId, packageName, dayStart, sharedPool,
+            )
+            val hourlyExtension = usageRepository.hourlyExtensionDisplay(
+                profileId, packageName, hourStart, sharedPool,
+            )
+            val weeklyExtension = usageRepository.weeklyExtensionDisplay(
+                profileId, packageName, weekStart, sharedPool,
+            )
 
             return buildList {
                 limit.weeklyLimitMs?.let { base ->
@@ -453,11 +456,9 @@ class ProfileViewModel @Inject constructor(
                         CurrentUsageLimitRow(
                             kind = CurrentUsageLimitKind.weekly,
                             usageMs = usage.weeklyMs,
-                            effectiveLimitMs = EffectiveLimitDisplay.effectiveLimitMs(
+                            effectiveLimitMs = com.gatekeep.app.enforcement.UsageDisplayLimits.displayLimitMs(
                                 base,
-                                usage.weeklyMs,
-                                weeklyBonus,
-                                graceRemaining,
+                                weeklyExtension,
                                 noLimitToday,
                                 PeriodDuration.weekMs,
                             ),
@@ -470,11 +471,9 @@ class ProfileViewModel @Inject constructor(
                         CurrentUsageLimitRow(
                             kind = CurrentUsageLimitKind.daily,
                             usageMs = usage.dailyMs,
-                            effectiveLimitMs = EffectiveLimitDisplay.effectiveLimitMs(
+                            effectiveLimitMs = com.gatekeep.app.enforcement.UsageDisplayLimits.displayLimitMs(
                                 base,
-                                usage.dailyMs,
-                                dailyBonus,
-                                graceRemaining,
+                                dailyExtension,
                                 noLimitToday,
                                 PeriodDuration.dayMs,
                             ),
@@ -487,11 +486,9 @@ class ProfileViewModel @Inject constructor(
                         CurrentUsageLimitRow(
                             kind = CurrentUsageLimitKind.hourly,
                             usageMs = usage.hourlyMs,
-                            effectiveLimitMs = EffectiveLimitDisplay.effectiveLimitMs(
+                            effectiveLimitMs = com.gatekeep.app.enforcement.UsageDisplayLimits.displayLimitMs(
                                 base,
-                                usage.hourlyMs,
-                                hourlyBonus,
-                                graceRemaining,
+                                hourlyExtension,
                                 noLimitToday,
                                 PeriodDuration.hourMs,
                             ),
@@ -528,23 +525,6 @@ class ProfileViewModel @Inject constructor(
                 sharedLimits = emptyList(),
                 perApp = perApp,
             )
-        }
-    }
-
-    private fun isNoLimitTodayActive(
-        pauses: List<Pause>,
-        profileId: Long,
-        packageName: String,
-        now: Long,
-        sharedPool: Boolean,
-    ): Boolean {
-        val active = pauses.filter {
-            it.untilEpochMs > now && it.type == PauseType.noLimitToday
-        }
-        return if (sharedPool) {
-            active.any { it.profileId == profileId && it.packageName == null }
-        } else {
-            active.any { it.profileId == profileId && it.packageName == packageName }
         }
     }
 

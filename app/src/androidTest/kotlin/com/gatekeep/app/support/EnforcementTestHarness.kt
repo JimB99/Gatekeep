@@ -1,5 +1,6 @@
 package com.gatekeep.app.support
 
+import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -335,6 +336,43 @@ class EnforcementTestHarness(
 
     fun isExtensionButtonsVisible(): Boolean =
         uiDevice.hasObject(By.res(packageName, "extension_buttons"))
+
+    fun clickOverlayExtensionMinutes(minutes: Int): Boolean {
+        val label = context.getString(R.string.extension_minutes_format, minutes)
+        val button = uiDevice.findObject(By.text(label))
+        if (button != null) {
+            button.click()
+            uiDevice.waitForIdle(400)
+            return true
+        }
+        val fallback = uiDevice.findObject(By.textContains("+$minutes"))
+        fallback?.click()
+        uiDevice.waitForIdle(400)
+        return fallback != null
+    }
+
+    fun clickOverlayNoLimitToday(): Boolean {
+        val label = context.getString(R.string.overlay_no_limit_today)
+        val button = uiDevice.findObject(By.text(label))
+        button?.click()
+        uiDevice.waitForIdle(400)
+        return button != null
+    }
+
+    fun countdownNotificationBody(): String? {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val active = manager.activeNotifications.firstOrNull {
+            it.id == GatekeepNotificationHelper.COUNTDOWN_NOTIFICATION_ID
+        }
+        val extras = active?.notification?.extras ?: return null
+        return extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
+            ?: extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
+    }
+
+    fun countdownNotificationContainsInfinity(): Boolean {
+        val infinity = context.getString(R.string.duration_infinity)
+        return countdownNotificationBody()?.contains(infinity) == true
+    }
 
     fun isFrictionVisible(): Boolean =
         uiDevice.hasObject(By.res(packageName, "friction_container"))

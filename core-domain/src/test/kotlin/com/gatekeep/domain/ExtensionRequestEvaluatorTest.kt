@@ -100,6 +100,48 @@ class ExtensionRequestEvaluatorTest {
     }
 
     @Test
+    fun `no limit today allowed in app even when policy disables overlay option`() {
+        val disabled = policy.copy(showNoLimitToday = false)
+        val allowed = ExtensionRequestEvaluator.evaluate(
+            policy = disabled,
+            source = ExtensionGrantSource.inApp,
+            requestedMinutes = 0,
+            overridesToday = 0,
+            consecutiveInSession = 0,
+            isNoLimitTodayRequest = true,
+        )
+        assertEquals(ExtensionPolicyEvaluator.ExtensionDecision.NoLimitToday, allowed)
+    }
+
+    @Test
+    fun `no limit today denied on overlay when policy disables it`() {
+        val disabled = policy.copy(showNoLimitToday = false)
+        val denied = ExtensionRequestEvaluator.evaluate(
+            policy = disabled,
+            source = ExtensionGrantSource.overlay,
+            requestedMinutes = 0,
+            overridesToday = 0,
+            consecutiveInSession = 0,
+            isNoLimitTodayRequest = true,
+        )
+        assertTrue(denied is ExtensionPolicyEvaluator.ExtensionDecision.Denied)
+    }
+
+    @Test
+    fun `no limit today allowed in app when overlay only surface`() {
+        val overlayOnly = policy.copy(surfaceMode = ExtensionSurfaceMode.overlay)
+        val allowed = ExtensionRequestEvaluator.evaluate(
+            policy = overlayOnly,
+            source = ExtensionGrantSource.inApp,
+            requestedMinutes = 0,
+            overridesToday = 0,
+            consecutiveInSession = 0,
+            isNoLimitTodayRequest = true,
+        )
+        assertEquals(ExtensionPolicyEvaluator.ExtensionDecision.NoLimitToday, allowed)
+    }
+
+    @Test
     fun `allows valid in app request`() {
         val allowed = ExtensionRequestEvaluator.evaluate(
             policy = policy,

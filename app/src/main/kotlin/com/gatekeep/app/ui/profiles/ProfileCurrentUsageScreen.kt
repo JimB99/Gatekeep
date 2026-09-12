@@ -48,7 +48,7 @@ import com.gatekeep.app.ui.viewmodel.ProfileViewModel
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel.CurrentUsageAppRow
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel.CurrentUsageLimitKind
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel.CurrentUsageLimitRow
-import com.gatekeep.app.util.formatDurationMs
+import com.gatekeep.app.util.formatDurationMinutes
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -71,20 +71,23 @@ fun ProfileCurrentUsageScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val appliedMsg = stringResource(R.string.extension_applied)
+    val deniedMsg = stringResource(R.string.extension_denied_not_allowed)
     val resetDoneMsg = stringResource(R.string.extension_reset_done)
     val appliedGate = remember { AppliedSnackbarGate() }
 
-    fun showAppliedOnce() {
+    fun showSnackbarOnce(message: String) {
         appliedGate.job?.cancel()
         appliedGate.job = scope.launch {
             delay(400)
             snackbarHostState.currentSnackbarData?.dismiss()
             snackbarHostState.showSnackbar(
-                message = appliedMsg,
+                message = message,
                 duration = SnackbarDuration.Short,
             )
         }
     }
+
+    fun showAppliedOnce() = showSnackbarOnce(appliedMsg)
 
     LaunchedEffect(profileId) {
         viewModel.bindProfile(profileId)
@@ -143,8 +146,11 @@ fun ProfileCurrentUsageScreen(
                     },
                     onNoLimitToday = {
                         scope.launch {
-                            viewModel.grantNoLimitTodayInAppAwait(profileId, monitoredPackages)
-                            showAppliedOnce()
+                            if (viewModel.grantNoLimitTodayInAppAwait(profileId, monitoredPackages)) {
+                                showAppliedOnce()
+                            } else {
+                                showSnackbarOnce(deniedMsg)
+                            }
                         }
                     },
                 )
@@ -166,11 +172,15 @@ fun ProfileCurrentUsageScreen(
                         },
                         onNoLimitToday = {
                             scope.launch {
-                                viewModel.grantNoLimitTodayInAppAwait(
-                                    profileId,
-                                    listOf(appRow.packageName),
-                                )
-                                showAppliedOnce()
+                                if (viewModel.grantNoLimitTodayInAppAwait(
+                                        profileId,
+                                        listOf(appRow.packageName),
+                                    )
+                                ) {
+                                    showAppliedOnce()
+                                } else {
+                                    showSnackbarOnce(deniedMsg)
+                                }
                             }
                         },
                     )
@@ -226,17 +236,19 @@ private fun UsageLimitBar(row: CurrentUsageLimitRow) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium)
         Text(
-            "${formatDurationMs(row.usageMs)} / ${formatDurationMs(row.effectiveLimitMs)}",
+            "${formatDurationMinutes(row.usageMs)} / ${formatDurationMinutes(row.effectiveLimitMs)}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        row.effectiveLimitMs?.let { limitMs ->
-            val scale = limitMs.coerceAtLeast(1L)
-            LinearProgressIndicator(
-                progress = { (row.usageMs.toFloat() / scale).coerceIn(0f, 1f) },
-                drawStopIndicator = {},
-                modifier = Modifier.fillMaxWidth(),
-            )
+        if (!row.noLimitToday) {
+            row.effectiveLimitMs?.let { limitMs ->
+                val scale = limitMs.coerceAtLeast(1L)
+                LinearProgressIndicator(
+                    progress = { (row.usageMs.toFloat() / scale).coerceIn(0f, 1f) },
+                    drawStopIndicator = {},
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }

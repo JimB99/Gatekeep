@@ -14,18 +14,21 @@ object ExtensionRequestEvaluator {
         consecutiveInSession: Int,
         isNoLimitTodayRequest: Boolean = false,
     ): ExtensionPolicyEvaluator.ExtensionDecision {
-        if (!isSurfaceAllowed(policy, source)) {
-            return ExtensionPolicyEvaluator.ExtensionDecision.Denied(
-                ExtensionDenialReason.extensionNotAllowed,
-            )
-        }
         if (isNoLimitTodayRequest) {
+            if (source == ExtensionGrantSource.inApp) {
+                return ExtensionPolicyEvaluator.ExtensionDecision.NoLimitToday
+            }
             return ExtensionPolicyEvaluator.evaluateExtension(
                 policy = policy,
                 requestedMinutes = 0,
                 overridesToday = overridesToday,
                 consecutiveInSession = consecutiveInSession,
                 isNoLimitTodayRequest = true,
+            )
+        }
+        if (!isSurfaceAllowed(policy, source)) {
+            return ExtensionPolicyEvaluator.ExtensionDecision.Denied(
+                ExtensionDenialReason.extensionNotAllowed,
             )
         }
         if (requestedMinutes <= 0) {

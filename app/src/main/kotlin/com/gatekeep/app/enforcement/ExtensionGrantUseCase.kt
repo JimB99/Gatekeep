@@ -20,12 +20,17 @@ class ExtensionGrantUseCase(
         dayStartMs: Long,
         consecutiveInSession: Int,
         isNoLimitToday: Boolean = false,
+        useLimitExtensionPolicy: Boolean = false,
     ) = ExtensionRequestEvaluator.evaluate(
-        policy = ExtensionGrantEngine.policyForReason(
-            blockedReason,
-            profile.limitExtensionPolicy,
-            profile.sessionExtensionPolicy,
-        ),
+        policy = if (useLimitExtensionPolicy) {
+            profile.limitExtensionPolicy
+        } else {
+            ExtensionGrantEngine.policyForReason(
+                blockedReason,
+                profile.limitExtensionPolicy,
+                profile.sessionExtensionPolicy,
+            )
+        },
         source = source,
         requestedMinutes = minutes,
         overridesToday = usageRepository.countExtensionOverridesToday(

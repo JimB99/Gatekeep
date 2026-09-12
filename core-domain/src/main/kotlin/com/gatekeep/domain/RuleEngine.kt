@@ -2,6 +2,8 @@ package com.gatekeep.domain
 
 import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.BlockReason
+import com.gatekeep.domain.model.LimitUsageScope
+import com.gatekeep.domain.model.Pause
 import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
@@ -100,6 +102,10 @@ object RuleEngine {
             periodLimitsDisabled = context.periodLimitsDisabled,
             nowEpochMs = context.nowEpochMs,
             sessionAllowed = sessionAxis as? SessionTracker.SessionCheckResult.Allowed,
+            pauses = context.pauses,
+            profileId = context.profile.id,
+            packageName = context.packageName,
+            sharedPool = context.profile.limitUsageScope == LimitUsageScope.sharedPool,
         )
         val openAxis = evaluateOpenAxis(config, context.profile)
 
@@ -172,6 +178,10 @@ object RuleEngine {
         periodLimitsDisabled: Boolean,
         nowEpochMs: Long,
         sessionAllowed: SessionTracker.SessionCheckResult.Allowed?,
+        pauses: List<Pause>,
+        profileId: Long,
+        packageName: String,
+        sharedPool: Boolean,
     ): RuleResult? {
         if (periodLimitsDisabled) {
             return RuleResult.Allowed(
@@ -182,7 +192,20 @@ object RuleEngine {
             )
         }
 
-        val limitResult = LimitEvaluator.evaluate(limit, usage, limitExtensionBonus)
+        val graceUntil = ExtensionGrantEngine.activeGraceUntilEpochMs(
+            pauses = pauses,
+            profileId = profileId,
+            packageName = packageName,
+            nowEpochMs = nowEpochMs,
+            sharedPool = sharedPool,
+        )
+        val graceRemainingMs = graceUntil?.let { (it - nowEpochMs).coerceAtLeast(0) }
+        val limitResult = LimitEvaluator.evaluate(
+            limit = limit,
+            usage = usage,
+            extensionBonus = limitExtensionBonus,
+            graceRemainingMs = graceRemainingMs,
+        )
         return when (limitResult) {
             is LimitEvaluator.LimitCheckResult.Blocked -> applyLimitAction(
                 config = config,
