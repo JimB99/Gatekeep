@@ -1,6 +1,5 @@
 package com.gatekeep.app
 
-import android.content.Context
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -30,7 +29,6 @@ import com.gatekeep.app.ui.lock.AppLockScreen
 import com.gatekeep.app.ui.theme.GatekeepTheme
 import com.gatekeep.app.util.LocaleController
 import com.gatekeep.app.util.PermissionHelper
-import com.gatekeep.data.locale.LocalePreferences
 import com.gatekeep.app.worker.UsageSyncWorker
 import com.gatekeep.app.worker.WeeklyReportWorker
 import com.gatekeep.data.repository.ProfileRepository
@@ -38,7 +36,6 @@ import com.gatekeep.data.repository.SettingsRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -48,16 +45,7 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var coordinator: EnforcementCoordinator
     @Inject lateinit var profileRepository: ProfileRepository
 
-    override fun attachBaseContext(newBase: Context) {
-        LocaleController.apply(LocalePreferences.read(newBase))
-        super.attachBaseContext(newBase)
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
-        runBlocking {
-            settingsRepository.ensureLocalePersisted()
-            LocaleController.apply(settingsRepository.currentLanguageTag())
-        }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
