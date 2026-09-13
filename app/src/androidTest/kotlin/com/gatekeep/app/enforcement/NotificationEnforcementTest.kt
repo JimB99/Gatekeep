@@ -20,6 +20,8 @@ import org.junit.Test
 
 import org.junit.runner.RunWith
 
+import javax.inject.Inject
+
 
 
 @HiltAndroidTest
@@ -30,7 +32,7 @@ import org.junit.runner.RunWith
 
 class NotificationEnforcementTest : EnforcementCrossAppTestBase() {
 
-
+    @Inject lateinit var notificationHelper: GatekeepNotificationHelper
 
     @Test
 
@@ -188,7 +190,7 @@ class NotificationEnforcementTest : EnforcementCrossAppTestBase() {
 
         harness.launchTargetA()
 
-        harness.waitForCountdownNotification()
+        assertTrue(harness.waitForApproachingLimitNotification())
 
     }
 
@@ -291,6 +293,58 @@ class NotificationEnforcementTest : EnforcementCrossAppTestBase() {
         harness.sleepDevice()
 
         harness.waitForCountdownNotification()
+
+    }
+
+
+
+    @Test
+
+    fun n13_warningNotification_hasContentIntent() {
+
+        n06_eightyPercentWarning_fires()
+
+        assertTrue(
+            harness.hasNotificationContentIntent(GatekeepNotificationHelper.APPROACHING_LIMIT_ID),
+        )
+
+    }
+
+
+
+    @Test
+
+    fun n14_tapApproachingLimit_opensCurrentUsage() {
+
+        n06_eightyPercentWarning_fires()
+
+        assertTrue(
+            harness.launchNotificationContentIntent(GatekeepNotificationHelper.APPROACHING_LIMIT_ID),
+        )
+
+        assertTrue(harness.waitForCurrentUsageScreen())
+
+    }
+
+
+
+    @Test
+
+    fun n15_weeklyReportNotification_navigatesToStats() {
+
+        notificationHelper.showWeeklyReportWarning()
+
+        assertTrue(harness.waitForWeeklyReportNotification())
+
+        assertTrue(
+            harness.hasNotificationContentIntent(GatekeepNotificationHelper.WEEKLY_REPORT_ID),
+        )
+
+        assertTrue(
+            harness.launchNotificationContentIntent(GatekeepNotificationHelper.WEEKLY_REPORT_ID),
+        )
+
+        assertTrue(harness.waitForStatsScreen())
 
     }
 

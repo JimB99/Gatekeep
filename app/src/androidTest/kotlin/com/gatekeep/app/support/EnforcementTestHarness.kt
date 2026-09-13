@@ -472,6 +472,45 @@ class EnforcementTestHarness(
         }
     }
 
+    fun activeNotification(notificationId: Int): Notification? {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        return manager.activeNotifications.firstOrNull { it.id == notificationId }?.notification
+    }
+
+    fun hasNotificationContentIntent(notificationId: Int): Boolean =
+        activeNotification(notificationId)?.contentIntent != null
+
+    fun launchNotificationContentIntent(notificationId: Int): Boolean {
+        val pendingIntent = activeNotification(notificationId)?.contentIntent ?: return false
+        return try {
+            pendingIntent.send()
+            uiDevice.waitForIdle(400)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun waitForApproachingLimitNotification(timeoutMs: Long = DEFAULT_NOTIFICATION_TIMEOUT_MS): Boolean {
+        val title = context.getString(R.string.approaching_limit_title)
+        return waitForNotificationText(title, timeoutMs)
+    }
+
+    fun waitForWeeklyReportNotification(timeoutMs: Long = DEFAULT_NOTIFICATION_TIMEOUT_MS): Boolean {
+        val title = context.getString(R.string.weekly_report_title)
+        return waitForNotificationText(title, timeoutMs)
+    }
+
+    fun waitForCurrentUsageScreen(timeoutMs: Long = DEFAULT_NOTIFICATION_TIMEOUT_MS): Boolean {
+        val title = context.getString(R.string.profile_current_usage)
+        return uiDevice.wait(Until.hasObject(By.text(title)), timeoutMs)
+    }
+
+    fun waitForStatsScreen(timeoutMs: Long = DEFAULT_NOTIFICATION_TIMEOUT_MS): Boolean {
+        val title = context.getString(R.string.statistics)
+        return uiDevice.wait(Until.hasObject(By.text(title)), timeoutMs)
+    }
+
     fun swipeNotificationAway(textContains: String) {
         openNotifications()
         val notification = uiDevice.findObject(By.textContains(textContains))

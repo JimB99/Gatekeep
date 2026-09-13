@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
-import com.gatekeep.app.MainActivity
 import com.gatekeep.app.R
 import com.gatekeep.app.util.PermissionHelper
 import com.gatekeep.app.util.formatDurationMinutes
@@ -109,8 +108,11 @@ class GatekeepNotificationHelper @Inject constructor(
     }
 
     fun buildServiceNotification(): Notification {
-        val intent = Intent(context, MainActivity::class.java)
-        val pending = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+        val pending = NotificationDestinations.mainActivityPendingIntent(
+            context,
+            NotificationDestination.Dashboard,
+            PENDING_SERVICE,
+        )
         return NotificationCompat.Builder(localizedContext, CHANNEL_SERVICE)
             .setContentTitle(localizedContext.getString(R.string.enforcement_notification_title))
             .setContentText(localizedContext.getString(R.string.enforcement_notification_text))
@@ -129,13 +131,19 @@ class GatekeepNotificationHelper @Inject constructor(
     fun showCountdown(
         title: String,
         hud: UsageHudInfo,
+        profileId: Long? = null,
         lastBody: String? = null,
         onBodyPosted: (String) -> Unit = {},
     ): Boolean {
         if (CountdownNotificationState.dismissedByUser) return false
 
-        val intent = Intent(context, MainActivity::class.java)
-        val pending = PendingIntent.getActivity(context, 1, intent, PendingIntent.FLAG_IMMUTABLE)
+        val destination = profileId?.let { NotificationDestination.ProfileCurrentUsage(it) }
+            ?: NotificationDestination.Dashboard
+        val pending = NotificationDestinations.mainActivityPendingIntent(
+            context,
+            destination,
+            countdownPendingRequestCode(profileId),
+        )
         val dismissIntent = PendingIntent.getBroadcast(
             context,
             COUNTDOWN_DISMISS_REQUEST_CODE,
@@ -187,14 +195,64 @@ class GatekeepNotificationHelper @Inject constructor(
         notificationManager.cancel(COUNTDOWN_NOTIFICATION_ID)
     }
 
-    fun showWarning(title: String, text: String) {
+    fun showApproachingLimitWarning(profileId: Long, appLabel: String) {
+        showWarningNotification(
+            title = localizedContext.getString(R.string.approaching_limit_title),
+            text = localizedContext.getString(R.string.approaching_limit_body, appLabel),
+            destination = NotificationDestination.ProfileCurrentUsage(profileId),
+            notificationId = APPROACHING_LIMIT_ID,
+            pendingRequestCode = PENDING_APPROACHING_LIMIT,
+        )
+    }
+
+    fun showLimitReachedWarning(profileId: Long, title: String, text: String) {
+        showWarningNotification(
+            title = title,
+            text = text,
+            destination = NotificationDestination.ProfileCurrentUsage(profileId),
+            notificationId = LIMIT_REACHED_ID,
+            pendingRequestCode = PENDING_LIMIT_REACHED,
+        )
+    }
+
+    fun showWeeklyReportWarning() {
+        showWarningNotification(
+            title = localizedContext.getString(R.string.weekly_report_title),
+            text = localizedContext.getString(R.string.weekly_report_body),
+            destination = NotificationDestination.Stats,
+            notificationId = WEEKLY_REPORT_ID,
+            pendingRequestCode = PENDING_WEEKLY_REPORT,
+        )
+    }
+
+    private fun showWarningNotification(
+        title: String,
+        text: String,
+        destination: NotificationDestination,
+        notificationId: Int,
+        pendingRequestCode: Int,
+    ) {
+        val pending = NotificationDestinations.mainActivityPendingIntent(
+            context,
+            destination,
+            pendingRequestCode,
+        )
         val builder = NotificationCompat.Builder(localizedContext, CHANNEL_WARNINGS)
             .setContentTitle(title)
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentIntent(pending)
+            .setAutoCancel(true)
             .setOnlyAlertOnce(true)
-        notificationManager.notify(WARNING_ID, builder.build())
+        notificationManager.notify(notificationId, builder.build())
     }
+
+    private fun countdownPendingRequestCode(profileId: Long?): Int =
+        if (profileId == null) {
+            PENDING_COUNTDOWN
+        } else {
+            PENDING_COUNTDOWN_PROFILE_BASE + (profileId % PENDING_COUNTDOWN_PROFILE_SPAN).toInt()
+        }
 
     fun showAccessibilityRevoked() {
         val settingsIntent = PermissionHelper.accessibilityIntent(context).apply {
@@ -232,8 +290,21 @@ class GatekeepNotificationHelper @Inject constructor(
         const val SERVICE_NOTIFICATION_ID = 1001
         const val COUNTDOWN_NOTIFICATION_ID = 1003
         const val COUNTDOWN_DISMISS_REQUEST_CODE = 2003
-        const val WARNING_ID = 1002
+        const val LIMIT_REACHED_ID = 1002
+        const val APPROACHING_LIMIT_ID = 1005
+        const val WEEKLY_REPORT_ID = 1006
         const val ACCESSIBILITY_REVOKED_ID = 1004
+
+        private const val PENDING_SERVICE = 0
+        private const val PENDING_COUNTDOWN = 1
+        private const val PENDING_COUNTDOWN_PROFILE_BASE = 100
+        private const val PENDING_COUNTDOWN_PROFILE_SPAN = 1_000
+        private const val PENDING_APPROACHING_LIMIT = 10
+        private const val PENDING_LIMIT_REACHED = 11
+        private const val PENDING_WEEKLY_REPORT = 12
+
+        @Deprecated("Use LIMIT_REACHED_ID", ReplaceWith("LIMIT_REACHED_ID"))
+        const val WARNING_ID = LIMIT_REACHED_ID
 
         @Deprecated("Use SERVICE_NOTIFICATION_ID", ReplaceWith("SERVICE_NOTIFICATION_ID"))
         const val NOTIFICATION_ID = SERVICE_NOTIFICATION_ID

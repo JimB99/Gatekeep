@@ -111,8 +111,17 @@ object Routes {
 fun GatekeepNavHost(
     startDestination: String,
     onEnforcementStart: () -> Unit,
+    pendingRoute: String? = null,
+    onPendingRouteConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
+    LaunchedEffect(pendingRoute) {
+        val route = pendingRoute ?: return@LaunchedEffect
+        navController.navigate(route) {
+            launchSingleTop = true
+        }
+        onPendingRouteConsumed()
+    }
     NavHost(
         navController = navController,
         startDestination = startDestination,

@@ -7,7 +7,6 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.gatekeep.app.R
 import com.gatekeep.app.enforcement.GatekeepNotificationHelper
 import com.gatekeep.app.util.UsageStatsCollector
 import com.gatekeep.data.repository.AppSettings
@@ -83,10 +82,7 @@ class WeeklyReportWorker @AssistedInject constructor(
         val settings = settingsRepository.settings.first()
         if (!settings.weeklyReportEnabled) return Result.success()
 
-        notificationHelper.showWarning(
-            applicationContext.getString(R.string.weekly_report_title),
-            applicationContext.getString(R.string.weekly_report_body),
-        )
+        notificationHelper.showWeeklyReportWarning()
         return Result.success()
     }
 

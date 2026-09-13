@@ -1,5 +1,6 @@
 package com.gatekeep.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -20,6 +21,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.gatekeep.app.enforcement.EnforcementCoordinator
+import com.gatekeep.app.enforcement.NotificationDestinations
 import com.gatekeep.app.ui.GatekeepNavHost
 import com.gatekeep.app.ui.Routes
 import com.gatekeep.app.ui.onboarding.OnboardingScreen
@@ -45,9 +47,12 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var coordinator: EnforcementCoordinator
     @Inject lateinit var profileRepository: ProfileRepository
 
+    private val notificationRouteState = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        notificationRouteState.value = NotificationDestinations.readRoute(intent)
 
         lifecycleScope.launch {
             val profiles = profileRepository.observeProfiles().first()
@@ -92,6 +97,7 @@ class MainActivity : AppCompatActivity() {
                 sessionUnlocked = sessionUnlocked,
             )
             val settingsViewModel: SettingsViewModel = hiltViewModel()
+            val notificationRoute by notificationRouteState
 
             GatekeepTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -117,11 +123,22 @@ class MainActivity : AppCompatActivity() {
                         GatekeepNavHost(
                             startDestination = Routes.DASHBOARD,
                             onEnforcementStart = { coordinator.startEnforcementService() },
+                            pendingRoute = notificationRoute,
+                            onPendingRouteConsumed = {
+                                notificationRouteState.value = null
+                                NotificationDestinations.clearRoute(intent)
+                            },
                         )
                     }
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        notificationRouteState.value = NotificationDestinations.readRoute(intent)
     }
 
     override fun onResume() {

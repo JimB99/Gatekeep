@@ -124,6 +124,7 @@ class EnforcementCoordinator @Inject constructor(
     private var countdownWeeklyUsedMs: Long? = null
     private var countdownAppLabel: String? = null
     private var countdownPackageName: String? = null
+    private var countdownProfileId: Long? = null
     private var countdownSharedPool: Boolean = false
     private var countdownMonitoredPackages: List<String> = emptyList()
     private var enforcementLoopRunnable: Runnable? = null
@@ -846,6 +847,7 @@ class EnforcementCoordinator @Inject constructor(
         countdownWeeklyUsedMs = null
         countdownAppLabel = null
         countdownPackageName = null
+        countdownProfileId = null
         countdownSharedPool = false
         countdownMonitoredPackages = emptyList()
         showCountdownNotification = false
@@ -1194,7 +1196,14 @@ class EnforcementCoordinator @Inject constructor(
                         base, weeklyExtension, noLimitToday, PeriodDuration.weekMs,
                     )
                 }
-                maybeShowWarning(packageName, appLabel, result.warningLevel, settings.warningAlertsEnabled, now)
+                maybeShowWarning(
+                    profileId = primaryProfile.id,
+                    packageName = packageName,
+                    appLabel = appLabel,
+                    warningLevel = result.warningLevel,
+                    enabled = settings.warningAlertsEnabled,
+                    now = now,
+                )
                 if (result.notifyLimitReached) {
                     val notifyReason = result.notifyLimitReason ?: BlockReason.dailyLimit
                     val profileId = primaryProfile.id
@@ -1222,9 +1231,10 @@ class EnforcementCoordinator @Inject constructor(
                             )
                             notifiedLimitKeys.add(notifyKey)
                         }
-                        notificationHelper.showWarning(
-                            localizedContext.getString(com.gatekeep.app.R.string.limit_reached_title),
-                            BlockMessageResolver.blockMessage(localizedContext, notifyReason, appLabel),
+                        notificationHelper.showLimitReachedWarning(
+                            profileId = profileId,
+                            title = localizedContext.getString(com.gatekeep.app.R.string.limit_reached_title),
+                            text = BlockMessageResolver.blockMessage(localizedContext, notifyReason, appLabel),
                         )
                     }
                 }
@@ -1232,6 +1242,7 @@ class EnforcementCoordinator @Inject constructor(
                     .map { it.packageName }
                 if (settings.showSessionTimerNotification) {
                     startEnforcementLoop(
+                        profileId = primaryProfile.id,
                         appLabel = appLabel,
                         packageName = packageName,
                         remainingDailyMs = countdownDailyMs,
@@ -1255,6 +1266,7 @@ class EnforcementCoordinator @Inject constructor(
                     )
                 } else {
                     startEnforcementLoop(
+                        profileId = primaryProfile.id,
                         appLabel = appLabel,
                         packageName = packageName,
                         remainingDailyMs = countdownDailyMs,
@@ -1308,6 +1320,7 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private fun maybeShowWarning(
+        profileId: Long,
         packageName: String,
         appLabel: String,
         warningLevel: com.gatekeep.domain.model.WarningLevel,
@@ -1323,10 +1336,7 @@ class EnforcementCoordinator @Inject constructor(
         val key = "$packageName:$dayStart"
         if (key in warnedPackagesToday) return
         warnedPackagesToday.add(key)
-        notificationHelper.showWarning(
-            localizedContext.getString(com.gatekeep.app.R.string.approaching_limit_title),
-            localizedContext.getString(com.gatekeep.app.R.string.approaching_limit_body, appLabel),
-        )
+        notificationHelper.showApproachingLimitWarning(profileId, appLabel)
     }
 
     private suspend fun persistBreakIfNeeded(
@@ -1392,6 +1402,7 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private fun startEnforcementLoop(
+        profileId: Long,
         appLabel: String,
         packageName: String,
         remainingDailyMs: Long?,
@@ -1424,6 +1435,7 @@ class EnforcementCoordinator @Inject constructor(
 
         countdownAppLabel = appLabel
         countdownPackageName = packageName
+        countdownProfileId = profileId
         countdownSharedPool = sharedPool
         countdownMonitoredPackages = monitoredPackages
         countdownNotificationTitle = localizedContext.getString(com.gatekeep.app.R.string.hud_usage_title, appLabel)
@@ -1587,6 +1599,7 @@ class EnforcementCoordinator @Inject constructor(
                 weeklyLimitMs = weeklyLimitMs,
                 weeklyUsedMs = countdownWeeklyUsedMs,
             ),
+            profileId = countdownProfileId,
             lastBody = lastNotificationBody,
             onBodyPosted = { lastNotificationBody = it },
         )
@@ -1605,6 +1618,7 @@ class EnforcementCoordinator @Inject constructor(
         usedTodayMs: Long?,
     ) {
         startEnforcementLoop(
+            profileId = previousProfileId,
             appLabel = appLabel,
             packageName = packageName,
             remainingDailyMs = remainingDailyMs,
