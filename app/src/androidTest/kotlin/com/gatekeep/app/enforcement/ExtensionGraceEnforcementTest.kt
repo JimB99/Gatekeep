@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
+import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.ExtensionPolicy
 import com.gatekeep.domain.model.ExtensionSurfaceMode
 import com.gatekeep.domain.model.OnLimitAction
@@ -111,6 +112,45 @@ class ExtensionGraceEnforcementTest : EnforcementCrossAppTestBase() {
     fun e13_overlayNoLimitToday_dismissesOverlayAndStaysAllowed() {
         runSeed {
             seedBlockedProfile(config = extensionOverlayConfig())
+        }
+        harness.launchTargetA()
+        assertTrue(harness.waitForOverlay())
+        assertTrue(harness.clickOverlayNoLimitToday())
+        assertOverlayHidden()
+        assertAllowedWithoutBlockingOverlay()
+    }
+
+    @Test
+    fun e14_overlayNoLimitToday_sessionPolicyUsedWhenLimitPolicyDisables() {
+        runSeed {
+            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    dailyLimitMs = null,
+                    onSessionLimitAction = OnSessionLimitAction.limitWithExtensions,
+                    sessionLimitMs = GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS,
+                    sessionExtensionPolicy = ExtensionPolicy(
+                        optionMinutes = listOf(1, 5, 10),
+                        surfaceMode = ExtensionSurfaceMode.overlay,
+                        showNoLimitToday = true,
+                    ),
+                    limitExtensionPolicy = ExtensionPolicy(
+                        optionMinutes = listOf(1, 5, 10),
+                        surfaceMode = ExtensionSurfaceMode.overlay,
+                        showNoLimitToday = false,
+                    ),
+                ),
+            )
+            GatekeepTestFixtures.seedUsageAtCap(
+                usageRepository,
+                seeded.profileId,
+                seeded.packageName,
+                sessionState = com.gatekeep.domain.model.SessionState(
+                    packageName = seeded.packageName,
+                    sessionStartEpochMs = System.currentTimeMillis() -
+                        GatekeepTestFixtures.TestDurations.SESSION_OVER_CAP_MS,
+                ),
+            )
         }
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())

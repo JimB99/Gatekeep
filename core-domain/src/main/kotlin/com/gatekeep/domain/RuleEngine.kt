@@ -89,10 +89,10 @@ object RuleEngine {
         val config = context.enforcementConfig
 
         val sessionAxis = evaluateSessionAxis(
-            config = config,
             limit = limit,
             sessionState = context.sessionState,
             nowEpochMs = context.nowEpochMs,
+            noLimitTodayActive = context.periodLimitsDisabled,
         )
         val periodAxis = evaluatePeriodAxis(
             config = config,
@@ -158,11 +158,14 @@ object RuleEngine {
     }
 
     private fun evaluateSessionAxis(
-        config: ProfileEnforcementConfig,
         limit: AppLimit,
         sessionState: com.gatekeep.domain.model.SessionState?,
         nowEpochMs: Long,
+        noLimitTodayActive: Boolean,
     ): SessionTracker.SessionCheckResult {
+        if (noLimitTodayActive) {
+            return SessionTracker.SessionCheckResult.Allowed(remainingSessionMs = null)
+        }
         return SessionTracker.evaluateSession(
             limit = limit,
             session = sessionState,

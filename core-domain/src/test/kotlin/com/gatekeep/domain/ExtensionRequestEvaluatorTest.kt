@@ -87,16 +87,16 @@ class ExtensionRequestEvaluatorTest {
     }
 
     @Test
-    fun `rejects in app when surface disabled`() {
-        val inAppOff = policy.copy(surfaceMode = ExtensionSurfaceMode.overlay)
-        val denied = ExtensionRequestEvaluator.evaluate(
-            policy = inAppOff,
+    fun `in app allows minutes when surface is overlay only`() {
+        val overlayOnly = policy.copy(surfaceMode = ExtensionSurfaceMode.overlay)
+        val allowed = ExtensionRequestEvaluator.evaluate(
+            policy = overlayOnly,
             source = ExtensionGrantSource.inApp,
             requestedMinutes = 5,
             overridesToday = 0,
             consecutiveInSession = 0,
         )
-        assertTrue(denied is ExtensionPolicyEvaluator.ExtensionDecision.Denied)
+        assertEquals(ExtensionPolicyEvaluator.ExtensionDecision.Allowed(5), allowed)
     }
 
     @Test

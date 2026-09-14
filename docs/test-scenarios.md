@@ -266,7 +266,7 @@ Full combinatorial matrix: `RulesMatrixTest` (JVM) + `RulesInteractionTest` (JVM
 | R-INT-01 | Open wait + daily hardBlock skips open wait | `RulesCrossEnforcementTest.rInt01_openWait_dailyHardBlock_skipsOpenWait` | pass |
 | R-INT-02 | Open wait before daily extension block | `RulesCrossEnforcementTest.rInt02_openWait_dailyExtensions_openFirst` | pass |
 | R-INT-03 | Open wait under limits then proceed | `RulesCrossEnforcementTest.rInt03_openWait_underLimits_proceeds` | weak |
-| R-INT-04 | noLimitToday + session hardBlock | `RulesCrossEnforcementTest.rInt04_noLimitToday_sessionHardBlock_stillBlocks` | pass |
+| R-INT-04 | noLimitToday bypasses session hardBlock for today | `RulesCrossEnforcementTest.rInt04_noLimitToday_bypassesSessionHardBlockForToday` | pass |
 | R-INT-06 | noLimitToday bypasses period only | `RulesCrossEnforcementTest.rInt06_noLimitToday_periodBypass_noDailyBlock` | weak (engine pass; UI overlay parity) |
 
 See also `docs/test-run-report.md` for latest run summary.
@@ -290,6 +290,7 @@ See also `docs/test-run-report.md` for latest run summary.
 | E-11 | Over-cap usage + grace evaluates allowed | `ExtensionGraceEnforcementTest.e11_overDailyCap_programmaticGrace_evaluatesAllowed` |
 | E-12 | Grace over daily cap: HUD shows used / base+bonus (not ∞ or 289h-style) | `ExtensionGraceEnforcementTest.e12_overDailyCap_graceCountdown_showsFiniteLimitNotInfinity` |
 | E-13 | Overlay no-limit-today dismisses overlay | `ExtensionGraceEnforcementTest.e13_overlayNoLimitToday_dismissesOverlayAndStaysAllowed` |
+| E-14 | Overlay no-limit-today uses session policy when limit policy disables | `ExtensionGraceEnforcementTest.e14_overlayNoLimitToday_sessionPolicyUsedWhenLimitPolicyDisables` |
 
 ---
 
@@ -308,6 +309,7 @@ See also `docs/test-run-report.md` for latest run summary.
 | CU-09 | No limit today in-app with overlay-only policy shows ∞ + Applied | `CurrentUsageActionsTest.cu09_noLimitToday_overlayOnlyPolicy_showsInfinityAndApplied` |
 | CU-10 | No limit today shared pool shows ∞ in Current Usage | `CurrentUsageActionsTest.cu10_noLimitToday_sharedPool_showsInfinity` |
 | CU-11 | No limit today in-app works when session policy disables overlay option | `CurrentUsageActionsTest.cu11_noLimitToday_limitPolicyUsedWhenSessionPolicyDisables` |
+| CU-12 | Extend minutes in-app ignores overlay-only surface and quotas | `CurrentUsageActionsTest.cu12_extendMinutes_overlayOnlyPolicy_showsApplied` |
 
 ---
 

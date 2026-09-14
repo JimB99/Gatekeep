@@ -243,18 +243,23 @@ class RulesCrossEnforcementTest : EnforcementCrossAppTestBase() {
     }
 
     @Test
-    fun rInt04_noLimitToday_sessionHardBlock_stillBlocks() {
+    fun rInt04_noLimitToday_bypassesSessionHardBlockForToday() {
         runSeed {
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
                     onSessionLimitAction = OnSessionLimitAction.hardBlock,
                     sessionLimitMs = GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS,
+                    dailyLimitMs = null,
                 ),
             )
             GatekeepTestFixtures.seedUsageAtCap(
                 usageRepository, seeded.profileId, seeded.packageName,
-                dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
+                sessionState = com.gatekeep.domain.model.SessionState(
+                    packageName = seeded.packageName,
+                    sessionStartEpochMs = System.currentTimeMillis() -
+                        GatekeepTestFixtures.TestDurations.SESSION_OVER_CAP_MS,
+                ),
             )
             GatekeepTestFixtures.seedPause(
                 usageRepository, PauseType.noLimitToday, seeded.profileId, seeded.packageName,
@@ -262,8 +267,7 @@ class RulesCrossEnforcementTest : EnforcementCrossAppTestBase() {
             )
         }
         harness.launchTargetA()
-        harness.waitForElapsedMs(GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS + GatekeepTestFixtures.TestDurations.TIMER_BUFFER_MS)
-        assertTrue(harness.waitForOverlay())
+        assertAllowedWithoutBlockingOverlay()
     }
 
     @Test

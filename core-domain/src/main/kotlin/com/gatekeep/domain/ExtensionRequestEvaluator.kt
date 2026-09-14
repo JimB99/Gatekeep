@@ -26,7 +26,7 @@ object ExtensionRequestEvaluator {
                 isNoLimitTodayRequest = true,
             )
         }
-        if (!isSurfaceAllowed(policy, source)) {
+        if (source != ExtensionGrantSource.inApp && !isSurfaceAllowed(policy, source)) {
             return ExtensionPolicyEvaluator.ExtensionDecision.Denied(
                 ExtensionDenialReason.extensionNotAllowed,
             )

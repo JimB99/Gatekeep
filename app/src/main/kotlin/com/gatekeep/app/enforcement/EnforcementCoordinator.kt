@@ -527,9 +527,31 @@ class EnforcementCoordinator @Inject constructor(
                 dayStartMs = dayStart,
                 consecutiveInSession = consecutiveExtensionsFor(profileId, packageName),
                 isNoLimitToday = true,
-                useLimitExtensionPolicy = true,
+                useLimitExtensionPolicy = fromInApp,
             )
-            if (decision is ExtensionPolicyEvaluator.ExtensionDecision.Denied) return false
+            if (decision is ExtensionPolicyEvaluator.ExtensionDecision.Denied) {
+                if (!fromInApp) {
+                    val denialMessage = BlockMessageResolver.extensionDenied(
+                        localizedContext,
+                        decision.reason,
+                    )
+                    val request = buildBlockRequest(
+                        packageName = packageName,
+                        message = denialMessage,
+                        reason = BlockPresentationReason.extensionDenied,
+                        profile = profile,
+                        blocked = RuleResult.Blocked(
+                            reason = lastBlockReason ?: BlockReason.dailyLimit,
+                            bypassAllowed = true,
+                        ),
+                        useExtensions = true,
+                    )
+                    enterBlockState(packageName)
+                    val generation = blockGeneration
+                    presentBlockOverlay(request, generation)
+                }
+                return false
+            }
             val dayEnd = TimeBoundaries.dayBounds(now).endExclusiveMs
             val pausePackageName = if (profile.limitUsageScope == LimitUsageScope.sharedPool) {
                 null

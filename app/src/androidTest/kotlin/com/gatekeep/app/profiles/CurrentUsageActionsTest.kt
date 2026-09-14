@@ -227,4 +227,25 @@ class CurrentUsageActionsTest {
             composeRule.onAllNodesWithText("∞").fetchSemanticsNodes().isNotEmpty()
         }
     }
+
+    @Test
+    fun cu12_extendMinutes_overlayOnlyPolicy_showsApplied() {
+        reseedProfile(
+            config = GatekeepTestFixtures.ProfileSeedConfig(
+                onLimitAction = OnLimitAction.limitWithExtensions,
+                limitExtensionPolicy = ExtensionPolicy(
+                    optionMinutes = listOf(1, 5, 10),
+                    maxExtensionsPerDay = 0,
+                    maxConsecutiveExtensions = 0,
+                    surfaceMode = ExtensionSurfaceMode.overlay,
+                    showNoLimitToday = false,
+                ),
+            ),
+            dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
+        )
+        composeRule.onNodeWithTag(GatekeepTestTags.CURRENT_USAGE_EXTEND_PREFIX + "5").performClick()
+        composeRule.waitUntil(timeoutMillis = 6_000) {
+            composeRule.onAllNodesWithText("Applied", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
 }

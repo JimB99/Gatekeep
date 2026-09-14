@@ -108,7 +108,7 @@ class RulesInteractionTest {
     }
 
     @Test
-    fun noLimitToday_plus_sessionHardBlock_stillBlocksSession() {
+    fun noLimitToday_bypassesSessionHardBlockForToday() {
         val profile = profileBase.copy(onSessionLimitAction = OnSessionLimitAction.hardBlock)
         val session = SessionTracker.startSession("com.test.app", 1_000_000L - 20 * 60_000L)
         val pause = Pause(
@@ -128,8 +128,50 @@ class RulesInteractionTest {
                 enforcementConfig = profile.enforcementConfig(),
             ),
         )
+        assertInstanceOf(RuleResult.Allowed::class.java, result)
+    }
+
+    @Test
+    fun noLimitToday_bypassesWeeklyLimitForToday() {
+        val weeklyLimit = AppLimit(
+            profileId = 1,
+            packageName = "com.test.app",
+            weeklyLimitMs = 7 * 60 * 60_000L,
+            enabled = true,
+        )
+        val profile = profileBase.copy(onLimitAction = OnLimitAction.hardBlock)
+        val result = RuleEngine.evaluate(
+            context(
+                profile = profile,
+                limit = weeklyLimit,
+                usage = UsageSnapshot(weeklyMs = 7 * 60 * 60_000L + 1),
+                periodLimitsDisabled = true,
+                enforcementConfig = profile.enforcementConfig(),
+            ),
+        )
+        assertInstanceOf(RuleResult.Allowed::class.java, result)
+    }
+
+    @Test
+    fun noLimitToday_expired_weeklyLimitBlocksAgain() {
+        val weeklyLimit = AppLimit(
+            profileId = 1,
+            packageName = "com.test.app",
+            weeklyLimitMs = 7 * 60 * 60_000L,
+            enabled = true,
+        )
+        val profile = profileBase.copy(onLimitAction = OnLimitAction.hardBlock)
+        val result = RuleEngine.evaluate(
+            context(
+                profile = profile,
+                limit = weeklyLimit,
+                usage = UsageSnapshot(weeklyMs = 7 * 60 * 60_000L + 1),
+                periodLimitsDisabled = false,
+                enforcementConfig = profile.enforcementConfig(),
+            ),
+        )
         assertInstanceOf(RuleResult.Blocked::class.java, result)
-        assertEquals(BlockReason.sessionLimit, (result as RuleResult.Blocked).reason)
+        assertEquals(BlockReason.weeklyLimit, (result as RuleResult.Blocked).reason)
     }
 
     @Test
@@ -257,6 +299,7 @@ class RulesInteractionTest {
 
     private fun context(
         profile: Profile = profileBase,
+        limit: AppLimit = this.limit,
         now: Long = 1_000_000L,
         usage: UsageSnapshot = UsageSnapshot(),
         sessionState: SessionState? = null,
