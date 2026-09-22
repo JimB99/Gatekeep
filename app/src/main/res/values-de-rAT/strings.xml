@@ -66,8 +66,8 @@
     <string name="extension_one_hour">1 Std.</string>
     <string name="version_format">Version %1$s</string>
     <string name="version_full_format">Version %1$s (%2$d)</string>
-    <string name="replay_onboarding">Einrichtung wiederholen</string>
-    <string name="permissions_and_setup">Berechtigungen und Einrichtung</string>
+    <string name="replay_onboarding">Berechtigungen</string>
+    <string name="permissions_and_setup">Nutzungszugriff, Bedienungshilfen, Overlay und Akku</string>
     <string name="require_pin_to_open">PIN zum Öffnen von Gatekeep erforderlich</string>
     <string name="app_lock_help_set">Sperrt die App, wenn du Gatekeep verlässt oder erneut öffnest.</string>
     <string name="app_lock_help_unset">Lege zuerst unten bei App-Sperre eine PIN fest.</string>
@@ -265,9 +265,9 @@
     <string name="usage_slash_format">%1$s / %2$s</string>
     <string name="no_limit_dash">—</string>
 
-    <string name="pause_limits">Limits pausieren</string>
-    <string name="pause_enforcement_section">Limits pausieren</string>
-    <string name="pause_enforcement_help">Deaktiviert Limits vorübergehend für den gewählten Bereich. Apps bleiben nutzbar.</string>
+    <string name="pause_limits">Profile pausieren</string>
+    <string name="pause_enforcement_section">Profile pausieren</string>
+    <string name="pause_enforcement_help">Deaktiviert vorübergehend alle Regeln für den gewählten Bereich (Limits, Öffnungs-Reibung und Zeitpläne). Apps bleiben nutzbar.</string>
     <string name="focus_mode_section">Fokusmodus</string>
     <string name="focus_mode_help">Blockiert überwachte Apps für den gewählten Bereich.</string>
     <string name="duration_5_min">5 Min.</string>
@@ -306,6 +306,8 @@
     <string name="perm_overlay_desc">Zeigt Blockierbildschirm und Sitzungstimer-HUD.</string>
     <string name="perm_battery_title">Akku-Optimierung</string>
     <string name="perm_battery_desc">Verhindert, dass das System Gatekeep auf manchen Geräten beendet.</string>
+    <string name="perm_notifications_desc">Erforderlich für Limit-Hinweise und die Sitzungstimer-Benachrichtigung.</string>
+    <string name="perm_manage">Verwalten</string>
     <string name="allow_notifications">Benachrichtigungen erlauben</string>
     <string name="get_started">Loslegen</string>
     <string name="skip_for_now">Jetzt überspringen</string>

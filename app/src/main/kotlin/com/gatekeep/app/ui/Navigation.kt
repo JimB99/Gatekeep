@@ -30,6 +30,7 @@ import com.gatekeep.app.ui.settings.LanguageSettingsScreen
 import com.gatekeep.app.ui.settings.AboutSettingsScreen
 import com.gatekeep.app.ui.settings.EnforcementSettingsScreen
 import com.gatekeep.app.ui.settings.NotificationSettingsScreen
+import com.gatekeep.app.ui.settings.PermissionsScreen
 import com.gatekeep.app.ui.settings.SecuritySettingsScreen
 import com.gatekeep.app.ui.settings.SettingsHubScreen
 import com.gatekeep.app.ui.stats.StatsScreen
@@ -72,6 +73,7 @@ object Routes {
     const val SETTINGS_ENFORCEMENT = "settings/enforcement"
     const val SETTINGS_ABOUT = "settings/about"
     const val SETTINGS_LANGUAGE = "settings/language"
+    const val SETTINGS_PERMISSIONS = "settings/permissions"
 
     fun profileDetail(id: Long) = "profile/$id"
     fun profilePolicy(id: Long) = "profile/$id/policy"
@@ -499,8 +501,11 @@ fun GatekeepNavHost(
                 onNavigateEnforcement = { navController.navigate(Routes.SETTINGS_ENFORCEMENT) },
                 onNavigateAbout = { navController.navigate(Routes.SETTINGS_ABOUT) },
                 onNavigateLanguage = { navController.navigate(Routes.SETTINGS_LANGUAGE) },
-                onReplayOnboarding = { navController.navigate(Routes.ONBOARDING) },
+                onNavigatePermissions = { navController.navigate(Routes.SETTINGS_PERMISSIONS) },
             )
+        }
+        composable(Routes.SETTINGS_PERMISSIONS) {
+            PermissionsScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.SETTINGS_SECURITY) {
             SecuritySettingsScreen(onBack = { navController.popBackStack() })

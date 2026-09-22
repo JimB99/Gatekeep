@@ -108,7 +108,7 @@ fun SettingsHubScreen(
 
     onNavigateLanguage: () -> Unit,
 
-    onReplayOnboarding: () -> Unit,
+    onNavigatePermissions: () -> Unit,
 
     viewModel: SettingsViewModel = hiltViewModel(),
 
@@ -250,7 +250,8 @@ fun SettingsHubScreen(
 
                 subtitle = stringResource(R.string.permissions_and_setup),
 
-                onClick = onReplayOnboarding,
+                onClick = onNavigatePermissions,
+                modifier = Modifier.testTag(GatekeepTestTags.SETTINGS_PERMISSIONS),
 
             )
 

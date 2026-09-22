@@ -905,7 +905,7 @@ class PauseViewModel @Inject constructor(
 
     fun pauseToday(profileIds: List<Long>?) {
         val dayEnd = dayEndEpochMs()
-        pauseForTargets(PauseType.noLimitToday, profileIds, untilMs = dayEnd)
+        pauseForTargets(PauseType.untilDatetime, profileIds, untilMs = dayEnd)
     }
 
     fun blockForTargets(profileIds: List<Long>?, untilMs: Long) {

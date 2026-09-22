@@ -66,8 +66,8 @@
     <string name="extension_one_hour">1 h</string>
     <string name="version_format">Versión %1$s</string>
     <string name="version_full_format">Versión %1$s (%2$d)</string>
-    <string name="replay_onboarding">Repetir configuración inicial</string>
-    <string name="permissions_and_setup">Permisos y configuración</string>
+    <string name="replay_onboarding">Permisos</string>
+    <string name="permissions_and_setup">Uso, accesibilidad, superposición y batería</string>
     <string name="require_pin_to_open">Requerir PIN para abrir Gatekeep</string>
     <string name="app_lock_help_set">Bloquea la app cuando sales de Gatekeep o la vuelves a abrir.</string>
     <string name="app_lock_help_unset">Primero establece un PIN en Bloqueo de app abajo.</string>
@@ -265,9 +265,9 @@
     <string name="usage_slash_format">%1$s / %2$s</string>
     <string name="no_limit_dash">—</string>
 
-    <string name="pause_limits">Pausar límites</string>
-    <string name="pause_enforcement_section">Pausar límites</string>
-    <string name="pause_enforcement_help">Desactiva temporalmente los límites del ámbito seleccionado. Las apps siguen disponibles.</string>
+    <string name="pause_limits">Pausar perfiles</string>
+    <string name="pause_enforcement_section">Pausar perfiles</string>
+    <string name="pause_enforcement_help">Desactiva temporalmente todas las reglas del ámbito seleccionado (límites, fricción al abrir y horarios). Las apps siguen disponibles.</string>
     <string name="focus_mode_section">Modo enfoque</string>
     <string name="focus_mode_help">Bloquea las apps supervisadas del ámbito seleccionado.</string>
     <string name="duration_5_min">5 min</string>
@@ -306,6 +306,8 @@
     <string name="perm_overlay_desc">Muestra la pantalla de bloqueo y el HUD del temporizador de sesión.</string>
     <string name="perm_battery_title">Optimización de batería</string>
     <string name="perm_battery_desc">Evita que el sistema cierre Gatekeep en algunos dispositivos.</string>
+    <string name="perm_notifications_desc">Necesario para alertas de límites y la notificación del temporizador de sesión.</string>
+    <string name="perm_manage">Gestionar</string>
     <string name="allow_notifications">Permitir notificaciones</string>
     <string name="get_started">Empezar</string>
     <string name="skip_for_now">Omitir por ahora</string>

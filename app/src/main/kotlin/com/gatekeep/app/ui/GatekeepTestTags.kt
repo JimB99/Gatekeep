@@ -12,6 +12,8 @@ object GatekeepTestTags {
     const val PERMISSION_BANNER = "permission_banner"
     const val PERMISSION_ACCESSIBILITY_BUTTON = "permission_accessibility_button"
     const val SETTINGS_LANGUAGE = "settings_language"
+    const val SETTINGS_PERMISSIONS = "settings_permissions"
+    const val PERMISSIONS_ROOT = "permissions_root"
     const val SETTINGS_ENFORCEMENT_TOGGLE = "settings_enforcement_toggle"
     const val SETTINGS_SESSION_TIMER_TOGGLE = "settings_session_timer_toggle"
     const val SETTINGS_WEEKLY_REPORT_TOGGLE = "settings_weekly_report_toggle"

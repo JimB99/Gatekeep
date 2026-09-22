@@ -1,5 +1,6 @@
 package com.gatekeep.app.ui.pause
 
+import com.gatekeep.domain.TimeBoundaries
 import com.gatekeep.domain.model.Pause
 import com.gatekeep.domain.model.PauseType
 
@@ -9,6 +10,12 @@ sealed interface DurationChoice {
     data object Today : DurationChoice
     data class UntilDateTime(val untilEpochMs: Long) : DurationChoice
 }
+
+fun isPauseUntilEndOfDay(untilEpochMs: Long, nowEpochMs: Long): Boolean =
+    untilEpochMs == TimeBoundaries.dayBounds(nowEpochMs).endExclusiveMs
+
+fun isAllowPauseDisplayType(type: PauseType): Boolean =
+    type != PauseType.noLimitToday && type != PauseType.extensionGrace
 
 fun DurationChoice.sameKindAs(other: DurationChoice?): Boolean {
     if (other == null) return false
@@ -26,18 +33,21 @@ fun resolveActiveDurationChoice(pause: Pause?, nowEpochMs: Long): DurationChoice
         PauseType.fiveMin -> DurationChoice.PresetMinutes(5)
         PauseType.fifteenMin -> DurationChoice.PresetMinutes(15)
         PauseType.sixtyMin -> DurationChoice.PresetMinutes(60)
-        PauseType.noLimitToday -> DurationChoice.Today
         PauseType.untilDatetime -> {
-            val remainingMs = pause.untilEpochMs - nowEpochMs
-            if (remainingMs > 24 * 60 * 60_000L) {
-                DurationChoice.UntilDateTime(pause.untilEpochMs)
+            if (isPauseUntilEndOfDay(pause.untilEpochMs, nowEpochMs)) {
+                DurationChoice.Today
             } else {
-                val minutes = (remainingMs / 60_000L).toInt().coerceIn(1, 999)
-                when (minutes) {
-                    5 -> DurationChoice.PresetMinutes(5)
-                    15 -> DurationChoice.PresetMinutes(15)
-                    60 -> DurationChoice.PresetMinutes(60)
-                    else -> DurationChoice.CustomMinutes(minutes)
+                val remainingMs = pause.untilEpochMs - nowEpochMs
+                if (remainingMs > 24 * 60 * 60_000L) {
+                    DurationChoice.UntilDateTime(pause.untilEpochMs)
+                } else {
+                    val minutes = (remainingMs / 60_000L).toInt().coerceIn(1, 999)
+                    when (minutes) {
+                        5 -> DurationChoice.PresetMinutes(5)
+                        15 -> DurationChoice.PresetMinutes(15)
+                        60 -> DurationChoice.PresetMinutes(60)
+                        else -> DurationChoice.CustomMinutes(minutes)
+                    }
                 }
             }
         }

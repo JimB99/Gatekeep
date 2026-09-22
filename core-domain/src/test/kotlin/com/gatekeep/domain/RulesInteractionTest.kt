@@ -175,6 +175,28 @@ class RulesInteractionTest {
     }
 
     @Test
+    fun profilePauseUntilDayEnd_bypassesOpenWait() {
+        val profile = profileBase.copy(onOpenAction = OnOpenAction.deterrentWait)
+        val now = 1_000_000L
+        val dayEnd = com.gatekeep.domain.TimeBoundaries.dayBounds(now).endExclusiveMs
+        val pause = Pause(
+            profileId = 1,
+            packageName = null,
+            type = PauseType.untilDatetime,
+            untilEpochMs = dayEnd,
+        )
+        val result = RuleEngine.evaluate(
+            context(
+                profile = profile,
+                now = now,
+                pauses = listOf(pause),
+                enforcementConfig = profile.enforcementConfig(),
+            ),
+        )
+        assertInstanceOf(RuleResult.Allowed::class.java, result)
+    }
+
+    @Test
     fun noLimitToday_plus_openWait_stillShowsOpen() {
         val profile = profileBase.copy(onOpenAction = OnOpenAction.deterrentWait)
         val pause = Pause(

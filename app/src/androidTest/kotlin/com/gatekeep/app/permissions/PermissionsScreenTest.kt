@@ -1,14 +1,13 @@
-package com.gatekeep.app.pause
+package com.gatekeep.app.permissions
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.MainActivity
 import com.gatekeep.app.support.GatekeepTestFixtures
-import com.gatekeep.app.support.GatekeepUiTest
-import com.gatekeep.app.support.GatekeepUiTest.openPause
+import com.gatekeep.app.support.GatekeepUiTest.openPermissions
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.SettingsRepository
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -22,7 +21,7 @@ import org.junit.runner.RunWith
 
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
-class PauseScreenTest {
+class PermissionsScreenTest {
 
     @get:Rule(order = 0)
     val hiltRule = HiltAndroidRule(this)
@@ -38,25 +37,13 @@ class PauseScreenTest {
         runBlocking { GatekeepTestFixtures.seedEnforcementReady(settingsRepository) }
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
-        composeRule.openPause()
     }
 
     @Test
-    fun pa01_profilePause_fromUi() {
-        composeRule.onNodeWithTag(GatekeepTestTags.PAUSE_ALLOW_FIVE_MIN).performClick()
-        composeRule.waitForIdle()
-    }
-
-    @Test
-    fun pa04_globalPause_fromUi() {
-        composeRule.onNodeWithTag(GatekeepTestTags.PAUSE_ALLOW_FIFTEEN_MIN).performClick()
-        composeRule.waitForIdle()
-    }
-
-    @Test
-    fun pa11_endPauseEarly_fromUi() {
-        pa01_profilePause_fromUi()
-        composeRule.onNodeWithTag(GatekeepTestTags.PAUSE_RESET_ACTION).performClick()
-        composeRule.waitForIdle()
+    fun perm01_settingsPermissions_staysVisible() {
+        composeRule.openPermissions()
+        composeRule.onNodeWithTag(GatekeepTestTags.PERMISSIONS_ROOT).assertIsDisplayed()
+        composeRule.onNodeWithText("Usage Access", substring = true, ignoreCase = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Manage", substring = true, ignoreCase = true).assertIsDisplayed()
     }
 }

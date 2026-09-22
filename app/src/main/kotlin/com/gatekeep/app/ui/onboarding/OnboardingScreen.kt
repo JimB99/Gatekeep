@@ -1,9 +1,5 @@
 package com.gatekeep.app.ui.onboarding
 
-import android.Manifest
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -15,33 +11,27 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import com.gatekeep.app.ui.GatekeepTestTags
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.gatekeep.app.R
+import com.gatekeep.app.ui.GatekeepTestTags
+import com.gatekeep.app.ui.permissions.PermissionsContent
+import com.gatekeep.app.ui.permissions.rememberPermissionUiState
 import com.gatekeep.app.ui.viewmodel.SettingsViewModel
-import com.gatekeep.app.util.PermissionHelper
 import kotlinx.coroutines.launch
 
 @Composable
@@ -50,7 +40,6 @@ fun OnboardingScreen(
     onFinishOnboarding: suspend () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val settings by viewModel.settings.collectAsState()
     var enforcementLaunchHandled by remember { mutableStateOf(false) }
@@ -60,37 +49,9 @@ fun OnboardingScreen(
             onComplete()
         }
     }
-    var permissionRefreshKey by remember { mutableIntStateOf(0) }
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                permissionRefreshKey++
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
 
-    val notificationLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { permissionRefreshKey++ }
-
-    val usageGranted = remember(permissionRefreshKey) {
-        PermissionHelper.hasUsageStatsPermission(context)
-    }
-    val accessibilityGranted = remember(permissionRefreshKey) {
-        PermissionHelper.isAccessibilityEnabled(context)
-    }
-    val overlayGranted = remember(permissionRefreshKey) {
-        PermissionHelper.hasOverlayPermission(context)
-    }
-    val batteryGranted = remember(permissionRefreshKey) {
-        PermissionHelper.isIgnoringBatteryOptimizations(context)
-    }
-    val notificationsGranted = remember(permissionRefreshKey) {
-        PermissionHelper.hasNotificationPermission(context)
-    }
+    val permissionState = rememberPermissionUiState()
+    val snapshot = permissionState.snapshot
 
     Column(
         modifier = Modifier
@@ -112,43 +73,11 @@ fun OnboardingScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(
-            stringResource(R.string.onboarding_return_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
-        PermissionCard(
-            title = stringResource(R.string.perm_usage_title),
-            description = stringResource(R.string.perm_usage_desc),
-            granted = usageGranted,
-            onGrant = { context.startActivity(PermissionHelper.usageStatsIntent()) },
+        PermissionsContent(
+            showReturnHint = false,
+            permissionState = permissionState,
         )
-        PermissionCard(
-            title = stringResource(R.string.perm_accessibility_title),
-            description = stringResource(R.string.perm_accessibility_desc),
-            granted = accessibilityGranted,
-            onGrant = { context.startActivity(PermissionHelper.accessibilityIntent(context)) },
-        )
-        PermissionCard(
-            title = stringResource(R.string.perm_overlay_title),
-            description = stringResource(R.string.perm_overlay_desc),
-            granted = overlayGranted,
-            onGrant = { context.startActivity(PermissionHelper.overlayIntent(context)) },
-        )
-        PermissionCard(
-            title = stringResource(R.string.perm_battery_title),
-            description = stringResource(R.string.perm_battery_desc),
-            granted = batteryGranted,
-            onGrant = { context.startActivity(PermissionHelper.batteryOptimizationIntent(context)) },
-        )
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notificationsGranted) {
-            Button(
-                onClick = { notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text(stringResource(R.string.allow_notifications)) }
-        }
 
         Spacer(Modifier.height(8.dp))
         Button(
@@ -156,7 +85,7 @@ fun OnboardingScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(GatekeepTestTags.ONBOARDING_GET_STARTED),
-            enabled = usageGranted && accessibilityGranted && overlayGranted,
+            enabled = snapshot.usageGranted && snapshot.accessibilityGranted && snapshot.overlayGranted,
         ) { Text(stringResource(R.string.get_started)) }
 
         Button(
@@ -165,30 +94,5 @@ fun OnboardingScreen(
                 .fillMaxWidth()
                 .testTag(GatekeepTestTags.ONBOARDING_SKIP),
         ) { Text(stringResource(R.string.skip_for_now)) }
-    }
-}
-
-@Composable
-private fun PermissionCard(
-    title: String,
-    description: String,
-    granted: Boolean,
-    onGrant: () -> Unit,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(title, fontWeight = FontWeight.SemiBold)
-            Text(description, style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                if (granted) stringResource(R.string.granted) else stringResource(R.string.not_granted),
-                color = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-            )
-            if (!granted) {
-                Button(onClick = onGrant, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.open_settings))
-                }
-            }
-        }
     }
 }

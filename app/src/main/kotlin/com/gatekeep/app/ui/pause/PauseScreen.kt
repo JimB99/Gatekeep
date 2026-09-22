@@ -75,8 +75,6 @@ fun PauseScreen(
     var focusCustomState by rememberSaveable(stateSaver = CustomDurationStateSaver) {
         mutableStateOf(CustomDurationState())
     }
-    var pauseDraftChoice by remember { mutableStateOf<DurationChoice?>(null) }
-    var focusDraftChoice by remember { mutableStateOf<DurationChoice?>(null) }
 
     val pauseActivatedMsg = stringResource(R.string.pause_activated)
     val focusActivatedMsg = stringResource(R.string.focus_block_activated)
@@ -87,7 +85,9 @@ fun PauseScreen(
 
     val now = System.currentTimeMillis()
     val allowPauses = activePauses.filter {
-        it.type != PauseType.focusBlock && it.untilEpochMs > now
+        it.type != PauseType.focusBlock &&
+            it.untilEpochMs > now &&
+            isAllowPauseDisplayType(it.type)
     }
     val focusBlocks = activePauses.filter {
         it.type == PauseType.focusBlock && it.untilEpochMs > now
@@ -101,6 +101,20 @@ fun PauseScreen(
         ?: legacyFocusUntil?.let { DurationChoice.UntilDateTime(it) }
     val activeAllowUntil = activeAllowPause?.untilEpochMs
     val activeFocusUntil = activeFocusPause?.untilEpochMs ?: legacyFocusUntil
+
+    fun applyAllowChoice(choice: DurationChoice) {
+        if (!canAct) return
+        viewModel.applyAllowChoice(profileIdsForScope(), choice)
+        pauseCustomState = CustomDurationState()
+        scope.launch { snackbarHostState.showSnackbar(pauseActivatedMsg) }
+    }
+
+    fun applyFocusChoice(choice: DurationChoice) {
+        if (!canAct) return
+        viewModel.applyFocusChoice(profileIdsForScope(), choice)
+        focusCustomState = CustomDurationState()
+        scope.launch { snackbarHostState.showSnackbar(focusActivatedMsg) }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -133,8 +147,6 @@ fun PauseScreen(
                     onClick = {
                         pauseAll = true
                         selectedProfileIds = emptySet()
-                        pauseDraftChoice = null
-                        focusDraftChoice = null
                     },
                     label = { Text(stringResource(R.string.scope_all)) },
                 )
@@ -164,8 +176,6 @@ fun PauseScreen(
                                 } else {
                                     selectedProfileIds + profile.id
                                 }
-                                pauseDraftChoice = null
-                                focusDraftChoice = null
                             },
                             label = { Text(profile.name) },
                         )
@@ -179,8 +189,8 @@ fun PauseScreen(
                 enabled = canAct,
                 onReset = {
                     viewModel.resetAllForScope(profileIdsForScope())
-                    pauseDraftChoice = null
-                    focusDraftChoice = null
+                    pauseCustomState = CustomDurationState()
+                    focusCustomState = CustomDurationState()
                     scope.launch { snackbarHostState.showSnackbar(pauseResetDoneMsg) }
                 },
             )
@@ -204,16 +214,9 @@ fun PauseScreen(
             DurationActionGrid(
                 enabled = canAct,
                 activeChoice = activeAllowChoice,
-                draftChoice = pauseDraftChoice,
                 customState = pauseCustomState,
                 onCustomStateChange = { pauseCustomState = it },
-                onDraftSelect = { pauseDraftChoice = it },
-                onApply = {
-                    val choice = pauseDraftChoice ?: return@DurationActionGrid
-                    viewModel.applyAllowChoice(profileIdsForScope(), choice)
-                    pauseDraftChoice = null
-                    scope.launch { snackbarHostState.showSnackbar(pauseActivatedMsg) }
-                },
+                onChoiceSelected = ::applyAllowChoice,
                 onUntilDate = {
                     pickerTarget = PickerTarget.Pause
                     showDatePicker = true
@@ -241,16 +244,9 @@ fun PauseScreen(
             DurationActionGrid(
                 enabled = canAct,
                 activeChoice = activeFocusChoice,
-                draftChoice = focusDraftChoice,
                 customState = focusCustomState,
                 onCustomStateChange = { focusCustomState = it },
-                onDraftSelect = { focusDraftChoice = it },
-                onApply = {
-                    val choice = focusDraftChoice ?: return@DurationActionGrid
-                    viewModel.applyFocusChoice(profileIdsForScope(), choice)
-                    focusDraftChoice = null
-                    scope.launch { snackbarHostState.showSnackbar(focusActivatedMsg) }
-                },
+                onChoiceSelected = ::applyFocusChoice,
                 onUntilDate = {
                     pickerTarget = PickerTarget.Focus
                     showDatePicker = true
@@ -295,8 +291,8 @@ fun PauseScreen(
                 }
                 val choice = DurationChoice.UntilDateTime(cal.timeInMillis)
                 when (pickerTarget) {
-                    PickerTarget.Pause -> pauseDraftChoice = choice
-                    PickerTarget.Focus -> focusDraftChoice = choice
+                    PickerTarget.Pause -> applyAllowChoice(choice)
+                    PickerTarget.Focus -> applyFocusChoice(choice)
                 }
                 showTimePicker = false
                 selectedDateMs = null

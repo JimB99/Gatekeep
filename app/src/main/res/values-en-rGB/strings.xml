@@ -69,8 +69,8 @@
     <string name="extension_one_hour">1h</string>
     <string name="version_format">Version %1$s</string>
     <string name="version_full_format">Version %1$s (%2$d)</string>
-    <string name="replay_onboarding">Replay onboarding</string>
-    <string name="permissions_and_setup">Permissions and setup</string>
+    <string name="replay_onboarding">Permissions</string>
+    <string name="permissions_and_setup">Usage, accessibility, overlay, and battery</string>
     <string name="require_pin_to_open">Require PIN to open Gatekeep</string>
     <string name="app_lock_help_set">Locks the app when you leave Gatekeep or reopen it.</string>
     <string name="app_lock_help_unset">Set a PIN in App lock below first.</string>
@@ -274,9 +274,9 @@
     <string name="no_limit_dash">—</string>
 
     <!-- Pause -->
-    <string name="pause_limits">Pause limits</string>
-    <string name="pause_enforcement_section">Pause enforcement</string>
-    <string name="pause_enforcement_help">Temporarily disables limits for the selected scope. Apps stay usable.</string>
+    <string name="pause_limits">Pause profiles</string>
+    <string name="pause_enforcement_section">Pause profiles</string>
+    <string name="pause_enforcement_help">Temporarily disables all rules for the selected scope (limits, on-open friction, and schedules). Apps stay usable.</string>
     <string name="focus_mode_section">Focus mode</string>
     <string name="focus_mode_help">Blocks monitored apps for the selected scope.</string>
     <string name="duration_5_min">5 min</string>
@@ -316,6 +316,8 @@
     <string name="perm_overlay_desc">Shows block screen and session timer HUD.</string>
     <string name="perm_battery_title">Battery Optimization</string>
     <string name="perm_battery_desc">Prevents the system from killing Gatekeep on some devices.</string>
+    <string name="perm_notifications_desc">Needed for limit alerts and the session timer notification.</string>
+    <string name="perm_manage">Manage</string>
     <string name="allow_notifications">Allow notifications</string>
     <string name="get_started">Get started</string>
     <string name="skip_for_now">Skip for now</string>

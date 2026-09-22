@@ -17,6 +17,12 @@ object GatekeepUiTest {
         waitForIdle()
     }
 
+    fun AndroidComposeTestRule<ActivityScenarioRule<MainActivity>, MainActivity>.openPermissions() {
+        openSettings()
+        onNodeWithTag(GatekeepTestTags.SETTINGS_PERMISSIONS).performClick()
+        waitForIdle()
+    }
+
     fun AndroidComposeTestRule<ActivityScenarioRule<MainActivity>, MainActivity>.openStats() {
         onNodeWithTag(GatekeepTestTags.NAV_STATS).performClick()
         waitForIdle()

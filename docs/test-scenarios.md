@@ -74,6 +74,14 @@ Gradle uses JDK 21 via `org.gradle.java.home` in `gradle.properties` (Studio JBR
 
 ---
 
+## PERM — Permissions screen
+
+| ID | Scenario | Automated test |
+|----|----------|----------------|
+| PERM-01 | Settings permissions screen stays visible | `PermissionsScreenTest.perm01_settingsPermissions_staysVisible` |
+
+---
+
 ## L — Language
 
 | ID | Scenario | Automated test |
@@ -191,8 +199,8 @@ Gradle uses JDK 21 via `org.gradle.java.home` in `gradle.properties` (Studio JBR
 | PA-02 | App-only pause | `PauseEnforcementTest.pa02_appOnlyPause_otherAppsLimited` |
 | PA-03 | Multi-profile selective pause | `PauseEnforcementTest.pa03_multiProfile_selectivePause` |
 | PA-04 | Global pause all profiles | `PauseScreenTest.pa04_globalPause_fromUi` |
-| PA-05 | No limit today per app | `PauseEnforcementTest.pa05_noLimitToday_perApp` |
-| PA-06 | No limit today shared pool | `PauseEnforcementTest.pa06_noLimitToday_sharedPool` |
+| PA-05 | Profile pause today allows app | `PauseEnforcementTest.pa05_profilePauseToday_allowsOverCap` |
+| PA-06 | Profile pause today shared pool | `PauseEnforcementTest.pa06_profilePauseToday_sharedPool` |
 | PA-07 | Pause expires while in foreground | `PauseEnforcementTest.pa07_pauseExpires_whileInForeground` |
 | PA-08 | Pause overrides schedule block | `PauseEnforcementTest.pa08_pauseOverrides_scheduleBlock` |
 | PA-09 | Focus mode blocks | `PauseEnforcementTest.pa09_focusMode_blocks` |

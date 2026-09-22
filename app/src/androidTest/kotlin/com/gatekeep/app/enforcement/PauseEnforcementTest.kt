@@ -66,7 +66,7 @@ class PauseEnforcementTest : EnforcementCrossAppTestBase() {
     }
 
     @Test
-    fun pa05_noLimitToday_perApp() {
+    fun pa05_profilePauseToday_allowsOverCap() {
         runSeed {
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
@@ -75,9 +75,13 @@ class PauseEnforcementTest : EnforcementCrossAppTestBase() {
                     sessionLimitMs = null,
                 ),
             )
+            val dayEnd = com.gatekeep.domain.TimeBoundaries.dayBounds(System.currentTimeMillis()).endExclusiveMs
             GatekeepTestFixtures.seedPause(
-                usageRepository, PauseType.noLimitToday, seeded.profileId, seeded.packageName,
-                untilMs = System.currentTimeMillis() + GatekeepTestFixtures.TestDurations.FUTURE_OFFSET_MS,
+                usageRepository,
+                PauseType.untilDatetime,
+                seeded.profileId,
+                packageName = null,
+                untilMs = dayEnd,
             )
         }
         harness.launchTargetA()
@@ -85,7 +89,7 @@ class PauseEnforcementTest : EnforcementCrossAppTestBase() {
     }
 
     @Test
-    fun pa06_noLimitToday_sharedPool() {
+    fun pa06_profilePauseToday_sharedPool() {
         runSeed {
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
@@ -94,9 +98,10 @@ class PauseEnforcementTest : EnforcementCrossAppTestBase() {
                     onLimitAction = OnLimitAction.hardBlock,
                 ),
             )
+            val dayEnd = com.gatekeep.domain.TimeBoundaries.dayBounds(System.currentTimeMillis()).endExclusiveMs
             GatekeepTestFixtures.seedPause(
-                usageRepository, PauseType.noLimitToday, seeded.profileId, packageName = null,
-                untilMs = System.currentTimeMillis() + GatekeepTestFixtures.TestDurations.FUTURE_OFFSET_MS,
+                usageRepository, PauseType.untilDatetime, seeded.profileId, packageName = null,
+                untilMs = dayEnd,
             )
         }
         harness.launchTargetA()
