@@ -120,6 +120,11 @@
     <string name="policy_schedules_tab">Zeitpläne</string>
     <string name="policy_week_tab">Woche</string>
     <string name="policy_subtitle_format">%1$s · %2$d Zeitpläne</string>
+    <string name="policy_preview_open">Öffnen: %1$s</string>
+    <string name="policy_preview_weekly">Wöchentlich: %1$s</string>
+    <string name="policy_preview_daily">Täglich: %1$s</string>
+    <string name="policy_preview_hourly">Stündlich: %1$s</string>
+    <string name="policy_preview_session">Sitzung: %1$s</string>
     <string name="when_no_schedule_matches">Wenn kein Zeitplan passt</string>
     <string name="when_no_schedule_matches_hint">Gilt, wenn kein Zeitplan passt oder ein Zeitplan auf Standard steht.</string>
     <string name="schedule_mode_allow">Erlauben</string>

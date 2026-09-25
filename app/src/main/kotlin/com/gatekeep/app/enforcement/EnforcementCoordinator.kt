@@ -81,7 +81,6 @@ class EnforcementCoordinator @Inject constructor(
     private val blockOverlay: BlockOverlayManager,
     private val notificationHelper: GatekeepNotificationHelper,
     private val enforcementLog: EnforcementLog,
-    private val profileUnlockCache: ProfileUnlockCache,
     private val screenStateMonitor: ScreenStateMonitor,
     private val extensionGrantUseCase: ExtensionGrantUseCase,
 ) {
@@ -140,7 +139,6 @@ class EnforcementCoordinator @Inject constructor(
     private var activeExtensionPolicy: com.gatekeep.domain.model.ExtensionPolicy? = null
     private var lastBlockReason: BlockReason? = null
     private var lastBlockProfileId: Long? = null
-    private val lastForegroundEvaluationAtMs = mutableMapOf<String, Long>()
     private var foregroundPollRunnable: Runnable? = null
     private var evaluationEpoch = 0L
     private var accessibilityRevokedNotified = false
@@ -165,8 +163,6 @@ class EnforcementCoordinator @Inject constructor(
     )
 
     fun onForegroundAppChanged(packageName: String, windowClassName: String? = null) {
-        if (packageName == currentForegroundPackage && !shouldReevaluateForeground(packageName)) return
-
         if (packageName == context.packageName) {
             if (isEnforcementTestTargetActivity(windowClassName)) {
                 val prevPackage = currentForegroundPackage
@@ -193,6 +189,14 @@ class EnforcementCoordinator @Inject constructor(
             return
         }
 
+        if (!ForegroundTransitionPolicy.shouldProcessThirdPartyForegroundChange(
+                packageName,
+                currentForegroundPackage,
+            )
+        ) {
+            return
+        }
+
         if (packageName in ignoredForegroundPackages) {
             if (lastMonitoredForegroundPackage != null &&
                 System.currentTimeMillis() - lastMonitoredForegroundAtMs < 3_000
@@ -209,10 +213,6 @@ class EnforcementCoordinator @Inject constructor(
             if (System.currentTimeMillis() - blockEnteredAtMs < BLOCK_STABILIZATION_MS) {
                 return
             }
-        }
-
-        if (shouldReevaluateForeground(packageName) && packageName == currentForegroundPackage) {
-            sessionStartedForPackage = null
         }
 
         val prevPackage = currentForegroundPackage
@@ -764,7 +764,6 @@ class EnforcementCoordinator @Inject constructor(
         previousProfileId = 0
         lastMonitoredForegroundPackage = null
         lastMonitoredForegroundAtMs = 0
-        lastForegroundEvaluationAtMs.clear()
         notifiedLimitKeys.clear()
         warnedPackagesToday.clear()
         warnedDayStartMs = 0L
@@ -949,7 +948,6 @@ class EnforcementCoordinator @Inject constructor(
 
     private suspend fun evaluateInternal(packageName: String) {
         val evaluationEpochAtStart = evaluationEpoch
-        lastForegroundEvaluationAtMs[packageName] = System.currentTimeMillis()
         val evaluationToken = EvaluationToken(packageName, blockGeneration)
         val settings = settingsRepository.settings.first()
         if (!settings.enforcementEnabled) {
@@ -1027,37 +1025,7 @@ class EnforcementCoordinator @Inject constructor(
         val mergedLimit = resolvedSchedulePolicy.limits
             ?: ProfileMergeEngine.mergedLimitForApp(limitsForMerge, packageName)
 
-        val profileNeedingPin = matchingProfiles.firstOrNull { profile ->
-            val policy = ProfileMergeEngine.mergedSchedulePolicy(
-                profiles = listOf(profile),
-                segments = allScheduleSegments,
-                windows = allScheduleWindows,
-                packageName = packageName,
-                nowEpochMs = now,
-            )
-            val openAction = policy.enforcementConfig?.onOpenAction ?: profile.onOpenAction
-            openAction == OnOpenAction.pinGate && !profile.passwordHash.isNullOrBlank()
-        }
-        if (profileNeedingPin != null && !profileUnlockCache.isUnlocked(profileNeedingPin.id, now)) {
-            scope.launch {
-                recordFrictionStart(packageName, profileNeedingPin.id)
-            }
-            showPinGate(
-                packageName = packageName,
-                profile = profileNeedingPin,
-                message = BlockMessageResolver.enterProfilePin(localizedContext, appLabel),
-            )
-            return
-        }
-
         val config = effectiveConfig
-
-        if (openGatePassedPackage != packageName &&
-            config.onOpenAction != OnOpenAction.none &&
-            config.onOpenAction != OnOpenAction.pinGate
-        ) {
-            // open deterrent evaluated in RuleEngine
-        }
 
         val usage = resolveUsageForEvaluation(
             profile = primaryProfile,
@@ -1408,6 +1376,7 @@ class EnforcementCoordinator @Inject constructor(
                 frictionMethod = deterrent.method,
                 difficulty = profile.defaultFrictionDifficulty,
                 waitDurationSeconds = profile.openWaitDurationSeconds,
+                profilePasswordHash = profile.passwordHash,
                 isOpenGate = true,
             ),
             generation,
@@ -1537,7 +1506,7 @@ class EnforcementCoordinator @Inject constructor(
         val className = usageStatsCollector.getForegroundActivityClassFallback()
         if (pkg == context.packageName && !isEnforcementTestTargetActivity(className)) return
         if (pkg in ignoredForegroundPackages) return
-        if (pkg != currentForegroundPackage || shouldReevaluateForeground(pkg)) {
+        if (pkg != currentForegroundPackage) {
             onForegroundAppChanged(pkg, windowClassName = className)
         }
     }
@@ -1549,13 +1518,6 @@ class EnforcementCoordinator @Inject constructor(
     private fun reconcileForegroundFromUsageStats() {
         if (isBlockingActive) return
         pollForegroundIfChanged()
-    }
-
-    private fun shouldReevaluateForeground(packageName: String): Boolean {
-        if (sessionStartedForPackage != packageName) return true
-        val lastResume = usageStatsCollector.getLastResumeTimeMs(packageName) ?: return false
-        val lastEvaluated = lastForegroundEvaluationAtMs[packageName] ?: 0L
-        return lastResume > lastEvaluated
     }
 
     private fun startForegroundPolling() {
@@ -1661,28 +1623,6 @@ class EnforcementCoordinator @Inject constructor(
             sharedPool = false,
             monitoredPackages = listOf(packageName),
             showNotification = true,
-        )
-    }
-
-    private fun showPinGate(packageName: String, profile: Profile, message: String) {
-        enterBlockState(packageName)
-        val generation = blockGeneration
-        presentBlockOverlay(
-            BlockOverlayRequest(
-                packageName = packageName,
-                message = message,
-                reason = BlockPresentationReason.profilePin,
-                bypassAllowed = true,
-                frictionMethod = FrictionMethod.password,
-                difficulty = profile.defaultFrictionDifficulty,
-                profilePasswordHash = profile.passwordHash,
-                onProfileUnlocked = {
-                    profileUnlockCache.unlock(profile.id)
-                    scope.launch { recordFrictionEnd(packageName, profile.id) }
-                },
-                isOpenGate = true,
-            ),
-            generation,
         )
     }
 

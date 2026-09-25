@@ -120,6 +120,11 @@
     <string name="policy_schedules_tab">Horarios</string>
     <string name="policy_week_tab">Semana</string>
     <string name="policy_subtitle_format">%1$s · %2$d horarios</string>
+    <string name="policy_preview_open">Abrir: %1$s</string>
+    <string name="policy_preview_weekly">Semanal: %1$s</string>
+    <string name="policy_preview_daily">Diario: %1$s</string>
+    <string name="policy_preview_hourly">Por hora: %1$s</string>
+    <string name="policy_preview_session">Sesión: %1$s</string>
     <string name="when_no_schedule_matches">Cuando no coincide ningún horario</string>
     <string name="when_no_schedule_matches_hint">Se usa cuando no coincide ningún horario o un horario está en Predeterminado.</string>
     <string name="schedule_mode_allow">Permitir</string>

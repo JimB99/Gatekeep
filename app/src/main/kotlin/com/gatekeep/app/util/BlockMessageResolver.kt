@@ -42,6 +42,7 @@ object BlockMessageResolver {
     fun openDeterrentMessage(context: Context, method: FrictionMethod): String = when (method) {
         FrictionMethod.math -> completeChallengeToOpen(context)
         FrictionMethod.waitOneMin -> waitBeforeOpening(context)
+        FrictionMethod.password -> context.getString(R.string.enter_profile_pin)
         else -> waitBeforeOpening(context)
     }
 

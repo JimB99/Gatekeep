@@ -128,6 +128,11 @@
     <string name="policy_schedules_tab">Schedules</string>
     <string name="policy_week_tab">Week</string>
     <string name="policy_subtitle_format">%1$s · %2$d schedules</string>
+    <string name="policy_preview_open">Open: %1$s</string>
+    <string name="policy_preview_weekly">Weekly: %1$s</string>
+    <string name="policy_preview_daily">Daily: %1$s</string>
+    <string name="policy_preview_hourly">Hourly: %1$s</string>
+    <string name="policy_preview_session">Session: %1$s</string>
     <string name="when_no_schedule_matches">When no schedule matches</string>
     <string name="when_no_schedule_matches_hint">Used when no schedule matches, or when a schedule is set to Default.</string>
     <string name="schedule_mode_allow">Allow</string>

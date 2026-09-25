@@ -10,6 +10,7 @@ import com.gatekeep.domain.model.FrictionDifficulty
 import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -231,6 +232,57 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
             )
         }
         harness.launchTargetA()
+    }
+
+    @Test
+    fun g11_samePackageActivityChange_doesNotReopenGate() {
+        runSeed {
+            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.deterrentMath,
+                    defaultFrictionDifficulty = FrictionDifficulty.easy,
+                ),
+            )
+        }
+        harness.launchTargetA()
+        assertTrue(harness.waitForOpenFriction())
+        runBlocking {
+            enforcementCoordinator.onOpenGatePassed(EnforcementTestPackages.TARGET_A)
+            assertTrue(
+                enforcementCoordinator.awaitAllowedWithoutOverlay(EnforcementTestPackages.TARGET_A),
+            )
+        }
+        enforcementCoordinator.onForegroundAppChanged(
+            EnforcementTestPackages.TARGET_A,
+            "com.instagram.android.AccountSwitcherActivity",
+        )
+        enforcementCoordinator.onForegroundAppChanged(
+            EnforcementTestPackages.TARGET_A,
+            "com.instagram.android.MainActivity",
+        )
+        assertOverlayHidden()
+    }
+
+    @Test
+    fun g12_leaveAndReturn_reopensGate() {
+        runSeed {
+            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.deterrentMath,
+                    defaultFrictionDifficulty = FrictionDifficulty.easy,
+                ),
+            )
+        }
+        harness.launchTargetA()
+        assertTrue(harness.waitForOpenFriction())
+        runBlocking {
+            enforcementCoordinator.onOpenGatePassed(EnforcementTestPackages.TARGET_A)
+        }
+        harness.pressHome()
+        harness.launchTargetA()
+        assertTrue(harness.waitForOpenFriction())
     }
 
     @Test

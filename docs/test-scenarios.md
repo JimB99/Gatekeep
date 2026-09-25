@@ -157,6 +157,8 @@ Gradle uses JDK 21 via `org.gradle.java.home` in `gradle.properties` (Studio JBR
 | G-08 | Difficulty affects math | `OpenGateTest.g08_difficulty_affectsMath` |
 | G-09 | Open vs session wait durations | `OpenGateTest.g09_openVsSessionWait_durations` |
 | G-10 | None friction with extension bypass | `OpenGateTest.g10_noneFriction_extensionBypass` |
+| G-11 | Same-package activity change does not reopen gate | `OpenGateTest.g11_samePackageActivityChange_doesNotReopenGate` |
+| G-12 | Leave and return reopens gate | `OpenGateTest.g12_leaveAndReturn_reopensGate` |
 
 ---
 

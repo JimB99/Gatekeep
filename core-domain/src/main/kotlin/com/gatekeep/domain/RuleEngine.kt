@@ -292,7 +292,7 @@ object RuleEngine {
         is RuleResult.DelayOpen -> 1
         is RuleResult.OpenDeterrent -> when (result.method) {
             FrictionMethod.waitOneMin -> 1
-            FrictionMethod.math -> 2
+            FrictionMethod.math, FrictionMethod.password -> 2
             else -> 2
         }
         else -> -1
@@ -437,7 +437,11 @@ object RuleEngine {
                 null
             }
         }
-        OnOpenAction.pinGate -> null
+        OnOpenAction.pinGate -> if (!profile.passwordHash.isNullOrBlank()) {
+            RuleResult.OpenDeterrent(method = FrictionMethod.password)
+        } else {
+            null
+        }
         OnOpenAction.deterrentMath -> RuleResult.OpenDeterrent(
             method = FrictionMethod.math,
         )

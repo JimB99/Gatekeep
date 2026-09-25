@@ -307,12 +307,6 @@ class BlockOverlayManager @Inject constructor(
             }
         }
 
-        val hasProfilePin = !request.profilePasswordHash.isNullOrBlank()
-        if (request.reason == BlockPresentationReason.profilePin && hasProfilePin) {
-            frictionInProgress = true
-            continueBtn.visibility = View.GONE
-            showPasswordFriction(view, request)
-        }
     }
 
     private fun showFriction(
@@ -433,7 +427,6 @@ class BlockOverlayManager @Inject constructor(
                 PasswordHasher.verify(pin, request.profilePasswordHash)
             ) {
                 frictionInProgress = false
-                request.onProfileUnlocked?.invoke()
                 if (request.isOpenGate) {
                     coordinator.get().onOpenGatePassed(request.packageName)
                 } else if (request.useExtensionButtons) {

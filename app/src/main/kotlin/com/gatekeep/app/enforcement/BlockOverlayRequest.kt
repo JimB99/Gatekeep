@@ -18,7 +18,6 @@ data class BlockOverlayRequest(
     val showNoLimitToday: Boolean = false,
     val useExtensionButtons: Boolean = false,
     val profilePasswordHash: String? = null,
-    val onProfileUnlocked: (() -> Unit)? = null,
     val isOpenGate: Boolean = false,
     val extensionsUsedToday: Int = 0,
     val maxExtensionsPerDay: Int? = null,

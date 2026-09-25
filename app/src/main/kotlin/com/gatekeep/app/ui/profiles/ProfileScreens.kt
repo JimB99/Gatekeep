@@ -600,12 +600,32 @@ private fun profileAppsSubtitle(count: Int): String =
 @Composable
 private fun profilePolicySubtitle(profile: Profile?, segmentCount: Int): String {
     if (profile == null) return stringResource(R.string.no_schedules)
-    val limits = profileLimitsSubtitle(profile)
+    val preview = profilePolicyPreviewSubtitle(profile)
     return if (segmentCount == 0) {
-        limits
+        preview
     } else {
-        stringResource(R.string.policy_subtitle_format, limits, segmentCount)
+        stringResource(R.string.policy_subtitle_format, preview, segmentCount)
     }
+}
+
+@Composable
+internal fun profilePolicyPreviewSubtitle(profile: Profile): String {
+    val parts = buildList {
+        add(stringResource(R.string.policy_preview_open, openActionLabel(profile.onOpenAction)))
+        profile.weeklyLimitMs?.let {
+            add(stringResource(R.string.policy_preview_weekly, formatDurationMinutes(it)))
+        }
+        profile.dailyLimitMs?.let {
+            add(stringResource(R.string.policy_preview_daily, formatDurationMinutes(it)))
+        }
+        profile.hourlyLimitMs?.let {
+            add(stringResource(R.string.policy_preview_hourly, formatDurationMinutes(it)))
+        }
+        profile.sessionLimitMs?.let {
+            add(stringResource(R.string.policy_preview_session, formatDurationMinutes(it)))
+        }
+    }
+    return parts.joinToString(" · ")
 }
 
 @Composable
@@ -675,9 +695,4 @@ internal fun overrideRulesSubtitle(overrides: com.gatekeep.domain.model.Schedule
         parts.joinToString(" · ")
     }
 }
-
-@Composable
-private fun profileRulesSubtitle(profile: Profile): String =
-    "${openActionLabel(profile.onOpenAction)} · ${limitActionLabel(profile.onLimitAction)} · ${sessionActionLabel(profile.onSessionLimitAction)}"
-
 

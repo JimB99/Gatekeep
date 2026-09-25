@@ -16,7 +16,7 @@ core-data/     Room database, repositories, DataStore
 ## Battery
 
 - Foreground app changes are event-driven via accessibility
-- A 2s UsageEvents poll runs while accessibility is connected to catch same-app resumes and keyboard/system-UI noise (`shouldReevaluateForeground`)
+- A 2s UsageEvents poll runs while accessibility is connected to catch package changes missed by accessibility events and keyboard/system-UI noise
 - Notification/enforcement loop: **1s** when any active limit deadline is within 5 minutes, **30s** otherwise
 - Usage is recorded on app switch, resume detection, and break expiry — not on notification ticks
 - Usage sync every 30 min via WorkManager

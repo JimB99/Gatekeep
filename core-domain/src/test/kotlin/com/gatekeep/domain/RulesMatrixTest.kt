@@ -2,6 +2,7 @@ package com.gatekeep.domain
 
 import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.BlockReason
+import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.OnSessionLimitAction
@@ -127,10 +128,27 @@ class RulesMatrixTest {
             ),
         )
         when (open) {
-            OnOpenAction.none, OnOpenAction.pinGate -> assertInstanceOf(RuleResult.Allowed::class.java, result)
+            OnOpenAction.none, OnOpenAction.pinGate ->
+                assertInstanceOf(RuleResult.Allowed::class.java, result)
             OnOpenAction.deterrentMath, OnOpenAction.deterrentWait ->
                 assertInstanceOf(RuleResult.OpenDeterrent::class.java, result)
         }
+    }
+
+    @org.junit.jupiter.api.Test
+    fun evaluateOpenGate_pinGateWithPassword_returnsOpenDeterrent() {
+        val profile = profileBase.copy(
+            onOpenAction = OnOpenAction.pinGate,
+            passwordHash = "hashed-pin",
+        )
+        val result = RuleEngine.evaluate(
+            context(
+                profile = profile,
+                enforcementConfig = profile.enforcementConfig(),
+            ),
+        )
+        assertInstanceOf(RuleResult.OpenDeterrent::class.java, result)
+        assertEquals(FrictionMethod.password, (result as RuleResult.OpenDeterrent).method)
     }
 
     private fun context(
