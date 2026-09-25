@@ -29,12 +29,17 @@ From `Gatekeep/`:
 cd Gatekeep
 export JAVA_HOME="../.tools/jdk-17.0.14+7"
 export ANDROID_HOME="../.tools/android-sdk"
-./gradlew :core-domain:test :core-data:test :app:testDebugUnitTest :app:assembleRelease
+./gradlew :core-domain:test :core-data:test :app:testDebugUnitTest
+bash scripts/build_apk.sh
 ```
 
 **Prerequisite:** `keystore/debug.keystore` must exist (one-time setup below). Without it, release builds are unsigned.
 
-APK output: `app/build/outputs/apk/release/app-release.apk` (arm64-v8a only; see `app/build.gradle.kts` `abiFilters`).
+**Release APK:** **Always** build the installable release via `scripts/build_apk.sh` (not raw `assembleRelease` alone). The script runs Gradle and copies the signed APK to `gatekeep-<version>.apk` (from `app/build.gradle.kts` `versionName`).
+
+**Output:** `Gatekeep/dist/gatekeep-<version>.apk` (arm64-v8a only; e.g. `dist/gatekeep-3.6.6.apk`).
+
+Gradle also writes `app/build/outputs/apk/release/app-release.apk`; treat `dist/gatekeep-<version>.apk` as the canonical copy for sharing and sideloading.
 
 One-time keystore setup (from `Gatekeep/`):
 

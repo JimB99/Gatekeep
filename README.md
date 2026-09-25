@@ -24,10 +24,11 @@ Requirements: JDK 17, Android SDK 35
 ```bash
 export JAVA_HOME="../.tools/jdk-17.0.14+7"
 export ANDROID_HOME="../.tools/android-sdk"
-./gradlew :core-domain:test :core-data:test :app:testDebugUnitTest :app:assembleRelease
+./gradlew :core-domain:test :core-data:test :app:testDebugUnitTest
+bash scripts/build_apk.sh
 ```
 
-APK output: `app/build/outputs/apk/release/app-release.apk` (arm64-v8a only).
+APK output: **`dist/gatekeep-<version>.apk`** (e.g. `dist/gatekeep-3.6.6.apk`; arm64-v8a only).
 
 **Prerequisite:** `keystore/debug.keystore` must exist. Without it, release builds are unsigned.
 
