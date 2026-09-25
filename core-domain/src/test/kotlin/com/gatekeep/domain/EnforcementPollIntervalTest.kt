@@ -59,4 +59,48 @@ class EnforcementPollIntervalTest {
             EnforcementPollInterval.enforcementLoopIntervalMs(now, listOf(passed)),
         )
     }
+
+    @Test
+    fun `session display keeps full precision on fine poll`() {
+        assertEquals(
+            90_000L,
+            EnforcementPollInterval.sessionDisplayRemainingMs(
+                90_000L,
+                EnforcementPollInterval.FINE_INTERVAL_MS,
+            ),
+        )
+    }
+
+    @Test
+    fun `session display floors partial minute on coarse poll`() {
+        assertEquals(
+            14 * 60_000L,
+            EnforcementPollInterval.sessionDisplayRemainingMs(
+                14 * 60_000L + 21_000L,
+                EnforcementPollInterval.COARSE_INTERVAL_MS,
+            ),
+        )
+    }
+
+    @Test
+    fun `session display keeps exact minute on coarse poll`() {
+        assertEquals(
+            45 * 60_000L,
+            EnforcementPollInterval.sessionDisplayRemainingMs(
+                45 * 60_000L,
+                EnforcementPollInterval.COARSE_INTERVAL_MS,
+            ),
+        )
+    }
+
+    @Test
+    fun `session display floors hour minute seconds on coarse poll`() {
+        assertEquals(
+            (60 + 5) * 60_000L,
+            EnforcementPollInterval.sessionDisplayRemainingMs(
+                (60 + 5) * 60_000L + 30_000L,
+                EnforcementPollInterval.COARSE_INTERVAL_MS,
+            ),
+        )
+    }
 }

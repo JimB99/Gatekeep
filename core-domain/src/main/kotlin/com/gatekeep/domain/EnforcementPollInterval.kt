@@ -26,4 +26,12 @@ object EnforcementPollInterval {
             COARSE_INTERVAL_MS
         }
     }
+
+    /** Session HUD shows seconds only when the enforcement loop ticks every second. */
+    fun sessionDisplayRemainingMs(remainingMs: Long, pollIntervalMs: Long): Long =
+        if (pollIntervalMs <= FINE_INTERVAL_MS) {
+            remainingMs
+        } else {
+            (remainingMs / 60_000L) * 60_000L
+        }
 }

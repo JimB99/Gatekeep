@@ -9,6 +9,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.gatekeep.app.R
+import com.gatekeep.domain.EnforcementPollInterval
 import com.gatekeep.app.util.PermissionHelper
 import com.gatekeep.app.util.formatDurationMinutes
 import com.gatekeep.app.util.formatDurationMs
@@ -50,6 +51,17 @@ fun UsageHudInfo.countdownLines(): List<UsageHudLine> = buildList {
     dailyUsedMs?.let { add(UsageHudLine.UsedOverLimit(UsageHudBucket.daily, it, dailyLimitMs)) }
     hourlyUsedMs?.let { add(UsageHudLine.UsedOverLimit(UsageHudBucket.hourly, it, hourlyLimitMs)) }
     weeklyUsedMs?.let { add(UsageHudLine.UsedOverLimit(UsageHudBucket.weekly, it, weeklyLimitMs)) }
+}
+
+data class SessionHudDisplay(
+    val displayMs: Long,
+    val includeSeconds: Boolean,
+)
+
+fun sessionHudDisplay(remainingMs: Long, pollIntervalMs: Long): SessionHudDisplay {
+    val displayMs = EnforcementPollInterval.sessionDisplayRemainingMs(remainingMs, pollIntervalMs)
+    val includeSeconds = pollIntervalMs <= EnforcementPollInterval.FINE_INTERVAL_MS
+    return SessionHudDisplay(displayMs, includeSeconds)
 }
 
 fun tickHudUsedMs(
@@ -134,6 +146,7 @@ class GatekeepNotificationHelper @Inject constructor(
         profileId: Long? = null,
         lastBody: String? = null,
         onBodyPosted: (String) -> Unit = {},
+        sessionPollIntervalMs: Long = EnforcementPollInterval.FINE_INTERVAL_MS,
     ): Boolean {
         if (CountdownNotificationState.dismissedByUser) return false
 
@@ -152,10 +165,15 @@ class GatekeepNotificationHelper @Inject constructor(
         )
         val parts = hud.countdownLines().map { line ->
             when (line) {
-                is UsageHudLine.Session -> localizedContext.getString(
-                    R.string.hud_session_format,
-                    formatDurationMs(context, line.remainingMs),
-                )
+                is UsageHudLine.Session -> {
+                    val sessionDisplay = sessionHudDisplay(line.remainingMs, sessionPollIntervalMs)
+                    val formatted = if (sessionDisplay.includeSeconds) {
+                        formatDurationMs(context, sessionDisplay.displayMs)
+                    } else {
+                        formatDurationMinutes(sessionDisplay.displayMs)
+                    }
+                    localizedContext.getString(R.string.hud_session_format, formatted)
+                }
                 is UsageHudLine.UsedOverLimit -> {
                     val used = formatDurationMinutes(line.usedMs)
                     val limit = formatDurationMinutes(line.limitMs)

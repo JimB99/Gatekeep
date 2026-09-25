@@ -1572,6 +1572,8 @@ class EnforcementCoordinator @Inject constructor(
         countdownUsedTodayMs = liveUsage?.dailyMs.takeIf { dailyLimitMs != null }
         countdownHourlyUsedMs = liveUsage?.hourlyMs.takeIf { hourlyLimitMs != null }
         countdownWeeklyUsedMs = liveUsage?.weeklyMs.takeIf { weeklyLimitMs != null }
+        val pollIntervalMs = enforcementLoopDelayMs(now)
+            ?: EnforcementPollInterval.FINE_INTERVAL_MS
         val shown = notificationHelper.showCountdown(
             title = title,
             hud = UsageHudInfo(
@@ -1586,6 +1588,7 @@ class EnforcementCoordinator @Inject constructor(
             profileId = countdownProfileId,
             lastBody = lastNotificationBody,
             onBodyPosted = { lastNotificationBody = it },
+            sessionPollIntervalMs = pollIntervalMs,
         )
         if (!shown) {
             showCountdownNotification = false
