@@ -1,6 +1,16 @@
 # Gatekeep
 
-An Android app that helps you manage screen time with profiles, session limits, schedules, friction unlocks, and a Session HUD timer bar.
+Android screen-time management: profiles, limits, schedules, friction unlocks, and a session HUD timer bar.
+
+**Status:** Personal release builds; actively maintained. Screenshots: add PNGs under `docs/screenshots/` when capturing the policy UI and Session HUD.
+
+---
+
+## Why
+
+Gatekeep enforces limits in real time on the foreground app: accessibility-driven foreground detection, a pure Kotlin rule engine, and overlay/block UX. The design prioritizes testable domain rules (`core-domain`) separate from Room and Android services.
+
+---
 
 ## Features
 
@@ -17,46 +27,45 @@ An Android app that helps you manage screen time with profiles, session limits, 
 - Strict mode and optional device admin deterrent
 - Gradual limit tightening
 
+---
+
 ## Build
 
-Requirements: JDK 17, Android SDK 35
+Requirements: JDK 17, Android SDK 35. See **[docs/BUILD.md](docs/BUILD.md)** for signing and workspace toolchain paths.
 
 ```bash
-export JAVA_HOME="../.tools/jdk-17.0.14+7"
-export ANDROID_HOME="../.tools/android-sdk"
 ./gradlew :core-domain:test :core-data:test :app:testDebugUnitTest
 bash scripts/build_apk.sh
 ```
 
-APK output: **`dist/gatekeep-<version>.apk`** (e.g. `dist/gatekeep-3.6.6.apk`; arm64-v8a only).
-
-**Prerequisite:** `keystore/debug.keystore` must exist. Without it, release builds are unsigned.
-
-For local signing, create a shared keystore once (not committed):
-
-```bash
-mkdir -p keystore
-keytool -genkeypair -v -keystore keystore/debug.keystore -alias androiddebugkey \
-  -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
-  -dname "CN=Gatekeep Debug, OU=Dev, O=Gatekeep, L=Local, ST=Local, C=NL"
-```
+---
 
 ## Permissions
 
 See [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
 
+---
+
 ## Architecture
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Scenario-level tests: [docs/test-scenarios.md](docs/test-scenarios.md).
+
+Project conventions: `.cursor/rules/gatekeep-*.mdc`.
+
+---
 
 ## Database upgrades
 
-Room migrations are explicit — the app does **not** use `fallbackToDestructiveMigration()`.
-If an upgrade fails schema validation (for example an index-name mismatch), GateKeep logs the
-error, deletes `gatekeep.db` (and WAL/SHM sidecars), and opens a fresh database once.
-Local enforcement history may reset after that recovery path. Profile backups from Settings
-are the way to keep configuration across a failed upgrade.
+Room migrations are explicit — the app does **not** use `fallbackToDestructiveMigration()`. Recovery behavior is documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Profile JSON backups from Settings preserve configuration across a failed upgrade.
+
+---
 
 ## Roadmap
 
 - [ ] **Week timeline view** on the Policy → Schedules tab (visual 7-day grid; list editor remains primary)
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
