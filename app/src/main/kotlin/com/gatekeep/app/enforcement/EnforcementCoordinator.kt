@@ -13,6 +13,7 @@ import com.gatekeep.app.util.withAppLocale
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
+import com.gatekeep.domain.OpenGatePassPolicy
 import com.gatekeep.domain.EnforcementPollInterval
 import com.gatekeep.domain.ExtensionDisplayLogic
 import com.gatekeep.domain.ExtensionGrantEngine
@@ -140,6 +141,9 @@ class EnforcementCoordinator @Inject constructor(
     private var lastBlockReason: BlockReason? = null
     private var lastBlockProfileId: Long? = null
     private var foregroundPollRunnable: Runnable? = null
+    private var pendingForegroundPackage: String? = null
+    private var pendingForegroundFirstSeenMs: Long = 0
+    private var pendingForegroundRunnable: Runnable? = null
     private var evaluationEpoch = 0L
     private var accessibilityRevokedNotified = false
 
@@ -197,9 +201,16 @@ class EnforcementCoordinator @Inject constructor(
             return
         }
 
-        if (packageName in ignoredForegroundPackages) {
-            if (lastMonitoredForegroundPackage != null &&
-                System.currentTimeMillis() - lastMonitoredForegroundAtMs < 3_000
+        if (packageName in ignoredForegroundPackages ||
+            ForegroundStabilizationPolicy.isTransientForegroundPackage(packageName)
+        ) {
+            if (ForegroundStabilizationPolicy.shouldApplyMonitoredGrace(
+                    incomingPackage = packageName,
+                    ignoredPackages = ignoredForegroundPackages,
+                    lastMonitoredPackage = lastMonitoredForegroundPackage,
+                    lastMonitoredAtMs = lastMonitoredForegroundAtMs,
+                    nowMs = System.currentTimeMillis(),
+                )
             ) {
                 reconcileForegroundFromUsageStats()
                 return
@@ -215,16 +226,63 @@ class EnforcementCoordinator @Inject constructor(
             }
         }
 
-        val prevPackage = currentForegroundPackage
-        currentForegroundPackage = packageName
+        scheduleForegroundCommit(packageName)
+    }
 
-        scope.launch {
-            try {
-                handleForegroundChange(packageName, prevPackage)
-            } catch (e: Exception) {
-                enforcementLog.logError("Foreground evaluation failed", e)
+    fun onWindowsLayoutChanged() {
+        reconcileForegroundFromUsageStats()
+    }
+
+    private fun scheduleForegroundCommit(packageName: String) {
+        val now = System.currentTimeMillis()
+        if (pendingForegroundPackage != packageName) {
+            pendingForegroundPackage = packageName
+            pendingForegroundFirstSeenMs = now
+        }
+        pendingForegroundRunnable?.let { mainHandler.removeCallbacks(it) }
+        pendingForegroundRunnable = Runnable {
+            val candidate = pendingForegroundPackage ?: return@Runnable
+            val nowMs = System.currentTimeMillis()
+            if (!ForegroundStabilizationPolicy.debounceConfirmed(
+                    candidatePackage = candidate,
+                    candidateFirstSeenMs = pendingForegroundFirstSeenMs,
+                    nowMs = nowMs,
+                )
+            ) {
+                val remaining = ForegroundStabilizationPolicy.DEBOUNCE_MS -
+                    (nowMs - pendingForegroundFirstSeenMs)
+                mainHandler.postDelayed(
+                    pendingForegroundRunnable!!,
+                    remaining.coerceAtLeast(1L),
+                )
+                return@Runnable
+            }
+            if (candidate == currentForegroundPackage) {
+                clearPendingForegroundCommit()
+                return@Runnable
+            }
+            clearPendingForegroundCommit()
+            val prevPackage = currentForegroundPackage
+            currentForegroundPackage = candidate
+            scope.launch {
+                try {
+                    handleForegroundChange(candidate, prevPackage)
+                } catch (e: Exception) {
+                    enforcementLog.logError("Foreground evaluation failed", e)
+                }
             }
         }
+        mainHandler.postDelayed(
+            pendingForegroundRunnable!!,
+            ForegroundStabilizationPolicy.DEBOUNCE_MS,
+        )
+    }
+
+    private fun clearPendingForegroundCommit() {
+        pendingForegroundRunnable?.let { mainHandler.removeCallbacks(it) }
+        pendingForegroundRunnable = null
+        pendingForegroundPackage = null
+        pendingForegroundFirstSeenMs = 0
     }
 
     private suspend fun handleForegroundChange(packageName: String, prevPackage: String?) {
@@ -576,11 +634,26 @@ class EnforcementCoordinator @Inject constructor(
         blockOverlay.clearFrictionState()
         blockOverlay.removeAfterResolution()
         scope.launch {
-            val profiles = profileRepository.observeActiveProfiles().first()
-            val profileId = profiles.firstOrNull()?.id ?: return@launch
-            recordFrictionEnd(packageName, profileId)
-            evaluate(packageName)
+            try {
+                val profiles = profileRepository.observeActiveProfiles().first()
+                val profileId = profiles.firstOrNull()?.id ?: return@launch
+                recordFrictionEnd(packageName, profileId)
+                persistOpenGatePassed(packageName, profileId)
+                evaluate(packageName)
+            } catch (e: Exception) {
+                enforcementLog.logError("Open gate passed failed", e)
+            }
         }
+    }
+
+    private suspend fun persistOpenGatePassed(packageName: String, profileId: Long) {
+        val now = System.currentTimeMillis()
+        val state = usageRepository.getSessionState(profileId, packageName)
+            ?: SessionTracker.startSession(packageName, now)
+        usageRepository.saveSessionState(
+            OpenGatePassPolicy.markOpenGatePassed(state, now),
+            profileId,
+        )
     }
 
     private suspend fun applyExtensionGrant(
@@ -756,6 +829,7 @@ class EnforcementCoordinator @Inject constructor(
         if (!BuildConfig.DEBUG) return
         evaluationEpoch++
         stopCountdownTicker()
+        clearPendingForegroundCommit()
         openGatePassedPackage = null
         sessionStartedForPackage = null
         currentForegroundPackage = null
@@ -1094,7 +1168,8 @@ class EnforcementCoordinator @Inject constructor(
             periodLimitsDisabled = noLimitToday,
         )
 
-        val openAlreadyPassed = openGatePassedPackage == packageName
+        val openAlreadyPassed = openGatePassedPackage == packageName ||
+            OpenGatePassPolicy.shouldSkipOpenGate(sessionForEval, now, OPEN_GATE_GRACE_MS)
         val result = when (val ruleResult = RuleEngine.evaluate(evalContext, openAlreadyPassed)) {
             is RuleResult.Blocked -> ruleResult
             is RuleResult.DelayOpen -> {
@@ -1104,13 +1179,20 @@ class EnforcementCoordinator @Inject constructor(
                         BlockMessageResolver.delayOpenMessage(localizedContext),
                     ) {
                         openGatePassedPackage = packageName
-                        scope.launch { evaluate(packageName) }
+                        scope.launch {
+                            val profiles = profileRepository.observeActiveProfiles().first()
+                            val profileId = profiles.firstOrNull()?.id
+                            if (profileId != null) {
+                                persistOpenGatePassed(packageName, profileId)
+                            }
+                            evaluate(packageName)
+                        }
                     }
                 }
                 return
             }
             is RuleResult.OpenDeterrent -> {
-                if (openGatePassedPackage != packageName) {
+                if (!openAlreadyPassed) {
                     showOpenDeterrent(
                         packageName, appLabel, primaryProfile, ruleResult, evaluationEpochAtStart,
                     )
@@ -1819,11 +1901,11 @@ class EnforcementCoordinator @Inject constructor(
         val state = when {
             pendingWait && existingState != null -> existingState
             sessionStartedForPackage != packageName && !onBreak -> {
-                openGatePassedPackage = null
                 val breakUntil = existingState?.breakUntilEpochMs?.takeIf { now < it }
                 SessionTracker.startSession(packageName, now).copy(
                     breakUntilEpochMs = breakUntil,
                     sessionLimitNotified = false,
+                    openGatePassedEpochMs = existingState?.openGatePassedEpochMs,
                 )
             }
             existingState == null -> SessionTracker.startSession(packageName, now)
@@ -1942,5 +2024,6 @@ class EnforcementCoordinator @Inject constructor(
     companion object {
         private const val BLOCK_STABILIZATION_MS = 400L
         private const val FOREGROUND_POLL_MS = 2_000L
+        private const val OPEN_GATE_GRACE_MS = OpenGatePassPolicy.DEFAULT_GRACE_MS
     }
 }

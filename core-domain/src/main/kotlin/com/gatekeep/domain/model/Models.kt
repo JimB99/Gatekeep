@@ -276,6 +276,7 @@ data class SessionState(
     val pendingWaitUntilEpochMs: Long? = null,
     val sessionLimitNotified: Boolean = false,
     val consecutiveExtensionCount: Int = 0,
+    val openGatePassedEpochMs: Long? = null,
 )
 
 data class RuleEvaluationContext(

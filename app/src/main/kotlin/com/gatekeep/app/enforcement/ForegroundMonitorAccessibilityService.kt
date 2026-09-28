@@ -25,9 +25,7 @@ class ForegroundMonitorAccessibilityService : AccessibilityService() {
                     coordinator.onForegroundAppChanged(packageName, className)
                 }
                 AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
-                    if (packageName == null) return
-                    if (packageName == applicationContext.packageName) return
-                    coordinator.onForegroundAppChanged(packageName, windowClassName = null)
+                    coordinator.onWindowsLayoutChanged()
                 }
             }
         } catch (e: Exception) {

@@ -138,6 +138,28 @@ class MigrationChainTest {
     }
 
     @Test
+    fun migrate14To15_addsOpenGatePassedColumn() {
+        LegacySchemaFixtures.createVersion12(context, TEST_DB)
+
+        val db = helper.runMigrationsAndValidate(
+            TEST_DB,
+            15,
+            true,
+            *GatekeepMigrations.ALL,
+        )
+
+        db.query("PRAGMA table_info(session_state)").use { cursor ->
+            val columns = buildList {
+                while (cursor.moveToNext()) {
+                    add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+                }
+            }
+            assertTrue("openGatePassedEpochMs" in columns)
+        }
+        db.close()
+    }
+
+    @Test
     fun migrate8To13_fullChainProducesValidSchema() {
         LegacySchemaFixtures.createVersion8(context, TEST_DB)
         LegacySchemaFixtures.insertProfileV8(context, TEST_DB, name = "Work")
@@ -150,7 +172,7 @@ class MigrationChainTest {
             endMinute = 17 * 60,
         )
 
-        val db = helper.runMigrationsAndValidate(TEST_DB, 14, true, *GatekeepMigrations.ALL)
+        val db = helper.runMigrationsAndValidate(TEST_DB, 15, true, *GatekeepMigrations.ALL)
 
         assertEquals("Work", db.singleTextOf("SELECT name FROM profiles"))
         assertEquals("perApp", db.singleTextOf("SELECT limitUsageScope FROM profiles"))

@@ -266,12 +266,40 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
 
     @Test
     fun g12_leaveAndReturn_reopensGate() {
+        var profileId = 0L
         runSeed {
-            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+            profileId = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
                     onOpenAction = OnOpenAction.deterrentMath,
                     defaultFrictionDifficulty = FrictionDifficulty.easy,
+                ),
+            ).profileId
+        }
+        harness.launchTargetA()
+        assertTrue(harness.waitForOpenFriction())
+        runBlocking {
+            enforcementCoordinator.onOpenGatePassed(EnforcementTestPackages.TARGET_A)
+            val state = usageRepository.getSessionState(profileId, EnforcementTestPackages.TARGET_A)
+                ?: error("missing session state")
+            usageRepository.saveSessionState(
+                state.copy(openGatePassedEpochMs = System.currentTimeMillis() - 70_000L),
+                profileId,
+            )
+        }
+        harness.pressHome()
+        harness.launchTargetA()
+        assertTrue(harness.waitForOpenFriction())
+    }
+
+    @Test
+    fun g13_quickReturn_withinGrace_skipsOpenGate() {
+        runSeed {
+            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.deterrentWait,
+                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.CANCELLED_OPEN_WAIT_SEC,
                 ),
             )
         }
@@ -279,10 +307,41 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
         assertTrue(harness.waitForOpenFriction())
         runBlocking {
             enforcementCoordinator.onOpenGatePassed(EnforcementTestPackages.TARGET_A)
+            assertTrue(
+                enforcementCoordinator.awaitAllowedWithoutOverlay(EnforcementTestPackages.TARGET_A),
+            )
         }
         harness.pressHome()
         harness.launchTargetA()
+        assertOverlayHidden()
+    }
+
+    @Test
+    fun g14_spuriousLauncherBlip_doesNotReopenGate() {
+        runSeed {
+            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.deterrentWait,
+                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.CANCELLED_OPEN_WAIT_SEC,
+                ),
+            )
+        }
+        harness.launchTargetA()
         assertTrue(harness.waitForOpenFriction())
+        runBlocking {
+            enforcementCoordinator.onOpenGatePassed(EnforcementTestPackages.TARGET_A)
+            assertTrue(
+                enforcementCoordinator.awaitAllowedWithoutOverlay(EnforcementTestPackages.TARGET_A),
+            )
+        }
+        enforcementCoordinator.onForegroundAppChanged("com.android.launcher3")
+        enforcementCoordinator.onForegroundAppChanged(
+            EnforcementTestPackages.TARGET_A,
+            "com.instagram.android.MainActivity",
+        )
+        Thread.sleep(ForegroundStabilizationPolicy.DEBOUNCE_MS + 100L)
+        assertOverlayHidden()
     }
 
     @Test

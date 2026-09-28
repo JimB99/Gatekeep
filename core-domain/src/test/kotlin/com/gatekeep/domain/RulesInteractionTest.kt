@@ -218,6 +218,19 @@ class RulesInteractionTest {
     }
 
     @Test
+    fun openAlreadyPassed_skipsOpenWaitWhenConfigured() {
+        val profile = profileBase.copy(onOpenAction = OnOpenAction.deterrentWait)
+        val result = RuleEngine.evaluate(
+            context(
+                profile = profile,
+                enforcementConfig = profile.enforcementConfig(),
+            ),
+            openAlreadyPassed = true,
+        )
+        assertInstanceOf(RuleResult.Allowed::class.java, result)
+    }
+
+    @Test
     fun extensionGracePause_allowsDailyUsageWhenOverCap() {
         val profile = profileBase.copy(onLimitAction = OnLimitAction.hardBlock)
         val gracePause = Pause(

@@ -20,6 +20,7 @@ object GatekeepMigrations {
             MIGRATION_11_12,
             MIGRATION_12_13,
             MIGRATION_13_14,
+            MIGRATION_14_15,
         )
 
     val MIGRATION_5_6 = object : Migration(5, 6) {
@@ -244,6 +245,14 @@ object GatekeepMigrations {
             )
             db.execSQL(
                 "ALTER TABLE override_events ADD COLUMN weeklyUsageAnchorMs INTEGER NOT NULL DEFAULT 0",
+            )
+        }
+    }
+
+    val MIGRATION_14_15 = object : Migration(14, 15) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE session_state ADD COLUMN openGatePassedEpochMs INTEGER DEFAULT NULL",
             )
         }
     }

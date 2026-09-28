@@ -158,7 +158,9 @@ Gradle uses JDK 21 via `org.gradle.java.home` in `gradle.properties` (Studio JBR
 | G-09 | Open vs session wait durations | `OpenGateTest.g09_openVsSessionWait_durations` |
 | G-10 | None friction with extension bypass | `OpenGateTest.g10_noneFriction_extensionBypass` |
 | G-11 | Same-package activity change does not reopen gate | `OpenGateTest.g11_samePackageActivityChange_doesNotReopenGate` |
-| G-12 | Leave and return reopens gate | `OpenGateTest.g12_leaveAndReturn_reopensGate` |
+| G-12 | Leave and return reopens gate after grace expires | `OpenGateTest.g12_leaveAndReturn_reopensGate` |
+| G-13 | Quick return within 60s grace skips open gate | `OpenGateTest.g13_quickReturn_withinGrace_skipsOpenGate` |
+| G-14 | Launcher blip does not reopen open gate | `OpenGateTest.g14_spuriousLauncherBlip_doesNotReopenGate` |
 
 ---
 
