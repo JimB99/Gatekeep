@@ -111,6 +111,27 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())
         harness.pressHome()
+        assertOverlayHidden()
+        harness.launchTargetA()
+        assertTrue(harness.waitForOverlay())
+    }
+
+    @Test
+    fun o13_overviewButton_hidesOverlay() {
+        seedHardBlockProfile()
+        harness.launchTargetA()
+        assertTrue(harness.waitForOverlay())
+        harness.pressRecents()
+        assertOverlayHidden()
+    }
+
+    @Test
+    fun o14_overviewThenSameApp_reshowsOverlay() {
+        seedHardBlockProfile()
+        harness.launchTargetA()
+        assertTrue(harness.waitForOverlay())
+        harness.pressRecents()
+        assertOverlayHidden()
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())
     }

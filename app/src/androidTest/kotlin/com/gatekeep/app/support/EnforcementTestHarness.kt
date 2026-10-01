@@ -292,6 +292,12 @@ class EnforcementTestHarness(
         onNavigatedAway?.invoke()
     }
 
+    fun pressRecents() {
+        uiDevice.pressRecentApps()
+        Thread.sleep(TARGET_LAUNCH_SETTLE_MS)
+        onNavigatedAway?.invoke()
+    }
+
     /** Reset platform usage counters so prior test runs do not inflate merged usage snapshots. */
     fun resetTestTargetUsageStats() {
         shell("cmd usagestats reset")

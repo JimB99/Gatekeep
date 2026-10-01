@@ -4,18 +4,20 @@ import com.gatekeep.domain.model.SessionState
 
 object OpenGatePassPolicy {
 
-    const val DEFAULT_GRACE_MS = 60_000L
+    const val DEFAULT_GRACE_MS = SessionContinuityPolicy.RESUME_GRACE_MS
 
     /**
-     * Skip open-gate friction when the user already passed for this session or within [graceMs].
+     * Skip open-gate friction only when it was already passed in the current session.
+     * Session continuity (close-to-reopen within [DEFAULT_GRACE_MS]) is decided separately
+     * by [SessionContinuityPolicy]; a never-passed bounce must still show on-open.
      */
+    @Suppress("UNUSED_PARAMETER")
     fun shouldSkipOpenGate(
         session: SessionState?,
         nowEpochMs: Long,
         graceMs: Long = DEFAULT_GRACE_MS,
     ): Boolean {
         val passedAt = session?.openGatePassedEpochMs ?: return false
-        if (nowEpochMs - passedAt < graceMs) return true
         return passedAt >= session.sessionStartEpochMs
     }
 

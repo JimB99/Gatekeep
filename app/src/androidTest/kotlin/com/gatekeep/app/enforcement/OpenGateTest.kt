@@ -283,11 +283,13 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
             val state = usageRepository.getSessionState(profileId, EnforcementTestPackages.TARGET_A)
                 ?: error("missing session state")
             usageRepository.saveSessionState(
-                state.copy(openGatePassedEpochMs = System.currentTimeMillis() - 70_000L),
+                state.copy(
+                    openGatePassedEpochMs = System.currentTimeMillis() - 70_000L,
+                    lastForegroundEndEpochMs = System.currentTimeMillis() - 70_000L,
+                ),
                 profileId,
             )
         }
-        harness.pressHome()
         harness.launchTargetA()
         assertTrue(harness.waitForOpenFriction())
     }
@@ -342,6 +344,24 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
         )
         Thread.sleep(ForegroundStabilizationPolicy.DEBOUNCE_MS + 100L)
         assertOverlayHidden()
+    }
+
+    @Test
+    fun g15_quickBounce_neverPassed_stillShowsOpenGate() {
+        runSeed {
+            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.deterrentWait,
+                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.CANCELLED_OPEN_WAIT_SEC,
+                ),
+            )
+        }
+        harness.launchTargetA()
+        assertTrue(harness.waitForOpenFriction())
+        harness.pressHome()
+        harness.launchTargetA()
+        assertTrue(harness.waitForOpenFriction())
     }
 
     @Test

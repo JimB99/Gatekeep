@@ -9,29 +9,14 @@ import org.junit.jupiter.api.Test
 class OpenGatePassPolicyTest {
 
     @Test
-    fun skipsWithinGraceWindow() {
+    fun skipsWhenPassedInCurrentSession() {
         val session = SessionState(
             packageName = "com.test",
             sessionStartEpochMs = 1_000L,
             openGatePassedEpochMs = 5_000L,
         )
         assertTrue(
-            OpenGatePassPolicy.shouldSkipOpenGate(session, nowEpochMs = 5_000L + 30_000L),
-        )
-    }
-
-    @Test
-    fun skipsForCurrentSessionAfterGraceExpires() {
-        val session = SessionState(
-            packageName = "com.test",
-            sessionStartEpochMs = 1_000L,
-            openGatePassedEpochMs = 2_000L,
-        )
-        assertTrue(
-            OpenGatePassPolicy.shouldSkipOpenGate(
-                session,
-                nowEpochMs = 2_000L + OpenGatePassPolicy.DEFAULT_GRACE_MS + 1,
-            ),
+            OpenGatePassPolicy.shouldSkipOpenGate(session, nowEpochMs = 5_000L + 90_000L),
         )
     }
 
@@ -45,7 +30,7 @@ class OpenGatePassPolicyTest {
     }
 
     @Test
-    fun doesNotSkipAfterGraceAndNewSessionStart() {
+    fun doesNotSkipWhenPassedOnlyInPreviousSession() {
         val session = SessionState(
             packageName = "com.test",
             sessionStartEpochMs = 100_000L,
@@ -54,7 +39,22 @@ class OpenGatePassPolicyTest {
         assertFalse(
             OpenGatePassPolicy.shouldSkipOpenGate(
                 session,
-                nowEpochMs = 100_000L + OpenGatePassPolicy.DEFAULT_GRACE_MS + 1,
+                nowEpochMs = 100_000L + 1_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun doesNotSkipWhenPassedRecentlyButNewSessionStarted() {
+        val session = SessionState(
+            packageName = "com.test",
+            sessionStartEpochMs = 50_000L,
+            openGatePassedEpochMs = 40_000L,
+        )
+        assertFalse(
+            OpenGatePassPolicy.shouldSkipOpenGate(
+                session,
+                nowEpochMs = 50_000L + 5_000L,
             ),
         )
     }

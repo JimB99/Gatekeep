@@ -140,6 +140,8 @@ Gradle uses JDK 21 via `org.gradle.java.home` in `gradle.properties` (Studio JBR
 | O-10 | Extension buttons by surface mode | `OverlayStabilityTest.o10_extensionButtons_bySurfaceMode` |
 | O-11 | Open Gatekeep from overlay | `OverlayStabilityTest.o11_openGatekeepFromOverlay` |
 | O-12 | Keyboard on math challenge usable | `OverlayStabilityTest.o12_keyboardOnMathChallenge_usable` |
+| O-13 | Overview button hides overlay | `OverlayStabilityTest.o13_overviewButton_hidesOverlay` |
+| O-14 | Overview then same app reshows overlay | `OverlayStabilityTest.o14_overviewThenSameApp_reshowsOverlay` |
 
 ---
 
@@ -161,6 +163,7 @@ Gradle uses JDK 21 via `org.gradle.java.home` in `gradle.properties` (Studio JBR
 | G-12 | Leave and return reopens gate after grace expires | `OpenGateTest.g12_leaveAndReturn_reopensGate` |
 | G-13 | Quick return within 60s grace skips open gate | `OpenGateTest.g13_quickReturn_withinGrace_skipsOpenGate` |
 | G-14 | Launcher blip does not reopen open gate | `OpenGateTest.g14_spuriousLauncherBlip_doesNotReopenGate` |
+| G-15 | Quick bounce without passing still shows open gate | `OpenGateTest.g15_quickBounce_neverPassed_stillShowsOpenGate` |
 
 ---
 

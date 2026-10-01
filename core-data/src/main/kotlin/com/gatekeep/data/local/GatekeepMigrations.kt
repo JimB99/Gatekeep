@@ -21,6 +21,7 @@ object GatekeepMigrations {
             MIGRATION_12_13,
             MIGRATION_13_14,
             MIGRATION_14_15,
+            MIGRATION_15_16,
         )
 
     val MIGRATION_5_6 = object : Migration(5, 6) {
@@ -253,6 +254,14 @@ object GatekeepMigrations {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL(
                 "ALTER TABLE session_state ADD COLUMN openGatePassedEpochMs INTEGER DEFAULT NULL",
+            )
+        }
+    }
+
+    val MIGRATION_15_16 = object : Migration(15, 16) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE session_state ADD COLUMN lastForegroundEndEpochMs INTEGER DEFAULT NULL",
             )
         }
     }

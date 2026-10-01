@@ -183,4 +183,5 @@ data class SessionStateEntity(
     val sessionLimitNotified: Boolean = false,
     val consecutiveExtensionCount: Int = 0,
     val openGatePassedEpochMs: Long? = null,
+    val lastForegroundEndEpochMs: Long? = null,
 )

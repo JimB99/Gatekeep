@@ -160,6 +160,28 @@ class MigrationChainTest {
     }
 
     @Test
+    fun migrate15To16_addsLastForegroundEndColumn() {
+        LegacySchemaFixtures.createVersion12(context, TEST_DB)
+
+        val db = helper.runMigrationsAndValidate(
+            TEST_DB,
+            16,
+            true,
+            *GatekeepMigrations.ALL,
+        )
+
+        db.query("PRAGMA table_info(session_state)").use { cursor ->
+            val columns = buildList {
+                while (cursor.moveToNext()) {
+                    add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+                }
+            }
+            assertTrue("lastForegroundEndEpochMs" in columns)
+        }
+        db.close()
+    }
+
+    @Test
     fun migrate8To13_fullChainProducesValidSchema() {
         LegacySchemaFixtures.createVersion8(context, TEST_DB)
         LegacySchemaFixtures.insertProfileV8(context, TEST_DB, name = "Work")
