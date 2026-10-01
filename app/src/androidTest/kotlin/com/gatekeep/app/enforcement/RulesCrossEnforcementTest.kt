@@ -318,9 +318,10 @@ class RulesCrossEnforcementTest : EnforcementCrossAppTestBase() {
                     it.untilEpochMs > now
             }
         }
-        val dayStart = com.gatekeep.domain.TimeBoundaries.dayStartEpochMs(now)
+        val reset = com.gatekeep.domain.DayReset.DEFAULT_MINUTE_OF_DAY
+        val dayStart = com.gatekeep.domain.TimeBoundaries.dayStartEpochMs(now, dayResetMinuteOfDay = reset)
         val hourStart = com.gatekeep.domain.TimeBoundaries.hourStartEpochMs(now)
-        val weekStart = com.gatekeep.domain.TimeBoundaries.weekBounds(now).startMs
+        val weekStart = com.gatekeep.domain.TimeBoundaries.weekBounds(now, dayResetMinuteOfDay = reset).startMs
         val usage = com.gatekeep.domain.model.UsageSnapshot(
             dailyMs = usageRepository.getDailyUsage(profileId, packageName, dayStart),
             hourlyMs = usageRepository.getHourlyUsage(profileId, packageName, hourStart),

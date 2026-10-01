@@ -121,4 +121,83 @@ class TimeBoundariesTest {
         )
         assertEquals(365, TimeBoundaries.iterateDaysInRange(bounds, amsterdam).size)
     }
+
+    @Test
+    fun fourAmResetKeepsPreDawnOnPreviousDay() {
+        val reset = 4 * 60
+        val twoAm = ZonedDateTime.of(2026, 10, 1, 2, 0, 0, 0, amsterdam)
+            .toInstant()
+            .toEpochMilli()
+        val bounds = TimeBoundaries.dayBounds(twoAm, amsterdam, reset)
+        assertEquals(
+            ZonedDateTime.of(2026, 9, 30, 4, 0, 0, 0, amsterdam).toInstant().toEpochMilli(),
+            bounds.startMs,
+        )
+        assertEquals(
+            ZonedDateTime.of(2026, 10, 1, 4, 0, 0, 0, amsterdam).toInstant().toEpochMilli(),
+            bounds.endExclusiveMs,
+        )
+    }
+
+    @Test
+    fun fourAmResetStartsNewDayAtFour() {
+        val reset = 4 * 60
+        val fourAm = ZonedDateTime.of(2026, 10, 1, 4, 0, 0, 0, amsterdam)
+            .toInstant()
+            .toEpochMilli()
+        val bounds = TimeBoundaries.dayBounds(fourAm, amsterdam, reset)
+        assertEquals(fourAm, bounds.startMs)
+        assertEquals(
+            ZonedDateTime.of(2026, 10, 2, 4, 0, 0, 0, amsterdam).toInstant().toEpochMilli(),
+            bounds.endExclusiveMs,
+        )
+    }
+
+    @Test
+    fun mondayBeforeResetBelongsToPreviousIsoWeek() {
+        val reset = 4 * 60
+        val mondayTwoAm = ZonedDateTime.of(2026, 10, 5, 2, 0, 0, 0, amsterdam)
+            .toInstant()
+            .toEpochMilli()
+        val bounds = TimeBoundaries.weekBounds(mondayTwoAm, amsterdam, WeekFields.ISO, reset)
+        assertEquals(
+            ZonedDateTime.of(2026, 9, 28, 4, 0, 0, 0, amsterdam).toInstant().toEpochMilli(),
+            bounds.startMs,
+        )
+        assertEquals(
+            ZonedDateTime.of(2026, 10, 5, 4, 0, 0, 0, amsterdam).toInstant().toEpochMilli(),
+            bounds.endExclusiveMs,
+        )
+    }
+
+    @Test
+    fun hourBoundsStayOnClockHourRegardlessOfDayReset() {
+        val twoThirty = ZonedDateTime.of(2026, 10, 1, 2, 30, 0, 0, amsterdam)
+            .toInstant()
+            .toEpochMilli()
+        val bounds = TimeBoundaries.hourBounds(twoThirty, amsterdam)
+        assertEquals(
+            ZonedDateTime.of(2026, 10, 1, 2, 0, 0, 0, amsterdam).toInstant().toEpochMilli(),
+            bounds.startMs,
+        )
+        assertEquals(
+            ZonedDateTime.of(2026, 10, 1, 3, 0, 0, 0, amsterdam).toInstant().toEpochMilli(),
+            bounds.endExclusiveMs,
+        )
+    }
+
+    @Test
+    fun iterateHoursInDayFromFourAmCoversUntilNextFourAm() {
+        val reset = 4 * 60
+        val fourAm = ZonedDateTime.of(2026, 10, 1, 4, 0, 0, 0, amsterdam)
+            .toInstant()
+            .toEpochMilli()
+        val hours = TimeBoundaries.iterateHoursInDay(fourAm, amsterdam)
+        assertEquals(24, hours.size)
+        assertEquals(fourAm, hours.first().startMs)
+        assertEquals(
+            ZonedDateTime.of(2026, 10, 2, 4, 0, 0, 0, amsterdam).toInstant().toEpochMilli(),
+            hours.last().endExclusiveMs,
+        )
+    }
 }

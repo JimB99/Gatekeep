@@ -14,22 +14,40 @@ enum class StatsPeriodKind {
 
 object StatsPeriodLogic {
 
-    fun periodStartMs(kind: StatsPeriodKind, anchorMs: Long, zoneId: ZoneId = ZoneId.systemDefault()): Long {
-        val zdt = ZonedDateTime.ofInstant(Instant.ofEpochMilli(anchorMs), zoneId)
+    fun periodStartMs(
+        kind: StatsPeriodKind,
+        anchorMs: Long,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        dayResetMinuteOfDay: Int = 0,
+    ): Long {
+        val date = TimeBoundaries.usageDate(anchorMs, zoneId, dayResetMinuteOfDay)
         return when (kind) {
-            StatsPeriodKind.day -> zdt.toLocalDate().atStartOfDay(zoneId).toInstant().toEpochMilli()
-            StatsPeriodKind.week -> {
-                zdt.with(WeekFields.ISO.dayOfWeek(), 1)
-                    .toLocalDate().atStartOfDay(zoneId).toInstant().toEpochMilli()
-            }
-            StatsPeriodKind.month -> zdt.withDayOfMonth(1).toLocalDate().atStartOfDay(zoneId).toInstant().toEpochMilli()
-            StatsPeriodKind.year -> zdt.withDayOfYear(1).toLocalDate().atStartOfDay(zoneId).toInstant().toEpochMilli()
+            StatsPeriodKind.day -> TimeBoundaries.dayStartEpochMs(anchorMs, zoneId, dayResetMinuteOfDay)
+            StatsPeriodKind.week -> TimeBoundaries.weekBounds(
+                anchorMs,
+                zoneId,
+                WeekFields.ISO,
+                dayResetMinuteOfDay,
+            ).startMs
+            StatsPeriodKind.month -> TimeBoundaries.monthBounds(
+                date.year,
+                date.monthValue,
+                zoneId,
+                dayResetMinuteOfDay,
+            ).startMs
+            StatsPeriodKind.year -> TimeBoundaries.yearBounds(date.year, zoneId, dayResetMinuteOfDay).startMs
         }
     }
 
-    fun canShiftForward(kind: StatsPeriodKind, anchorMs: Long, nowMs: Long, zoneId: ZoneId = ZoneId.systemDefault()): Boolean {
-        val currentStart = periodStartMs(kind, nowMs, zoneId)
-        val displayedStart = periodStartMs(kind, anchorMs, zoneId)
+    fun canShiftForward(
+        kind: StatsPeriodKind,
+        anchorMs: Long,
+        nowMs: Long,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        dayResetMinuteOfDay: Int = 0,
+    ): Boolean {
+        val currentStart = periodStartMs(kind, nowMs, zoneId, dayResetMinuteOfDay)
+        val displayedStart = periodStartMs(kind, anchorMs, zoneId, dayResetMinuteOfDay)
         return displayedStart < currentStart
     }
 
@@ -39,8 +57,9 @@ object StatsPeriodLogic {
         forward: Boolean,
         nowMs: Long,
         zoneId: ZoneId = ZoneId.systemDefault(),
+        dayResetMinuteOfDay: Int = 0,
     ): Long {
-        if (forward && !canShiftForward(kind, anchorMs, nowMs, zoneId)) {
+        if (forward && !canShiftForward(kind, anchorMs, nowMs, zoneId, dayResetMinuteOfDay)) {
             return anchorMs
         }
         val zdt = ZonedDateTime.ofInstant(Instant.ofEpochMilli(anchorMs), zoneId)
@@ -51,7 +70,9 @@ object StatsPeriodLogic {
             StatsPeriodKind.year -> zdt.plusYears(if (forward) 1 else -1)
         }
         val shiftedMs = shifted.toInstant().toEpochMilli()
-        if (forward && periodStartMs(kind, shiftedMs, zoneId) > periodStartMs(kind, nowMs, zoneId)) {
+        if (forward && periodStartMs(kind, shiftedMs, zoneId, dayResetMinuteOfDay) >
+            periodStartMs(kind, nowMs, zoneId, dayResetMinuteOfDay)
+        ) {
             return nowMs
         }
         return shiftedMs

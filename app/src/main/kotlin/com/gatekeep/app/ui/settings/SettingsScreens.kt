@@ -222,7 +222,13 @@ fun SettingsHubScreen(
 
                 subtitle = if (settings.enforcementEnabled) {
 
-                    stringResource(R.string.on)
+                    stringResource(
+                        R.string.day_reset_hub_subtitle,
+                        "%02d:%02d".format(
+                            settings.dayResetMinuteOfDay / 60,
+                            settings.dayResetMinuteOfDay % 60,
+                        ),
+                    )
 
                 } else {
 
@@ -587,6 +593,21 @@ fun EnforcementSettingsScreen(
 
             },
 
+        )
+
+        Text(
+            stringResource(R.string.day_starts_at_help),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        com.gatekeep.app.ui.components.TimeOfDayPicker(
+            stringResource(R.string.day_starts_at),
+            settings.dayResetMinuteOfDay,
+            onTimeChange = { minute ->
+                viewModel.update { s -> s.copy(dayResetMinuteOfDay = minute) }
+            },
+            modifier = Modifier.testTag(com.gatekeep.app.ui.GatekeepTestTags.SETTINGS_DAY_RESET),
         )
 
     }

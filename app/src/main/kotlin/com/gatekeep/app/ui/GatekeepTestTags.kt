@@ -15,6 +15,7 @@ object GatekeepTestTags {
     const val SETTINGS_PERMISSIONS = "settings_permissions"
     const val PERMISSIONS_ROOT = "permissions_root"
     const val SETTINGS_ENFORCEMENT_TOGGLE = "settings_enforcement_toggle"
+    const val SETTINGS_DAY_RESET = "settings_day_reset"
     const val SETTINGS_SESSION_TIMER_TOGGLE = "settings_session_timer_toggle"
     const val SETTINGS_WEEKLY_REPORT_TOGGLE = "settings_weekly_report_toggle"
     const val LANGUAGE_OPTION_PREFIX = "language_option_"

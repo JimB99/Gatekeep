@@ -52,8 +52,14 @@ class UsageRepository(
         )
     }
 
-    suspend fun aggregateAndStore(sessions: List<UsageSessionRecord>) {
-        val aggregates = UsageAggregator.aggregateSessions(sessions)
+    suspend fun aggregateAndStore(
+        sessions: List<UsageSessionRecord>,
+        dayResetMinuteOfDay: Int = com.gatekeep.domain.DayReset.DEFAULT_MINUTE_OF_DAY,
+    ) {
+        val aggregates = UsageAggregator.aggregateSessions(
+            sessions,
+            dayResetMinuteOfDay = dayResetMinuteOfDay,
+        )
         usageAggregateDao.upsertAll(
             aggregates.map {
                 UsageAggregateEntity(

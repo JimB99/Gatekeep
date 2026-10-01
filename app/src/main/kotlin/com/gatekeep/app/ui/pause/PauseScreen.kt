@@ -96,8 +96,9 @@ fun PauseScreen(
 
     val activeAllowPause = resolveScopePause(allowPauses, profileIdsForScope(), now, focusBlock = false)
     val activeFocusPause = resolveScopePause(focusBlocks, profileIdsForScope(), now, focusBlock = true)
-    val activeAllowChoice = resolveActiveDurationChoice(activeAllowPause, now)
-    val activeFocusChoice = resolveActiveDurationChoice(activeFocusPause, now)
+    val dayResetMinuteOfDay = settings.dayResetMinuteOfDay
+    val activeAllowChoice = resolveActiveDurationChoice(activeAllowPause, now, dayResetMinuteOfDay)
+    val activeFocusChoice = resolveActiveDurationChoice(activeFocusPause, now, dayResetMinuteOfDay)
         ?: legacyFocusUntil?.let { DurationChoice.UntilDateTime(it) }
     val activeAllowUntil = activeAllowPause?.untilEpochMs
     val activeFocusUntil = activeFocusPause?.untilEpochMs ?: legacyFocusUntil

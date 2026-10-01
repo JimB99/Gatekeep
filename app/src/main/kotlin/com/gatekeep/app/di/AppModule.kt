@@ -68,8 +68,11 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideUsageStatsCollector(@ApplicationContext context: Context): UsageStatsCollector =
-        UsageStatsCollector(context)
+    fun provideUsageStatsCollector(
+        @ApplicationContext context: Context,
+        settingsRepository: SettingsRepository,
+    ): UsageStatsCollector =
+        UsageStatsCollector(context) { settingsRepository.dayResetMinuteOfDay() }
 
     @Provides
     @Singleton

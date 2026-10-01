@@ -94,6 +94,9 @@
     <string name="enforcement_disabled_body">Keine App-Blockierung, Limits oder Sitzungstimer aktiv. Schalte die Durchsetzung wieder ein, um den Schutz fortzusetzen.</string>
     <string name="enforcement_settings_off_warning">Durchsetzung ist derzeit aus. Gatekeep blockiert keine Apps und zeigt keine Timer, bis du sie wieder einschaltest.</string>
     <string name="enforcement_hub_subtitle_off">Aus — Blockierung und Timer deaktiviert</string>
+    <string name="day_starts_at">Tag beginnt um</string>
+    <string name="day_starts_at_help">Tägliche und wöchentliche Limits, Serien und Statistiken werden zu dieser Uhrzeit zurückgesetzt statt um Mitternacht.</string>
+    <string name="day_reset_hub_subtitle">An · Reset um %1$s</string>
     <string name="turn_on_enforcement">Durchsetzung einschalten</string>
     <string name="last_error_format">Letzter Fehler: %1$s</string>
     <string name="no_recent_enforcement_errors">Keine aktuellen Durchsetzungsfehler</string>

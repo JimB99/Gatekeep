@@ -6,6 +6,7 @@ import com.gatekeep.data.repository.AppSettings
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
+import com.gatekeep.domain.DayReset
 import com.gatekeep.domain.TimeBoundaries
 import com.gatekeep.domain.UsageSessionRecord
 import com.gatekeep.domain.model.AppCategory
@@ -27,6 +28,8 @@ import com.gatekeep.domain.model.ScheduleSegment
 import com.gatekeep.domain.model.ScheduleWindow
 import com.gatekeep.domain.model.SessionState
 import kotlinx.coroutines.flow.first
+import java.time.ZoneId
+import java.time.temporal.WeekFields
 
 object GatekeepTestFixtures {
     const val TEST_PIN = "1234"
@@ -160,6 +163,7 @@ object GatekeepTestFixtures {
                 languageTag = "en-GB",
                 showSessionTimerNotification = true,
                 warningAlertsEnabled = true,
+                dayResetMinuteOfDay = DayReset.DEFAULT_MINUTE_OF_DAY,
             )
         }
     }
@@ -253,9 +257,11 @@ object GatekeepTestFixtures {
         sessionState: SessionState? = null,
     ) {
         val now = System.currentTimeMillis()
-        val dayStart = TimeBoundaries.dayStartEpochMs(now)
+        val zone = ZoneId.systemDefault()
+        val reset = DayReset.DEFAULT_MINUTE_OF_DAY
+        val dayStart = TimeBoundaries.dayStartEpochMs(now, zone, reset)
         val hourStart = TimeBoundaries.hourStartEpochMs(now)
-        val weekStart = TimeBoundaries.weekBounds(now).startMs
+        val weekStart = TimeBoundaries.weekBounds(now, zone, WeekFields.ISO, reset).startMs
 
         if (dailyMs > 0) {
             usageRepository.recordSession(

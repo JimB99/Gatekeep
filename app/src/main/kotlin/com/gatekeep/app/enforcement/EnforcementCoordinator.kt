@@ -28,7 +28,6 @@ import com.gatekeep.domain.PeriodDuration
 import com.gatekeep.domain.ProfileMergeEngine
 import com.gatekeep.domain.RuleEngine
 import com.gatekeep.domain.SessionTracker
-import com.gatekeep.domain.TimeBoundaries
 import com.gatekeep.domain.UsageSnapshotResolver
 import com.gatekeep.domain.model.BlockPresentationReason
 import com.gatekeep.domain.model.OverrideMethod
@@ -667,7 +666,7 @@ class EnforcementCoordinator @Inject constructor(
                 }
                 return false
             }
-            val dayEnd = TimeBoundaries.dayBounds(now).endExclusiveMs
+            val dayEnd = usageStatsCollector.dayBounds(now).endExclusiveMs
             val pausePackageName = if (profile.limitUsageScope == LimitUsageScope.sharedPool) {
                 null
             } else {

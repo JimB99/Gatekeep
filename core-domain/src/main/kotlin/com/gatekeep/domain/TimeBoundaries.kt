@@ -15,8 +15,12 @@ data class TimeRange(
 
 object TimeBoundaries {
 
-    fun dayBounds(anchorMs: Long, zoneId: ZoneId = ZoneId.systemDefault()): TimeRange {
-        val start = dayStartEpochMs(anchorMs, zoneId)
+    fun dayBounds(
+        anchorMs: Long,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        dayResetMinuteOfDay: Int = 0,
+    ): TimeRange {
+        val start = dayStartEpochMs(anchorMs, zoneId, dayResetMinuteOfDay)
         val nextDay = ZonedDateTime.ofInstant(Instant.ofEpochMilli(start), zoneId).plusDays(1)
         return TimeRange(start, nextDay.toInstant().toEpochMilli())
     }
@@ -25,13 +29,12 @@ object TimeBoundaries {
         anchorMs: Long,
         zoneId: ZoneId = ZoneId.systemDefault(),
         weekFields: WeekFields = WeekFields.ISO,
+        dayResetMinuteOfDay: Int = 0,
     ): TimeRange {
-        val zdt = ZonedDateTime.ofInstant(Instant.ofEpochMilli(anchorMs), zoneId)
-        val start = zdt.with(weekFields.dayOfWeek(), 1)
-            .toLocalDate()
-            .atStartOfDay(zoneId)
-            .toInstant()
-            .toEpochMilli()
+        val reset = DayReset.coerce(dayResetMinuteOfDay)
+        val weekStartDate = usageDate(anchorMs, zoneId, reset)
+            .with(weekFields.dayOfWeek(), 1)
+        val start = atResetOnDate(weekStartDate, zoneId, reset)
         val end = ZonedDateTime.ofInstant(Instant.ofEpochMilli(start), zoneId)
             .plusWeeks(1)
             .toInstant()
@@ -39,28 +42,48 @@ object TimeBoundaries {
         return TimeRange(start, end)
     }
 
-    fun monthBounds(year: Int, month: Int, zoneId: ZoneId = ZoneId.systemDefault()): TimeRange {
-        val start = LocalDate.of(year, month, 1).atStartOfDay(zoneId).toInstant().toEpochMilli()
-        val end = LocalDate.of(year, month, 1)
-            .plusMonths(1)
-            .atStartOfDay(zoneId)
-            .toInstant()
-            .toEpochMilli()
+    fun monthBounds(
+        year: Int,
+        month: Int,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        dayResetMinuteOfDay: Int = 0,
+    ): TimeRange {
+        val reset = DayReset.coerce(dayResetMinuteOfDay)
+        val start = atResetOnDate(LocalDate.of(year, month, 1), zoneId, reset)
+        val end = atResetOnDate(LocalDate.of(year, month, 1).plusMonths(1), zoneId, reset)
         return TimeRange(start, end)
     }
 
-    fun yearBounds(year: Int, zoneId: ZoneId = ZoneId.systemDefault()): TimeRange {
-        val start = LocalDate.of(year, 1, 1).atStartOfDay(zoneId).toInstant().toEpochMilli()
-        val end = LocalDate.of(year + 1, 1, 1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+    fun yearBounds(
+        year: Int,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        dayResetMinuteOfDay: Int = 0,
+    ): TimeRange {
+        val reset = DayReset.coerce(dayResetMinuteOfDay)
+        val start = atResetOnDate(LocalDate.of(year, 1, 1), zoneId, reset)
+        val end = atResetOnDate(LocalDate.of(year + 1, 1, 1), zoneId, reset)
         return TimeRange(start, end)
     }
 
-    fun dayStartEpochMs(anchorMs: Long, zoneId: ZoneId = ZoneId.systemDefault()): Long =
-        ZonedDateTime.ofInstant(Instant.ofEpochMilli(anchorMs), zoneId)
+    fun usageDate(
+        anchorMs: Long,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        dayResetMinuteOfDay: Int = 0,
+    ): LocalDate {
+        val reset = DayReset.coerce(dayResetMinuteOfDay)
+        return ZonedDateTime.ofInstant(Instant.ofEpochMilli(anchorMs), zoneId)
+            .minusMinutes(reset.toLong())
             .toLocalDate()
-            .atStartOfDay(zoneId)
-            .toInstant()
-            .toEpochMilli()
+    }
+
+    fun dayStartEpochMs(
+        anchorMs: Long,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        dayResetMinuteOfDay: Int = 0,
+    ): Long {
+        val reset = DayReset.coerce(dayResetMinuteOfDay)
+        return atResetOnDate(usageDate(anchorMs, zoneId, reset), zoneId, reset)
+    }
 
     fun hourStartEpochMs(anchorMs: Long, zoneId: ZoneId = ZoneId.systemDefault()): Long =
         ZonedDateTime.ofInstant(Instant.ofEpochMilli(anchorMs), zoneId)
@@ -79,23 +102,29 @@ object TimeBoundaries {
         return TimeRange(start, end)
     }
 
-    fun dayOffsetsFrom(startDayMs: Long, offset: Int, zoneId: ZoneId = ZoneId.systemDefault()): TimeRange {
-        val startZdt = ZonedDateTime.ofInstant(Instant.ofEpochMilli(startDayMs), zoneId)
-        val dayStart = startZdt.plusDays(offset.toLong())
-            .toLocalDate()
-            .atStartOfDay(zoneId)
+    fun dayOffsetsFrom(
+        startDayMs: Long,
+        offset: Int,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        dayResetMinuteOfDay: Int = 0,
+    ): TimeRange {
+        val shifted = ZonedDateTime.ofInstant(Instant.ofEpochMilli(startDayMs), zoneId)
+            .plusDays(offset.toLong())
             .toInstant()
             .toEpochMilli()
-        val dayEnd = dayStartZdt(dayStart, zoneId).plusDays(1).toInstant().toEpochMilli()
-        return TimeRange(dayStart, dayEnd)
+        return dayBounds(shifted, zoneId, dayResetMinuteOfDay)
     }
 
     fun daysInMonth(year: Int, month: Int): Int =
         LocalDate.of(year, month, 1).lengthOfMonth()
 
-    fun iterateDaysInRange(range: TimeRange, zoneId: ZoneId = ZoneId.systemDefault()): List<TimeRange> {
+    fun iterateDaysInRange(
+        range: TimeRange,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        dayResetMinuteOfDay: Int = 0,
+    ): List<TimeRange> {
         val days = mutableListOf<TimeRange>()
-        var cursor = dayStartEpochMs(range.startMs, zoneId)
+        var cursor = dayStartEpochMs(range.startMs, zoneId, dayResetMinuteOfDay)
         while (cursor < range.endExclusiveMs) {
             val dayEnd = ZonedDateTime.ofInstant(Instant.ofEpochMilli(cursor), zoneId)
                 .plusDays(1)
@@ -128,6 +157,9 @@ object TimeBoundaries {
         return hours
     }
 
-    private fun dayStartZdt(dayStartMs: Long, zoneId: ZoneId): ZonedDateTime =
-        ZonedDateTime.ofInstant(Instant.ofEpochMilli(dayStartMs), zoneId)
+    private fun atResetOnDate(date: LocalDate, zoneId: ZoneId, dayResetMinuteOfDay: Int): Long =
+        date.atStartOfDay(zoneId)
+            .plusMinutes(DayReset.coerce(dayResetMinuteOfDay).toLong())
+            .toInstant()
+            .toEpochMilli()
 }

@@ -878,7 +878,7 @@ class PauseViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.gatekeep.data.repository.AppSettings())
 
     fun dayEndEpochMs(now: Long = System.currentTimeMillis()): Long =
-        TimeBoundaries.dayBounds(now).endExclusiveMs
+        usageStatsCollector.dayBounds(now).endExclusiveMs
 
     fun pauseForTargets(
         type: PauseType,
@@ -1039,6 +1039,7 @@ class SettingsViewModel @Inject constructor(
 class StatsViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
     private val statsRepository: StatsRepository,
+    private val usageStatsCollector: UsageStatsCollector,
 ) : ViewModel() {
 
     val profiles = profileRepository.observeProfiles()
@@ -1083,6 +1084,7 @@ class StatsViewModel @Inject constructor(
                     kind.toPeriodKind(),
                     anchor,
                     System.currentTimeMillis(),
+                    dayResetMinuteOfDay = usageStatsCollector.dayResetMinuteOfDay(),
                 )
                 loadStats(kind, anchor, profileList)
             }
@@ -1105,6 +1107,7 @@ class StatsViewModel @Inject constructor(
             _anchorMs.value,
             forward,
             now,
+            dayResetMinuteOfDay = usageStatsCollector.dayResetMinuteOfDay(),
         )
     }
 
@@ -1170,15 +1173,19 @@ class StatsViewModel @Inject constructor(
 
     private fun buildRange(kind: StatsRangeKind, anchorMs: Long): StatsTimeRange {
         val zone = java.time.ZoneId.systemDefault()
-        val zdt = java.time.ZonedDateTime.ofInstant(java.time.Instant.ofEpochMilli(anchorMs), zone)
+        val reset = usageStatsCollector.dayResetMinuteOfDay()
+        val date = TimeBoundaries.usageDate(anchorMs, zone, reset)
         return when (kind) {
             StatsRangeKind.day -> StatsTimeRange.SingleDay(anchorMs)
-            StatsRangeKind.week -> StatsTimeRange.Week(
-                zdt.get(java.time.temporal.WeekFields.ISO.weekBasedYear()),
-                zdt.get(java.time.temporal.WeekFields.ISO.weekOfWeekBasedYear()),
-            )
-            StatsRangeKind.month -> StatsTimeRange.Month(zdt.year, zdt.monthValue)
-            StatsRangeKind.year -> StatsTimeRange.Year(zdt.year)
+            StatsRangeKind.week -> {
+                val weekFields = java.time.temporal.WeekFields.ISO
+                StatsTimeRange.Week(
+                    date.get(weekFields.weekBasedYear()),
+                    date.get(weekFields.weekOfWeekBasedYear()),
+                )
+            }
+            StatsRangeKind.month -> StatsTimeRange.Month(date.year, date.monthValue)
+            StatsRangeKind.year -> StatsTimeRange.Year(date.year)
         }
     }
 

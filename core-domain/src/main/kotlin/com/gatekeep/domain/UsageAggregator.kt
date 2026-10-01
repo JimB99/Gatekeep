@@ -1,9 +1,7 @@
 package com.gatekeep.domain
 
 import com.gatekeep.domain.model.UsagePeriod
-import java.time.Instant
 import java.time.ZoneId
-import java.time.ZonedDateTime
 import java.time.temporal.WeekFields
 
 data class UsageSessionRecord(
@@ -28,22 +26,25 @@ object UsageAggregator {
     fun aggregateSessions(
         sessions: List<UsageSessionRecord>,
         zoneId: ZoneId = ZoneId.systemDefault(),
+        dayResetMinuteOfDay: Int = 0,
     ): List<UsageAggregate> {
         val dayBuckets = mutableMapOf<Triple<Long, String, Long>, Long>()
         val hourBuckets = mutableMapOf<Triple<Long, String, Long>, Long>()
         val weekBuckets = mutableMapOf<Triple<Long, String, Long>, Long>()
 
         for (session in sessions) {
-            val zdt = ZonedDateTime.ofInstant(Instant.ofEpochMilli(session.startEpochMs), zoneId)
-            val dayStart = zdt.toLocalDate().atStartOfDay(zoneId).toInstant().toEpochMilli()
-            val hourStart = zdt.withMinute(0).withSecond(0).withNano(0).toInstant().toEpochMilli()
-            val weekFields = WeekFields.ISO
-            val weekStart = zdt
-                .with(weekFields.dayOfWeek(), 1)
-                .toLocalDate()
-                .atStartOfDay(zoneId)
-                .toInstant()
-                .toEpochMilli()
+            val dayStart = TimeBoundaries.dayStartEpochMs(
+                session.startEpochMs,
+                zoneId,
+                dayResetMinuteOfDay,
+            )
+            val hourStart = TimeBoundaries.hourStartEpochMs(session.startEpochMs, zoneId)
+            val weekStart = TimeBoundaries.weekBounds(
+                session.startEpochMs,
+                zoneId,
+                WeekFields.ISO,
+                dayResetMinuteOfDay,
+            ).startMs
 
             val dayKey = Triple(session.profileId, session.packageName, dayStart)
             val hourKey = Triple(session.profileId, session.packageName, hourStart)
@@ -54,13 +55,6 @@ object UsageAggregator {
             weekBuckets[weekKey] = (weekBuckets[weekKey] ?: 0) + session.durationMs
         }
 
-        val result = mutableListOf<UsageAggregate>()
-        dayBuckets.forEach { (key, total) ->
-            result.add(UsageAggregate(key.third.let { 0 }.let { _ ->
-                UsageAggregate(key.second, key.first, UsagePeriod.day, key.third, total)
-            }.packageName, key.first, UsagePeriod.day, key.third, total))
-        }
-        // Fix the above - let me simplify
         return buildList {
             dayBuckets.forEach { (key, total) ->
                 add(UsageAggregate(key.second, key.first, UsagePeriod.day, key.third, total))

@@ -44,6 +44,15 @@ class PauseDurationModelsTest {
     }
 
     @Test
+    fun isPauseUntilEndOfDay_matchesCustomDayReset() {
+        val now = 1_700_000_000_000L
+        val reset = 4 * 60
+        val dayEnd = TimeBoundaries.dayBounds(now, dayResetMinuteOfDay = reset).endExclusiveMs
+        assertTrue(isPauseUntilEndOfDay(dayEnd, now, reset))
+        assertFalse(isPauseUntilEndOfDay(TimeBoundaries.dayBounds(now).endExclusiveMs, now, reset))
+    }
+
+    @Test
     fun isAllowPauseDisplayType_excludesPeriodOnlyPauses() {
         assertFalse(isAllowPauseDisplayType(PauseType.noLimitToday))
         assertFalse(isAllowPauseDisplayType(PauseType.extensionGrace))

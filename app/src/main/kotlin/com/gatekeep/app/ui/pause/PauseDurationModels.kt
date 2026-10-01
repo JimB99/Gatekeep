@@ -11,8 +11,12 @@ sealed interface DurationChoice {
     data class UntilDateTime(val untilEpochMs: Long) : DurationChoice
 }
 
-fun isPauseUntilEndOfDay(untilEpochMs: Long, nowEpochMs: Long): Boolean =
-    untilEpochMs == TimeBoundaries.dayBounds(nowEpochMs).endExclusiveMs
+fun isPauseUntilEndOfDay(
+    untilEpochMs: Long,
+    nowEpochMs: Long,
+    dayResetMinuteOfDay: Int = 0,
+): Boolean =
+    untilEpochMs == TimeBoundaries.dayBounds(nowEpochMs, dayResetMinuteOfDay = dayResetMinuteOfDay).endExclusiveMs
 
 fun isAllowPauseDisplayType(type: PauseType): Boolean =
     type != PauseType.noLimitToday && type != PauseType.extensionGrace
@@ -27,14 +31,18 @@ fun DurationChoice.sameKindAs(other: DurationChoice?): Boolean {
     }
 }
 
-fun resolveActiveDurationChoice(pause: Pause?, nowEpochMs: Long): DurationChoice? {
+fun resolveActiveDurationChoice(
+    pause: Pause?,
+    nowEpochMs: Long,
+    dayResetMinuteOfDay: Int = 0,
+): DurationChoice? {
     if (pause == null || pause.untilEpochMs <= nowEpochMs) return null
     return when (pause.type) {
         PauseType.fiveMin -> DurationChoice.PresetMinutes(5)
         PauseType.fifteenMin -> DurationChoice.PresetMinutes(15)
         PauseType.sixtyMin -> DurationChoice.PresetMinutes(60)
         PauseType.untilDatetime -> {
-            if (isPauseUntilEndOfDay(pause.untilEpochMs, nowEpochMs)) {
+            if (isPauseUntilEndOfDay(pause.untilEpochMs, nowEpochMs, dayResetMinuteOfDay)) {
                 DurationChoice.Today
             } else {
                 val remainingMs = pause.untilEpochMs - nowEpochMs

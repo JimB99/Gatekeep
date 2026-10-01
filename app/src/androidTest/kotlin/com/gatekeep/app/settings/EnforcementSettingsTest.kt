@@ -100,4 +100,13 @@ class EnforcementSettingsTest {
         openNotificationSettings()
         composeRule.onNodeWithTag(GatekeepTestTags.SETTINGS_SESSION_TIMER_TOGGLE).assertIsDisplayed()
     }
+
+    @Test
+    fun dayResetSetting_defaultsToFourAmAndIsVisible() {
+        val reset = runBlocking { settingsRepository.settings.first().dayResetMinuteOfDay }
+        assertTrue(reset == 4 * 60)
+        openEnforcementSettings()
+        composeRule.onNodeWithTag(GatekeepTestTags.SETTINGS_DAY_RESET).assertIsDisplayed()
+        composeRule.onNodeWithText("Day starts at", substring = true, ignoreCase = true).assertIsDisplayed()
+    }
 }

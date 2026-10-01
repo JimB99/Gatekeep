@@ -141,8 +141,9 @@ class StatsRepository @Inject constructor(
         if (packages.isEmpty()) return StreakInfo(0, 0, null)
         val now = System.currentTimeMillis()
         val todayStart = usageStatsCollector.dayStartEpochMs(now)
+        val reset = usageStatsCollector.dayResetMinuteOfDay()
         val underBudget = (6 downTo 0).map { daysAgo ->
-            val dayBounds = TimeBoundaries.dayOffsetsFrom(todayStart, -daysAgo, zoneId)
+            val dayBounds = TimeBoundaries.dayOffsetsFrom(todayStart, -daysAgo, zoneId, reset)
             val used = usageStatsCollector.totalUsageForPackages(
                 packages,
                 dayBounds.startMs,
@@ -190,15 +191,17 @@ class StatsRepository @Inject constructor(
 
     private fun buildRangeBounds(range: StatsTimeRange): RangeBounds {
         val now = System.currentTimeMillis()
+        val reset = usageStatsCollector.dayResetMinuteOfDay()
         return when (range) {
             is StatsTimeRange.SingleDay -> {
                 val dayStart = usageStatsCollector.dayStartEpochMs(range.dayEpochMs)
-                val dayBounds = TimeBoundaries.dayBounds(range.dayEpochMs, zoneId)
+                val dayBounds = TimeBoundaries.dayBounds(range.dayEpochMs, zoneId, reset)
                 val nowMs = System.currentTimeMillis()
-                val buckets = TimeBoundaries.iterateHoursInDay(dayStart, zoneId).mapIndexed { hour, slot ->
+                val buckets = TimeBoundaries.iterateHoursInDay(dayStart, zoneId).map { slot ->
                     val effectiveEnd = if (slot.startMs < nowMs) minOf(slot.endExclusiveMs, nowMs) else slot.startMs
+                    val clockHour = ZonedDateTime.ofInstant(Instant.ofEpochMilli(slot.startMs), zoneId).hour
                     ChartBucket(
-                        label = "%02d".format(hour),
+                        label = "%02d".format(clockHour),
                         usageMs = 0L,
                         startMs = slot.startMs,
                         endMs = effectiveEnd.coerceAtLeast(slot.startMs),
@@ -211,12 +214,13 @@ class StatsRepository @Inject constructor(
                 val startDate = LocalDate.of(range.year, 1, 1)
                     .with(weekFields.weekOfWeekBasedYear(), range.weekOfYear.toLong())
                     .with(weekFields.dayOfWeek(), 1)
-                val anchorMs = startDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
-                val weekBounds = TimeBoundaries.weekBounds(anchorMs, zoneId, weekFields)
+                val noonMs = startDate.atTime(12, 0).atZone(zoneId).toInstant().toEpochMilli()
+                val weekBounds = TimeBoundaries.weekBounds(noonMs, zoneId, weekFields, reset)
                 val end = minOf(weekBounds.endExclusiveMs, now)
                 val buckets = TimeBoundaries.iterateDaysInRange(
                     TimeRange(weekBounds.startMs, end),
                     zoneId,
+                    reset,
                 ).map { day ->
                     val zdt = ZonedDateTime.ofInstant(Instant.ofEpochMilli(day.startMs), zoneId)
                     val dayName = zdt.dayOfWeek.getDisplayName(TextStyle.SHORT, appLocale)
@@ -232,11 +236,12 @@ class StatsRepository @Inject constructor(
                 RangeBounds(weekBounds.startMs, end, buckets)
             }
             is StatsTimeRange.Month -> {
-                val monthBounds = TimeBoundaries.monthBounds(range.year, range.month, zoneId)
+                val monthBounds = TimeBoundaries.monthBounds(range.year, range.month, zoneId, reset)
                 val end = minOf(monthBounds.endExclusiveMs, now)
                 val buckets = TimeBoundaries.iterateDaysInRange(
                     TimeRange(monthBounds.startMs, end),
                     zoneId,
+                    reset,
                 ).map { day ->
                     val dayNum = ZonedDateTime.ofInstant(Instant.ofEpochMilli(day.startMs), zoneId).dayOfMonth
                     ChartBucket("$dayNum", 0L, day.startMs, day.endExclusiveMs)
@@ -267,13 +272,13 @@ class StatsRepository @Inject constructor(
         val localized = context.withAppLocale()
         return when (range) {
             is StatsTimeRange.SingleDay -> {
-                val zdt = ZonedDateTime.ofInstant(Instant.ofEpochMilli(range.dayEpochMs), zoneId)
-                val today = ZonedDateTime.now(zoneId).toLocalDate()
-                val date = zdt.toLocalDate()
-                if (date == today) {
+                val reset = usageStatsCollector.dayResetMinuteOfDay()
+                val todayStart = TimeBoundaries.dayStartEpochMs(System.currentTimeMillis(), zoneId, reset)
+                val rangeStart = TimeBoundaries.dayStartEpochMs(range.dayEpochMs, zoneId, reset)
+                if (todayStart == rangeStart) {
                     localized.getString(R.string.stats_period_today)
                 } else {
-                    date.format(
+                    TimeBoundaries.usageDate(range.dayEpochMs, zoneId, reset).format(
                         java.time.format.DateTimeFormatter
                             .ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
                             .withLocale(appLocale),

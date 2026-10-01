@@ -3,6 +3,8 @@ package com.gatekeep.domain
 import com.gatekeep.domain.model.UsagePeriod
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
 class UsageAggregatorSyncTest {
 
@@ -19,5 +21,24 @@ class UsageAggregatorSyncTest {
             .first { it.period == UsagePeriod.day }
             .totalMs
         assertEquals(42 * 60_000L, dailyTotal)
+    }
+
+    @Test
+    fun `aggregateSessions buckets pre-dawn usage into previous usage day`() {
+        val zone = ZoneId.of("Europe/Amsterdam")
+        val reset = 4 * 60
+        val twoAm = ZonedDateTime.of(2026, 10, 1, 2, 0, 0, 0, zone)
+        val sessionStart = twoAm.toInstant().toEpochMilli()
+        val sessionEnd = twoAm.plusMinutes(10).toInstant().toEpochMilli()
+        val daily = UsageAggregator.aggregateSessions(
+            listOf(UsageSessionRecord("com.example", 1L, sessionStart, sessionEnd)),
+            zone,
+            reset,
+        ).first { it.period == UsagePeriod.day }
+        assertEquals(
+            ZonedDateTime.of(2026, 9, 30, 4, 0, 0, 0, zone).toInstant().toEpochMilli(),
+            daily.periodStartEpochMs,
+        )
+        assertEquals(10 * 60_000L, daily.totalMs)
     }
 }

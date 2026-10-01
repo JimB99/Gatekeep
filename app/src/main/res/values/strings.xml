@@ -100,6 +100,9 @@
     <string name="enforcement_disabled_body">No app blocking, limits, or session timers are running. Turn enforcement back on to resume protection.</string>
     <string name="enforcement_settings_off_warning">Enforcement is currently off. Gatekeep will not block apps or show timers until you turn it back on.</string>
     <string name="enforcement_hub_subtitle_off">Off — blocking and timers disabled</string>
+    <string name="day_starts_at">Day starts at</string>
+    <string name="day_starts_at_help">Daily and weekly limits, streaks, and statistics reset at this time instead of midnight.</string>
+    <string name="day_reset_hub_subtitle">On · resets at %1$s</string>
     <string name="turn_on_enforcement">Turn on enforcement</string>
     <string name="last_error_format">Last error: %1$s</string>
     <string name="no_recent_enforcement_errors">No recent enforcement errors</string>

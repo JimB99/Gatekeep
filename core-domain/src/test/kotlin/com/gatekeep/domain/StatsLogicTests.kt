@@ -105,4 +105,33 @@ class StatsPeriodLogicTest {
         )
         assertEquals(now, shifted)
     }
+
+    @Test
+    fun periodStartUsesDayResetForEarlyMorning() {
+        val reset = 4 * 60
+        val twoAm = ZonedDateTime.of(2026, 10, 1, 2, 0, 0, 0, zone).toInstant().toEpochMilli()
+        val start = StatsPeriodLogic.periodStartMs(StatsPeriodKind.day, twoAm, zone, reset)
+        assertEquals(
+            ZonedDateTime.of(2026, 9, 30, 4, 0, 0, 0, zone).toInstant().toEpochMilli(),
+            start,
+        )
+    }
+
+    @Test
+    fun monthPeriodBeforeResetIsPreviousMonth() {
+        val reset = 4 * 60
+        val oct1TwoAm = ZonedDateTime.of(2026, 10, 1, 2, 0, 0, 0, zone).toInstant().toEpochMilli()
+        val start = StatsPeriodLogic.periodStartMs(StatsPeriodKind.month, oct1TwoAm, zone, reset)
+        assertEquals(
+            ZonedDateTime.of(2026, 9, 1, 4, 0, 0, 0, zone).toInstant().toEpochMilli(),
+            start,
+        )
+    }
+
+    @Test
+    fun cannotShiftForwardFromCurrentUsageDayBeforeReset() {
+        val reset = 4 * 60
+        val twoAm = ZonedDateTime.of(2026, 10, 1, 2, 0, 0, 0, zone).toInstant().toEpochMilli()
+        assertFalse(StatsPeriodLogic.canShiftForward(StatsPeriodKind.day, twoAm, twoAm, zone, reset))
+    }
 }

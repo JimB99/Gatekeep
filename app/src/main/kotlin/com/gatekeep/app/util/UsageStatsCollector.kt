@@ -1,21 +1,20 @@
 package com.gatekeep.app.util
 
 import android.app.usage.UsageEvents
-import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import com.gatekeep.domain.DayReset
 import com.gatekeep.domain.TimeBoundaries
+import com.gatekeep.domain.TimeRange
 import com.gatekeep.domain.UsageBucketAggregator
 import com.gatekeep.domain.model.UsageSnapshot
-import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.TextStyle
 import java.time.temporal.WeekFields
-import java.util.Locale
 
-class UsageStatsCollector(private val context: Context) {
+class UsageStatsCollector(
+    private val context: Context,
+    private val dayResetMinute: () -> Int = { DayReset.DEFAULT_MINUTE_OF_DAY },
+) {
 
     private var cachedRangeStartMs: Long? = null
     private var cachedRangeEndMs: Long? = null
@@ -194,8 +193,13 @@ class UsageStatsCollector(private val context: Context) {
     fun totalUsageForPackages(packageNames: Set<String>, startMs: Long, endMs: Long): Long =
         foregroundMsInRange(startMs, endMs, packageNames)
 
+    fun dayResetMinuteOfDay(): Int = DayReset.coerce(dayResetMinute())
+
+    fun dayBounds(nowMs: Long = System.currentTimeMillis(), zoneId: ZoneId = ZoneId.systemDefault()): TimeRange =
+        TimeBoundaries.dayBounds(nowMs, zoneId, dayResetMinuteOfDay())
+
     fun dayStartEpochMs(nowMs: Long = System.currentTimeMillis(), zoneId: ZoneId = ZoneId.systemDefault()): Long =
-        TimeBoundaries.dayStartEpochMs(nowMs, zoneId)
+        TimeBoundaries.dayStartEpochMs(nowMs, zoneId, dayResetMinuteOfDay())
 
     fun hourStartEpochMs(nowMs: Long = System.currentTimeMillis(), zoneId: ZoneId = ZoneId.systemDefault()): Long =
         TimeBoundaries.hourStartEpochMs(nowMs, zoneId)
@@ -204,13 +208,13 @@ class UsageStatsCollector(private val context: Context) {
         nowMs: Long = System.currentTimeMillis(),
         zoneId: ZoneId = ZoneId.systemDefault(),
         weekFields: WeekFields = WeekFields.ISO,
-    ): Long = TimeBoundaries.weekBounds(nowMs, zoneId, weekFields).startMs
+    ): Long = TimeBoundaries.weekBounds(nowMs, zoneId, weekFields, dayResetMinuteOfDay()).startMs
 
     fun monthStartEpochMs(year: Int, month: Int, zoneId: ZoneId = ZoneId.systemDefault()): Long =
-        TimeBoundaries.monthBounds(year, month, zoneId).startMs
+        TimeBoundaries.monthBounds(year, month, zoneId, dayResetMinuteOfDay()).startMs
 
     fun yearStartEpochMs(year: Int, zoneId: ZoneId = ZoneId.systemDefault()): Long =
-        TimeBoundaries.yearBounds(year, zoneId).startMs
+        TimeBoundaries.yearBounds(year, zoneId, dayResetMinuteOfDay()).startMs
 
     private fun isExcludedPackage(packageName: String): Boolean =
         packageName == context.packageName ||

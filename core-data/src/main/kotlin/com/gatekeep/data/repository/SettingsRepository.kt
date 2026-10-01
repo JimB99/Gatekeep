@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.gatekeep.data.locale.LocalePreferences
+import com.gatekeep.domain.DayReset
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -39,6 +40,8 @@ data class AppSettings(
     val languageTag: String = "en-GB",
     /** User previously enabled the foreground-monitor accessibility service. */
     val accessibilityOptedIn: Boolean = false,
+    /** Minute of day when daily/weekly limits and stats reset. Default 04:00. */
+    val dayResetMinuteOfDay: Int = DayReset.DEFAULT_MINUTE_OF_DAY,
 ) {
     fun hasAppPin(): Boolean = !appPasswordHash.isNullOrBlank()
 }
@@ -65,7 +68,13 @@ class SettingsRepository(private val context: Context) {
         val WEEKLY_REPORT_MINUTE = intPreferencesKey("weekly_report_minute")
         val LANGUAGE = stringPreferencesKey("language_tag")
         val ACCESSIBILITY_OPTED_IN = booleanPreferencesKey("accessibility_opted_in")
+        val DAY_RESET = intPreferencesKey("day_reset_minute_of_day")
     }
+
+    @Volatile
+    private var cachedDayResetMinuteOfDay: Int = DayReset.DEFAULT_MINUTE_OF_DAY
+
+    fun dayResetMinuteOfDay(): Int = cachedDayResetMinuteOfDay
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs -> readSettings(prefs) }
 
@@ -118,7 +127,10 @@ class SettingsRepository(private val context: Context) {
         languageTag = prefs[Keys.LANGUAGE]?.takeIf { it in LocalePreferences.SUPPORTED_TAGS }
             ?: LocalePreferences.read(context),
         accessibilityOptedIn = prefs[Keys.ACCESSIBILITY_OPTED_IN] ?: false,
-    )
+        dayResetMinuteOfDay = DayReset.coerce(
+            prefs[Keys.DAY_RESET] ?: DayReset.DEFAULT_MINUTE_OF_DAY,
+        ),
+    ).also { cachedDayResetMinuteOfDay = it.dayResetMinuteOfDay }
 
     private fun writeSettings(prefs: MutablePreferences, updated: AppSettings) {
         prefs[Keys.ONBOARDING] = updated.onboardingComplete
@@ -146,5 +158,8 @@ class SettingsRepository(private val context: Context) {
         prefs[Keys.LANGUAGE] = languageTag
         LocalePreferences.write(context, languageTag)
         prefs[Keys.ACCESSIBILITY_OPTED_IN] = updated.accessibilityOptedIn
+        val dayReset = DayReset.coerce(updated.dayResetMinuteOfDay)
+        prefs[Keys.DAY_RESET] = dayReset
+        cachedDayResetMinuteOfDay = dayReset
     }
 }

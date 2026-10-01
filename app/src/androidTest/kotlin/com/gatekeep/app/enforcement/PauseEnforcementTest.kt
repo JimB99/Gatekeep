@@ -75,7 +75,10 @@ class PauseEnforcementTest : EnforcementCrossAppTestBase() {
                     sessionLimitMs = null,
                 ),
             )
-            val dayEnd = com.gatekeep.domain.TimeBoundaries.dayBounds(System.currentTimeMillis()).endExclusiveMs
+            val dayEnd = com.gatekeep.domain.TimeBoundaries.dayBounds(
+                System.currentTimeMillis(),
+                dayResetMinuteOfDay = com.gatekeep.domain.DayReset.DEFAULT_MINUTE_OF_DAY,
+            ).endExclusiveMs
             GatekeepTestFixtures.seedPause(
                 usageRepository,
                 PauseType.untilDatetime,
@@ -98,7 +101,10 @@ class PauseEnforcementTest : EnforcementCrossAppTestBase() {
                     onLimitAction = OnLimitAction.hardBlock,
                 ),
             )
-            val dayEnd = com.gatekeep.domain.TimeBoundaries.dayBounds(System.currentTimeMillis()).endExclusiveMs
+            val dayEnd = com.gatekeep.domain.TimeBoundaries.dayBounds(
+                System.currentTimeMillis(),
+                dayResetMinuteOfDay = com.gatekeep.domain.DayReset.DEFAULT_MINUTE_OF_DAY,
+            ).endExclusiveMs
             GatekeepTestFixtures.seedPause(
                 usageRepository, PauseType.untilDatetime, seeded.profileId, packageName = null,
                 untilMs = dayEnd,
