@@ -2,6 +2,7 @@ package com.gatekeep.app.enforcement
 
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityWindowInfo
 import com.gatekeep.app.util.EnforcementLog
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -17,12 +18,16 @@ class ForegroundMonitorAccessibilityService : AccessibilityService() {
         val eventType = event.eventType
         val packageName = event.packageName?.toString()
         val className = event.className?.toString()
-        // Keep the accessibility thread light; coordinator work runs asynchronously.
         try {
             when (eventType) {
                 AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                    if (packageName == null) return
-                    coordinator.onForegroundAppChanged(packageName, className)
+                    if (packageName != null) {
+                        coordinator.onForegroundAppChanged(packageName, className)
+                    }
+                    val snapshots = overlayWindowSnapshots()
+                    if (snapshots.isNotEmpty()) {
+                        coordinator.onTopWindowChanged(snapshots)
+                    }
                 }
                 AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
                     coordinator.onWindowsLayoutChanged()
@@ -30,6 +35,23 @@ class ForegroundMonitorAccessibilityService : AccessibilityService() {
             }
         } catch (e: Exception) {
             enforcementLog.logError("Accessibility event failed", e)
+        }
+    }
+
+    fun overlayWindowSnapshots(): List<OverlayWindowSnapshot> {
+        return try {
+            (windows ?: emptyList()).mapNotNull { window ->
+                val root = runCatching { window.root }.getOrNull()
+                val pkg = root?.packageName?.toString() ?: return@mapNotNull null
+                OverlayWindowSnapshot(
+                    packageName = pkg,
+                    className = root.className?.toString(),
+                    isOverlay = window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY,
+                )
+            }
+        } catch (e: Exception) {
+            enforcementLog.logError("Read accessibility windows failed", e)
+            emptyList()
         }
     }
 

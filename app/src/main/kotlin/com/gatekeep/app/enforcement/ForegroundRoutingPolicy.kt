@@ -2,7 +2,8 @@ package com.gatekeep.app.enforcement
 
 /**
  * Routes accessibility foreground events during enforcement.
- * Home/recents hide immediately; shade uses a short UsageStats confirm.
+ * Transient System UI (volume, etc.) is ignored; recents/home hide immediately;
+ * shade/unknown system UI uses a short UsageStats confirm.
  */
 object ForegroundRoutingPolicy {
 
@@ -17,68 +18,77 @@ object ForegroundRoutingPolicy {
         data class Restore(val packageName: String) : Route
     }
 
-    fun isRecentsWindow(className: String?): Boolean {
-        val name = className ?: return false
-        return name.contains("recents", ignoreCase = true) ||
-            name.contains("overview", ignoreCase = true)
-    }
-
-    fun isShadeWindow(className: String?): Boolean {
-        val name = className ?: return false
-        return name.contains("shade", ignoreCase = true) ||
-            name.contains("StatusBar", ignoreCase = true) ||
-            name.contains("Notification", ignoreCase = true)
-    }
-
     fun decide(
         incomingPackage: String,
         currentForegroundPackage: String?,
         blockedPackage: String?,
         blockingActive: Boolean,
-        isNoiseDestination: Boolean,
         blockEnteredAtMs: Long,
         nowMs: Long,
         presentation: BlockPresentation = BlockPresentation.None,
-        windowClassName: String? = null,
+        kind: OverlayWindowKind,
     ): Route {
-        if (blockingActive &&
-            presentation is BlockPresentation.HiddenForOtherApp &&
-            blockedPackage != null &&
-            incomingPackage == blockedPackage
-        ) {
-            return Route.Restore(incomingPackage)
-        }
-        if (currentForegroundPackage != null && incomingPackage == currentForegroundPackage) {
-            return Route.Ignore
-        }
-        if (isNoiseDestination) {
-            if (!blockingActive) {
+        if (!blockingActive) {
+            if (currentForegroundPackage != null && incomingPackage == currentForegroundPackage) {
                 return Route.Ignore
             }
-            if (blockedPackage != null &&
-                nowMs - blockEnteredAtMs < BLOCK_STABILIZATION_MS
+            return when (kind) {
+                OverlayWindowKind.TransientSystemUi,
+                OverlayWindowKind.Shade,
+                OverlayWindowKind.Recents,
+                OverlayWindowKind.Launcher,
+                OverlayWindowKind.Unknown,
+                -> Route.Ignore
+                OverlayWindowKind.BlockedApp,
+                OverlayWindowKind.OtherApp,
+                OverlayWindowKind.IncomingCall,
+                -> Route.Commit(incomingPackage, ForegroundStabilizationPolicy.DEBOUNCE_MS)
+            }
+        }
+
+        if (presentation is BlockPresentation.HiddenForOtherApp && blockedPackage != null) {
+            if (kind == OverlayWindowKind.Recents ||
+                kind == OverlayWindowKind.Launcher ||
+                kind == OverlayWindowKind.OtherApp ||
+                kind == OverlayWindowKind.IncomingCall
             ) {
                 return Route.Ignore
             }
-            if (presentation is BlockPresentation.Visible) {
-                if (isShadeWindow(windowClassName) && !isRecentsWindow(windowClassName)) {
-                    return Route.ConfirmExit(incomingPackage, SHADE_CONFIRM_HOLD_MS)
-                }
-                return Route.HideNow(incomingPackage)
+            if (kind == OverlayWindowKind.BlockedApp || incomingPackage == blockedPackage) {
+                return Route.Restore(blockedPackage)
             }
             return Route.Ignore
         }
-        if (blockingActive &&
-            blockedPackage != null &&
-            incomingPackage != blockedPackage &&
-            nowMs - blockEnteredAtMs < BLOCK_STABILIZATION_MS
+
+        if (currentForegroundPackage != null && incomingPackage == currentForegroundPackage) {
+            return Route.Ignore
+        }
+
+        if (blockedPackage != null &&
+            nowMs - blockEnteredAtMs < BLOCK_STABILIZATION_MS &&
+            kind != OverlayWindowKind.OtherApp &&
+            kind != OverlayWindowKind.IncomingCall &&
+            kind != OverlayWindowKind.BlockedApp
         ) {
             return Route.Ignore
         }
-        return Route.Commit(
-            incomingPackage,
-            ForegroundStabilizationPolicy.DEBOUNCE_MS,
-        )
+
+        if (presentation is BlockPresentation.Visible) {
+            return when (kind) {
+                OverlayWindowKind.TransientSystemUi -> Route.Ignore
+                OverlayWindowKind.Recents,
+                OverlayWindowKind.Launcher,
+                OverlayWindowKind.OtherApp,
+                OverlayWindowKind.IncomingCall,
+                -> Route.HideNow(incomingPackage)
+                OverlayWindowKind.Shade,
+                OverlayWindowKind.Unknown,
+                -> Route.ConfirmExit(incomingPackage, SHADE_CONFIRM_HOLD_MS)
+                OverlayWindowKind.BlockedApp -> Route.Ignore
+            }
+        }
+
+        return Route.Commit(incomingPackage, ForegroundStabilizationPolicy.DEBOUNCE_MS)
     }
 
     /** At commit time, only a real resume away from the blocked app counts as leaving. */

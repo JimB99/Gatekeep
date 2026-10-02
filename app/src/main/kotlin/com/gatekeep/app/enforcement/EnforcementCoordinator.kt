@@ -209,9 +209,10 @@ class EnforcementCoordinator @Inject constructor(
             return
         }
 
-        val isNoise = ForegroundStabilizationPolicy.isNoiseDestination(
+        val kind = OverlayWindowClassifier.classify(
             packageName,
-            ignoredForegroundPackages,
+            windowClassName,
+            blockedPackage,
         )
         when (
             val route = ForegroundRoutingPolicy.decide(
@@ -219,11 +220,10 @@ class EnforcementCoordinator @Inject constructor(
                 currentForegroundPackage = currentForegroundPackage,
                 blockedPackage = blockedPackage,
                 blockingActive = isBlockingActive,
-                isNoiseDestination = isNoise,
                 blockEnteredAtMs = blockEnteredAtMs,
                 nowMs = System.currentTimeMillis(),
                 presentation = blockPresentationState.presentation,
-                windowClassName = windowClassName,
+                kind = kind,
             )
         ) {
             ForegroundRoutingPolicy.Route.Ignore -> return
@@ -250,7 +250,21 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     fun onWindowsLayoutChanged() {
+        val snapshots = ForegroundMonitorAccessibilityService.instance?.overlayWindowSnapshots()
+        if (!snapshots.isNullOrEmpty()) {
+            onTopWindowChanged(snapshots)
+            return
+        }
         reconcileForegroundFromUsageStats()
+    }
+
+    fun onTopWindowChanged(windows: List<OverlayWindowSnapshot>) {
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(
+            windows = windows,
+            blockedPackage = blockedPackage,
+            overlayOwnerPackage = context.packageName,
+        ) ?: return
+        onForegroundAppChanged(top.packageName, top.className)
     }
 
     private fun restoreOverlayForPackage(packageName: String) {
@@ -1639,9 +1653,21 @@ class EnforcementCoordinator @Inject constructor(
         )
 
     private fun pollForegroundIfChanged() {
+        val snapshots = ForegroundMonitorAccessibilityService.instance?.overlayWindowSnapshots()
+        if (!snapshots.isNullOrEmpty()) {
+            onTopWindowChanged(snapshots)
+            return
+        }
         val pkg = usageStatsCollector.getForegroundPackageFallback() ?: return
         val className = usageStatsCollector.getForegroundActivityClassFallback()
         val blocked = blockedPackage
+        if (blockPresentationState.presentation is BlockPresentation.HiddenForOtherApp &&
+            blocked != null &&
+            pkg == blocked
+        ) {
+            restoreOverlayForPackage(blocked)
+            return
+        }
         if (blocked != null) {
             if (!ForegroundRoutingPolicy.confirmsExit(pkg, blocked)) return
         } else if (isBlockingActive) {
@@ -1660,10 +1686,6 @@ class EnforcementCoordinator @Inject constructor(
             className?.startsWith("com.gatekeep.app.testsupport.EnforcementTarget") == true
 
     private fun reconcileForegroundFromUsageStats() {
-        val pkg = usageStatsCollector.getForegroundPackageFallback() ?: return
-        val blocked = blockedPackage
-        if (blocked != null && !ForegroundRoutingPolicy.confirmsExit(pkg, blocked)) return
-        if (blocked == null && isBlockingActive) return
         pollForegroundIfChanged()
     }
 
