@@ -23,10 +23,11 @@ class ForegroundMonitorAccessibilityService : AccessibilityService() {
                 AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                     if (packageName != null) {
                         coordinator.onForegroundAppChanged(packageName, className)
-                    }
-                    val snapshots = overlayWindowSnapshots()
-                    if (snapshots.isNotEmpty()) {
-                        coordinator.onTopWindowChanged(snapshots)
+                    } else {
+                        val snapshots = overlayWindowSnapshots()
+                        if (snapshots.isNotEmpty()) {
+                            coordinator.onTopWindowChanged(snapshots)
+                        }
                     }
                 }
                 AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
@@ -47,6 +48,9 @@ class ForegroundMonitorAccessibilityService : AccessibilityService() {
                     packageName = pkg,
                     className = root.className?.toString(),
                     isOverlay = window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY,
+                    isFocused = window.isFocused,
+                    isActive = window.isActive,
+                    windowType = window.type,
                 )
             }
         } catch (e: Exception) {

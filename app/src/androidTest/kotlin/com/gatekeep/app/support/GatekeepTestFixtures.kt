@@ -42,6 +42,7 @@ object GatekeepTestFixtures {
         const val WEEKLY_LIMIT_MS = 70_000L
         const val SESSION_LIMIT_MS = 3_000L
         const val SESSION_OVER_CAP_MS = SESSION_LIMIT_MS + 500L
+        const val SESSION_CONTINUE_GAP_MS = 50L
         const val BREAK_MS = 1_500L
         const val LIMIT_BREAK_MS = 1_500L
         const val OPEN_WAIT_SEC = 1
@@ -77,7 +78,7 @@ object GatekeepTestFixtures {
         val dailyLimitMs: Long? = TestDurations.DAILY_LIMIT_MS,
         val hourlyLimitMs: Long? = null,
         val weeklyLimitMs: Long? = null,
-        val sessionLimitMs: Long? = TestDurations.SESSION_LIMIT_MS,
+        val sessionLimitMs: Long? = 20 * 60_000L,
         val onOpenAction: OnOpenAction = OnOpenAction.none,
         val onLimitAction: OnLimitAction = OnLimitAction.hardBlock,
         val onSessionLimitAction: OnSessionLimitAction = OnSessionLimitAction.hardBlock,
@@ -369,6 +370,26 @@ object GatekeepTestFixtures {
         onboardingComplete = true,
         appLockEnabled = true,
         appPasswordHash = null,
+    )
+
+    fun continuedSession(
+        packageName: String,
+        startedAgoMs: Long,
+        nowMs: Long = System.currentTimeMillis(),
+    ): SessionState = SessionState(
+        packageName = packageName,
+        sessionStartEpochMs = nowMs - startedAgoMs,
+        lastForegroundEndEpochMs = nowMs - TestDurations.SESSION_CONTINUE_GAP_MS,
+    )
+
+    fun staleOvernightSession(
+        packageName: String,
+        startedAgoMs: Long,
+        nowMs: Long = System.currentTimeMillis(),
+    ): SessionState = SessionState(
+        packageName = packageName,
+        sessionStartEpochMs = nowMs - startedAgoMs,
+        lastForegroundEndEpochMs = null,
     )
 
     private fun UsageSessionEntity.toRecord() = UsageSessionRecord(

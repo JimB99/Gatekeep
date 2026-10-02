@@ -298,6 +298,53 @@ class EnforcementTestHarness(
         onNavigatedAway?.invoke()
     }
 
+    fun resumeFromRecents() {
+        uiDevice.pressRecentApps()
+        Thread.sleep(TARGET_LAUNCH_SETTLE_MS)
+        onNavigatedAway?.invoke()
+        Thread.sleep(400)
+        clickRecentsTaskCard()
+        Thread.sleep(TARGET_LAUNCH_SETTLE_MS)
+        if (isRecentsOrLauncherForeground()) {
+            shell("am start -n ${EnforcementTestPackages.TARGET_A_COMPONENT}")
+            uiDevice.wait(
+                Until.hasObject(By.pkg(EnforcementTestPackages.TARGET_A)),
+                3_000,
+            )
+        }
+        Thread.sleep(TARGET_LAUNCH_SETTLE_MS)
+        onTargetLaunched?.invoke(
+            EnforcementTestPackages.TARGET_A,
+            "com.gatekeep.app.testsupport.EnforcementTargetActivity",
+        )
+    }
+
+    private fun clickRecentsTaskCard(): Boolean {
+        val selectors = listOf(
+            By.text(EnforcementTestPackages.TARGET_A_LABEL),
+            By.textContains("Gatekeep"),
+            By.descContains("Gatekeep"),
+            By.clazz("com.android.quickstep.views.TaskView"),
+            By.res("com.android.launcher3", "snapshot"),
+            By.res("com.google.android.apps.nexuslauncher", "snapshot"),
+        )
+        for (selector in selectors) {
+            val node = uiDevice.findObject(selector) ?: continue
+            node.click()
+            return true
+        }
+        uiDevice.click(uiDevice.displayWidth / 2, (uiDevice.displayHeight * 0.4).toInt())
+        return true
+    }
+
+    private fun isRecentsOrLauncherForeground(): Boolean {
+        val pkg = uiDevice.currentPackageName ?: return true
+        return pkg == "com.android.systemui" ||
+            pkg == "com.android.launcher" ||
+            pkg == "com.android.launcher3" ||
+            pkg == "com.google.android.apps.nexuslauncher"
+    }
+
     /** Reset platform usage counters so prior test runs do not inflate merged usage snapshots. */
     fun resetTestTargetUsageStats() {
         shell("cmd usagestats reset")
@@ -335,6 +382,99 @@ class EnforcementTestHarness(
             }
         }
         return null
+    }
+
+    /** Launches and navigation are observed from the device, not injected into the coordinator. */
+    fun useRealForegroundDetection() {
+        onTargetLaunched = null
+        onNavigatedAway = null
+    }
+
+    fun countdownText(): String? {
+        repeat(3) {
+            try {
+                return uiDevice.findObject(By.res(packageName, "wait_countdown"))?.text
+            } catch (_: StaleObjectException) {
+                Thread.sleep(POLL_INTERVAL_MS)
+            }
+        }
+        return null
+    }
+
+    fun countdownSeconds(): Int? =
+        countdownText()?.filter(Char::isDigit)?.toIntOrNull()
+
+    fun waitForCountdown(timeoutMs: Long = DEFAULT_OVERLAY_TIMEOUT_MS): Int? {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            countdownSeconds()?.let { return it }
+            Thread.sleep(POLL_INTERVAL_MS)
+        }
+        return null
+    }
+
+    fun waitForOverlayElapsedMs(timeoutMs: Long = DEFAULT_OVERLAY_TIMEOUT_MS): Long? {
+        val start = System.currentTimeMillis()
+        if (!waitForOverlay(timeoutMs)) return null
+        return System.currentTimeMillis() - start
+    }
+
+    fun sleepDevice() {
+        uiDevice.sleep()
+        val deadline = System.currentTimeMillis() + 2_000
+        while (System.currentTimeMillis() < deadline && uiDevice.isScreenOn) {
+            Thread.sleep(POLL_INTERVAL_MS)
+        }
+    }
+
+    /** Sleeps the device and returns the last readable overlay countdown, if any. */
+    fun sleepDeviceCapturingCountdown(): Int? {
+        var last = countdownSeconds()
+        uiDevice.sleep()
+        val deadline = System.currentTimeMillis() + 2_000
+        while (System.currentTimeMillis() < deadline && uiDevice.isScreenOn) {
+            countdownSeconds()?.let { last = it }
+            Thread.sleep(POLL_INTERVAL_MS)
+        }
+        countdownSeconds()?.let { last = it }
+        return last
+    }
+
+    /** @return true when the screen is off. */
+    fun sleepAndConfirmOff(): Boolean {
+        sleepDevice()
+        return !uiDevice.isScreenOn
+    }
+
+    fun isScreenOn(): Boolean = uiDevice.isScreenOn
+
+    fun wakeDevice() {
+        runCatching { uiDevice.wakeUp() }
+        shell("wm dismiss-keyguard")
+        val deadline = System.currentTimeMillis() + 2_000
+        while (System.currentTimeMillis() < deadline && !uiDevice.isScreenOn) {
+            Thread.sleep(POLL_INTERVAL_MS)
+        }
+    }
+
+    fun clearLogcat() {
+        shell("logcat -c")
+    }
+
+    fun gatekeepFatalCrash(): String? {
+        val log = shell("logcat -d -s AndroidRuntime:E")
+        if (!log.contains("FATAL EXCEPTION") || !log.contains(packageName)) return null
+        return log.lineSequence().take(30).joinToString("\n")
+    }
+
+    fun screenDiagnostics(): String {
+        val pkg = runCatching { uiDevice.currentPackageName }.getOrNull()
+        val crash = gatekeepFatalCrash()?.lineSequence()?.firstOrNull()
+        val windows = ForegroundMonitorAccessibilityService.instance?.overlayWindowSnapshots()
+            .orEmpty()
+            .take(4)
+            .joinToString(" | ") { "${it.packageName.substringAfterLast('.')}:${it.isFocused}/${it.isActive}" }
+        return "pkg=$pkg overlay=${overlayMessageText()} countdown=${countdownText()} windows=[$windows] crash=$crash"
     }
 
     fun overlayReasonText(): String? =
@@ -527,10 +667,17 @@ class EnforcementTestHarness(
     }
 
     fun submitOverlayMathAnswer(answer: String) {
-        val input = uiDevice.findObject(By.res(packageName, "friction_input"))
-        input?.click()
-        input?.text = answer
-        uiDevice.findObject(By.res(packageName, "friction_submit"))?.click()
+        repeat(3) {
+            try {
+                val input = uiDevice.findObject(By.res(packageName, "friction_input")) ?: return
+                input.click()
+                input.text = answer
+                uiDevice.findObject(By.res(packageName, "friction_submit"))?.click()
+                return
+            } catch (_: StaleObjectException) {
+                Thread.sleep(POLL_INTERVAL_MS)
+            }
+        }
     }
 
     fun clickOverlayBack() {
@@ -543,10 +690,6 @@ class EnforcementTestHarness(
 
     fun sleepMs(ms: Long) {
         Thread.sleep(ms)
-    }
-
-    fun sleepDevice() {
-        uiDevice.sleep()
     }
 
     val device: UiDevice get() = uiDevice

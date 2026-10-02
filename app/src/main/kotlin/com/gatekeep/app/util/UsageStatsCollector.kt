@@ -68,6 +68,8 @@ class UsageStatsCollector(
     fun getForegroundPackageFallback(): String? =
         getLastForegroundResumeEvent()?.packageName
 
+    fun latestForegroundResume(): UsageEvent? = getLastForegroundResumeEvent()
+
     fun getForegroundActivityClassFallback(): String? =
         getLastForegroundResumeEvent()?.className
 

@@ -38,6 +38,11 @@ class OverlayWindowClassifierTest {
             ),
             Triple(
                 "com.android.systemui",
+                "com.android.systemui.keyguard.KeyguardHostView",
+                OverlayWindowKind.TransientSystemUi,
+            ),
+            Triple(
+                "com.android.systemui",
                 "com.android.systemui.screenshot.ScreenshotShelfView",
                 OverlayWindowKind.TransientSystemUi,
             ),
@@ -92,6 +97,16 @@ class OverlayWindowClassifierTest {
                 OverlayWindowKind.BlockedApp,
             ),
             Triple(
+                blocked,
+                "com.instagram.feed.overview.MediaOverviewActivity",
+                OverlayWindowKind.BlockedApp,
+            ),
+            Triple(
+                blocked,
+                "com.instagram.modal.ModalActivity",
+                OverlayWindowKind.BlockedApp,
+            ),
+            Triple(
                 "com.example.other",
                 "com.example.other.MainActivity",
                 OverlayWindowKind.OtherApp,
@@ -142,6 +157,93 @@ class OverlayWindowClassifierTest {
         assertEquals(
             OverlayWindowKind.Recents,
             OverlayWindowClassifier.classify(top!!.packageName, top.className, blocked),
+        )
+    }
+
+    @Test
+    fun pickTopRelevantWindow_focusedRecentsBeatsFocusedBlockedApp() {
+        val windows = listOf(
+            OverlayWindowSnapshot(
+                packageName = "com.android.systemui",
+                className = "com.android.quickstep.RecentsActivity",
+                isOverlay = false,
+                isFocused = true,
+                isActive = true,
+            ),
+            OverlayWindowSnapshot(
+                packageName = blocked,
+                className = "com.instagram.android.MainActivity",
+                isOverlay = false,
+                isFocused = true,
+                isActive = true,
+            ),
+        )
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, "com.gatekeep.app")
+        assertEquals("com.android.systemui", top?.packageName)
+    }
+
+    @Test
+    fun pickTopRelevantWindow_unfocusedRecentsPrefersFocusedBlockedApp() {
+        val windows = listOf(
+            OverlayWindowSnapshot(
+                packageName = "com.android.systemui",
+                className = "com.android.quickstep.RecentsActivity",
+                isOverlay = false,
+                isFocused = false,
+                isActive = false,
+            ),
+            OverlayWindowSnapshot(
+                packageName = blocked,
+                className = "com.instagram.android.MainActivity",
+                isOverlay = false,
+                isFocused = true,
+                isActive = true,
+            ),
+        )
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, "com.gatekeep.app")
+        assertEquals(blocked, top?.packageName)
+    }
+
+    @Test
+    fun pickTopRelevantWindow_focusedLauncherBeatsActiveBlockedApp() {
+        val windows = listOf(
+            OverlayWindowSnapshot(
+                packageName = "com.google.android.apps.nexuslauncher",
+                className = "com.google.android.apps.nexuslauncher.NexusLauncherActivity",
+                isOverlay = false,
+                isFocused = true,
+                isActive = true,
+            ),
+            OverlayWindowSnapshot(
+                packageName = blocked,
+                className = "com.instagram.android.MainActivity",
+                isOverlay = false,
+                isFocused = false,
+                isActive = true,
+            ),
+        )
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, "com.gatekeep.app")
+        assertEquals("com.google.android.apps.nexuslauncher", top?.packageName)
+    }
+
+    @Test
+    fun pickTopRelevantWindow_keepsBlockedAppWhenItIsOverlayOwner() {
+        val owner = blocked
+        val windows = listOf(
+            OverlayWindowSnapshot(owner, "android.widget.FrameLayout", isOverlay = true),
+            OverlayWindowSnapshot(
+                owner,
+                "com.gatekeep.app.testsupport.EnforcementTargetActivity",
+                isOverlay = false,
+                isFocused = true,
+                isActive = true,
+            ),
+        )
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, owner)
+        assertEquals(owner, top?.packageName)
+        assertEquals(
+            "com.gatekeep.app.testsupport.EnforcementTargetActivity",
+            top?.className,
         )
     }
 }

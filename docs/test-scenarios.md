@@ -142,6 +142,9 @@ Gradle uses JDK 21 via `org.gradle.java.home` in `gradle.properties` (Studio JBR
 | O-12 | Keyboard on math challenge usable | `OverlayStabilityTest.o12_keyboardOnMathChallenge_usable` |
 | O-13 | Overview button hides overlay | `OverlayStabilityTest.o13_overviewButton_hidesOverlay` |
 | O-14 | Overview then same app reshows overlay | `OverlayStabilityTest.o14_overviewThenSameApp_reshowsOverlay` |
+| O-15 | Overview then tap recents card reshows overlay | `OverlayStabilityTest.o15_overviewThenTapRecentsCard_reshowsOverlay` |
+| O-16 | Stale recents window stack restores overlay | `OverlayStabilityTest.o16_staleRecentsWindowStack_restoresOverlay` |
+| O-17 | Instagram overview class does not hide overlay | `OverlayStabilityTest.o17_instagramOverviewClass_doesNotHideOverlay` |
 
 ---
 
@@ -181,6 +184,22 @@ Gradle uses JDK 21 via `org.gradle.java.home` in `gradle.properties` (Studio JBR
 
 ---
 
+## OBS — On-screen overlay timing
+
+These cases launch with `am start` and read `block_message` / `wait_countdown`. They do not inject a foreground change. A failure records the visible package, overlay text, countdown, and any Gatekeep fatal crash.
+
+| ID | Scenario | Automated test |
+|----|----------|----------------|
+| OBS-01 | Hard block with no injected foreground shows within 2s | `ScreenObservationTest.obs01_hardBlock_noInjection_overlayWithin2s` |
+| OBS-02 | Home hides the overlay within 1.5s | `ScreenObservationTest.obs02_home_overlayGoneWithin1500ms` |
+| OBS-03 | Blocked overlay stays up and the message does not flicker | `ScreenObservationTest.obs03_blockedOverlay_doesNotFlicker` |
+| OBS-04 | Open-wait countdown pauses while the screen is off | `ScreenObservationTest.obs04_openWait_pausesWhileScreenOff` |
+| OBS-05 | Session-limit wait pauses while the screen is off | `ScreenObservationTest.obs05_sessionWait_pausesWhileScreenOff` |
+| OBS-06 | Home for just over 60s starts a fresh session | `ScreenObservationTest.obs06_leaveOverOneMinute_freshSessionNotImmediateTimeout` |
+| OBS-07 | Home for about 5s keeps the session and excludes the gap | `ScreenObservationTest.obs07_leaveFiveSeconds_sameSessionGapExcluded` |
+
+---
+
 ## TL — Time limits
 
 | ID | Scenario | Automated test |
@@ -195,6 +214,12 @@ Gradle uses JDK 21 via `org.gradle.java.home` in `gradle.properties` (Studio JBR
 | TL-08 | No limit today hides limits | `TimeLimitEnforcementTest.tl08_noLimitToday_hidesLimits` |
 | TL-09 | Gradual tightening reduces limit | `TimeLimitEnforcementTest.tl09_gradualTightening_reducesLimit` |
 | TL-10 | Null limit field means no cap | `TimeLimitEnforcementTest.tl10_nullLimit_noCap` |
+| TL-15 | Stale overnight session starts fresh, not timeout | `TimeLimitEnforcementTest.tl15_staleOvernightSession_startsFreshNotTimeout` |
+| TL-16 | Process death / null lastForegroundEnd starts a new session | `SessionStartDecisionTest.processDeath_nullLastEnd_startsFresh` |
+| TL-17 | Session start before 4am day reset starts fresh when not live | `SessionStartDecisionTest.processDeath_sessionBeforeDayStart_startsFresh` |
+| TL-18 | Live in-memory session continues across 4am | `SessionStartDecisionTest.liveInMemory_acrossDayStart_continues` |
+| TL-19 | Away under 1 min resumes same session | `SessionStartDecisionTest.notLive_gapUnderOneMinute_sameDay_resumes` |
+| TL-20 | Away 1 min or more starts a new session | `SessionStartDecisionTest.notLive_gapAtLeastOneMinute_startsFresh` |
 
 ---
 

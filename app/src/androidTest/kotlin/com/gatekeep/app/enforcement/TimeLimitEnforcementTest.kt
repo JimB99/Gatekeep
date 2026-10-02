@@ -7,6 +7,7 @@ import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
 import com.gatekeep.domain.model.LimitUsageScope
 import com.gatekeep.domain.model.OnLimitAction
+import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.PauseType
 import org.junit.Assert.assertNotNull
@@ -33,9 +34,9 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
                 usageRepository,
                 seeded.profileId,
                 seeded.packageName,
-                sessionState = com.gatekeep.domain.model.SessionState(
-                    packageName = seeded.packageName,
-                    sessionStartEpochMs = System.currentTimeMillis() - GatekeepTestFixtures.TestDurations.SESSION_OVER_CAP_MS,
+                sessionState = GatekeepTestFixtures.continuedSession(
+                    seeded.packageName,
+                    GatekeepTestFixtures.TestDurations.SESSION_OVER_CAP_MS,
                 ),
             )
         }
@@ -127,7 +128,7 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
             )
         }
         harness.launchTargetB()
-        assertTrue(harness.waitForOverlay())
+        assertBlockedWithOverlay(EnforcementTestPackages.TARGET_B)
     }
 
     @Test
@@ -235,5 +236,30 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
         }
         harness.launchTargetA()
         assertOverlayHidden()
+    }
+
+    @Test
+    fun tl15_staleOvernightSession_startsFreshNotTimeout() {
+        runSeed {
+            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    sessionLimitMs = 20 * 60_000L,
+                    onSessionLimitAction = OnSessionLimitAction.hardBlock,
+                    onOpenAction = OnOpenAction.none,
+                ),
+            )
+            GatekeepTestFixtures.seedUsageAtCap(
+                usageRepository,
+                seeded.profileId,
+                seeded.packageName,
+                sessionState = GatekeepTestFixtures.staleOvernightSession(
+                    seeded.packageName,
+                    startedAgoMs = 36 * 60 * 60_000L,
+                ),
+            )
+        }
+        harness.launchTargetA()
+        assertAllowedWithoutBlockingOverlay()
     }
 }

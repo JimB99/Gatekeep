@@ -50,15 +50,19 @@ class BlockOverlayManager @Inject constructor(
     private var overlayView: View? = null
     private var waitRunnable: Runnable? = null
     private var breakRunnable: Runnable? = null
-    private var waitStopwatch: ScreenStateMonitor.PausedStopwatch? = null
+    private var waitStopwatch: PausedStopwatch? = null
+    @Volatile private var waitActive = false
     private var frictionInProgress = false
     private var currentChallenge: MathChallenge? = null
     private var overlayParams: WindowManager.LayoutParams? = null
     private var currentRequest: BlockOverlayRequest? = null
     @Volatile
     private var overlayVisible = false
+    private var overlayEpoch = 0L
 
     fun isVisible(): Boolean = overlayVisible
+
+    fun hasActiveWait(): Boolean = waitActive
 
     fun blockedPackage(): String? = if (overlayVisible) currentRequest?.packageName else null
 
@@ -103,17 +107,24 @@ class BlockOverlayManager @Inject constructor(
                 var remaining = delaySeconds
                 countdown.text = localizedContext.getString(R.string.countdown_seconds_format, remaining)
                 val stopwatch = screenStateMonitor.createStopwatch()
+                waitActive = true
                 addOverlay(view, focusable = false)
                 waitRunnable = object : Runnable {
                     override fun run() {
+                        if (!waitActive) return
+                        if (!screenStateMonitor.isScreenOn()) {
+                            if (waitActive) mainHandler.postDelayed(this, 500)
+                            return
+                        }
                         val elapsedSec = (stopwatch.elapsedMs() / 1000).toInt()
                         remaining = (delaySeconds - elapsedSec).coerceAtLeast(0)
                         if (remaining <= 0) {
+                            waitActive = false
                             removeOverlayOnly()
                             onComplete()
                         } else {
                             countdown.text = localizedContext.getString(R.string.countdown_seconds_format, remaining)
-                            mainHandler.postDelayed(this, 1000)
+                            if (waitActive) mainHandler.postDelayed(this, 1000)
                         }
                     }
                 }
@@ -125,22 +136,38 @@ class BlockOverlayManager @Inject constructor(
     }
 
     fun hideTemporarily() {
-        mainHandler.post {
+        val epoch = ++overlayEpoch
+        overlayVisible = false
+        val remove = Runnable {
+            if (epoch != overlayEpoch && overlayVisible) return@Runnable
             clearOverlayTimers()
             removeOverlayOnly()
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            remove.run()
+        } else {
+            mainHandler.post(remove)
         }
     }
 
     fun reshowFromStoredRequest() {
+        val epoch = ++overlayEpoch
         mainHandler.post {
+            if (epoch != overlayEpoch) return@post
             val request = currentRequest ?: return@post
             if (!coordinator.get().shouldPresentBlockOverlay(request.packageName)) return@post
-            if (overlayView != null) return@post
+            if (overlayVisible && overlayView != null) return@post
+            if (overlayView != null) {
+                runCatching { windowManager.removeView(overlayView) }
+                overlayView = null
+                overlayParams = null
+            }
             createBlockOverlay(request)
         }
     }
 
     fun dismissByUser() {
+        overlayEpoch++
         mainHandler.post {
             clearOverlayState()
             removeOverlayOnly()
@@ -149,6 +176,7 @@ class BlockOverlayManager @Inject constructor(
     }
 
     fun removeAfterResolution() {
+        overlayEpoch++
         mainHandler.post {
             clearOverlayState()
             removeOverlayOnly()
@@ -176,6 +204,7 @@ class BlockOverlayManager @Inject constructor(
         breakRunnable?.let { mainHandler.removeCallbacks(it) }
         breakRunnable = null
         waitStopwatch = null
+        waitActive = false
     }
 
     private fun clearOverlayState() {
@@ -294,6 +323,10 @@ class BlockOverlayManager @Inject constructor(
             extensionContainer.visibility = View.GONE
             if (request.frictionMethod == FrictionMethod.none) {
                 continueBtn.visibility = View.GONE
+            } else if (request.frictionMethod == FrictionMethod.waitOneMin) {
+                continueBtn.visibility = View.GONE
+                frictionInProgress = true
+                showFriction(view, request.frictionMethod, challenge, request)
             } else {
                 continueBtn.visibility = View.VISIBLE
                 continueBtn.setOnClickListener {
@@ -316,7 +349,6 @@ class BlockOverlayManager @Inject constructor(
         request: BlockOverlayRequest,
     ) {
         frictionInProgress = true
-        makeOverlayFocusableForInput()
 
         val container = view.findViewById<LinearLayout>(R.id.friction_container)
         container.visibility = View.VISIBLE
@@ -328,11 +360,13 @@ class BlockOverlayManager @Inject constructor(
                 frictionInProgress = false
             }
             FrictionMethod.math -> {
+                makeOverlayFocusableForInput()
                 val mathChallenge = challenge ?: FrictionChallenge.generate(request.difficulty)
                     .also { currentChallenge = it }
                 showMathFriction(view, mathChallenge, request)
             }
             FrictionMethod.password -> {
+                makeOverlayFocusableForInput()
                 if (!request.profilePasswordHash.isNullOrBlank()) {
                     showPasswordFriction(view, request)
                 } else {
@@ -347,37 +381,30 @@ class BlockOverlayManager @Inject constructor(
                 val countdown = view.findViewById<TextView>(R.id.wait_countdown)
                 countdown.visibility = View.VISIBLE
                 val totalMs = request.waitDurationSeconds * 1000L
-                val wallClockDeadlineMs = if (request.waitWallClock) {
-                    System.currentTimeMillis() + totalMs
-                } else {
-                    null
-                }
-                if (wallClockDeadlineMs != null) {
-                    coordinator.get().onWaitStarted(request.packageName, wallClockDeadlineMs)
-                }
-                val stopwatch = if (wallClockDeadlineMs == null) {
-                    screenStateMonitor.createStopwatch().also { waitStopwatch = it }
-                } else {
-                    null
-                }
+                coordinator.get().onWaitStarted(
+                    request.packageName,
+                    System.currentTimeMillis() + totalMs,
+                )
+                val stopwatch = screenStateMonitor.createStopwatch().also { waitStopwatch = it }
+                waitActive = true
                 waitRunnable = object : Runnable {
                     override fun run() {
-                        val remainingMs = if (wallClockDeadlineMs != null) {
-                            wallClockDeadlineMs - System.currentTimeMillis()
-                        } else {
-                            stopwatch!!.remainingMs(totalMs)
+                        if (!waitActive) return
+                        if (!screenStateMonitor.isScreenOn()) {
+                            if (waitActive) mainHandler.postDelayed(this, 500)
+                            return
                         }
+                        val remainingMs = stopwatch.remainingMs(totalMs)
                         val remainingSec = ((remainingMs + 999) / 1000).toInt()
                         if (remainingSec <= 0) {
                             frictionInProgress = false
+                            waitActive = false
                             waitStopwatch = null
-                            if (wallClockDeadlineMs != null) {
-                                coordinator.get().onWaitCompleted(request.packageName)
-                            }
+                            coordinator.get().onWaitCompleted(request.packageName)
                             onFrictionSuccess(request)
                         } else {
                             countdown.text = localizedContext.getString(R.string.countdown_seconds_format, remainingSec)
-                            mainHandler.postDelayed(this, 1000)
+                            if (waitActive) mainHandler.postDelayed(this, 1000)
                         }
                     }
                 }

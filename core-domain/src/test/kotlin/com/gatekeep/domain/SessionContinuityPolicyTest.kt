@@ -10,8 +10,8 @@ import org.junit.jupiter.api.Test
 class SessionContinuityPolicyTest {
 
     @Test
-    fun shouldContinue_whenNeverLeft() {
-        assertTrue(
+    fun shouldNotContinue_whenLastForegroundEndUnknown() {
+        assertFalse(
             SessionContinuityPolicy.shouldContinueSession(
                 lastForegroundEndEpochMs = null,
                 nowEpochMs = 10_000L,

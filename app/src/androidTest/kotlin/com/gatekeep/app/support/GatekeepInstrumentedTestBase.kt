@@ -41,8 +41,13 @@ abstract class GatekeepInstrumentedTestBase {
         }
     }
 
-    protected fun runSeed(block: suspend () -> Unit) {
-        runBlocking { block() }
+    protected fun <T> runSeed(block: suspend () -> T): T {
+        enforcementCoordinator.pauseForegroundMonitoringForTests()
+        try {
+            return runBlocking { block() }
+        } finally {
+            enforcementCoordinator.ensureForegroundMonitoring()
+        }
     }
 
     protected fun prepareEnforcementEnvironment() {
@@ -75,7 +80,7 @@ abstract class GatekeepInstrumentedTestBase {
         config: GatekeepTestFixtures.ProfileSeedConfig = GatekeepTestFixtures.ProfileSeedConfig(),
         dailyMs: Long = config.dailyLimitMs ?: GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
     ): GatekeepTestFixtures.SeededProfile {
-        return runBlocking {
+        return runSeed {
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
                 packageName = packageName,

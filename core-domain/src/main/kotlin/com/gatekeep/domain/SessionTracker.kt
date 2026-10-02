@@ -115,6 +115,12 @@ object SessionTracker {
         return (session!!.pendingWaitUntilEpochMs!! - nowEpochMs).coerceAtLeast(0)
     }
 
+    fun extendPendingWait(session: SessionState, extraMs: Long): SessionState {
+        val until = session.pendingWaitUntilEpochMs ?: return session
+        if (extraMs <= 0) return session
+        return session.copy(pendingWaitUntilEpochMs = until + extraMs)
+    }
+
     fun setPendingWait(session: SessionState, untilEpochMs: Long): SessionState =
         session.copy(pendingWaitUntilEpochMs = untilEpochMs)
 

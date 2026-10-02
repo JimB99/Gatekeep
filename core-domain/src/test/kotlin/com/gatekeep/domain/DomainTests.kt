@@ -631,6 +631,18 @@ class SessionTrackerTest {
     }
 
     @Test
+    fun `screen off extends a pending wait`() {
+        val now = 1_000_000L
+        val session = SessionTracker.setPendingWait(
+            SessionTracker.startSession("com.test", now),
+            now + 60_000L,
+        )
+        val extended = SessionTracker.extendPendingWait(session, 10_000L)
+        assertTrue(SessionTracker.hasPendingWait(extended, now + 65_000L))
+        assertFalse(SessionTracker.hasPendingWait(extended, now + 70_000L))
+    }
+
+    @Test
     fun `session limit notified flag set and cleared on new session`() {
         val now = 1_000_000L
         var session = SessionTracker.startSession("com.test", now)

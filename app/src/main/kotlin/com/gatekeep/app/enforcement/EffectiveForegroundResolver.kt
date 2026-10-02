@@ -19,10 +19,17 @@ object EffectiveForegroundResolver {
             accessibilityForeground == blockedPackage &&
             presentation is BlockPresentation.Visible
         ) {
-            if (usageStatsForeground != null && usageStatsForeground != blockedPackage) {
+            if (usageStatsForeground != null &&
+                usageStatsForeground != blockedPackage &&
+                !isTransientUsage(usageStatsForeground)
+            ) {
                 return usageStatsForeground
             }
         }
         return accessibilityForeground
     }
+
+    private fun isTransientUsage(packageName: String): Boolean =
+        packageName == "com.android.systemui" ||
+            ForegroundStabilizationPolicy.isTransientForegroundPackage(packageName)
 }

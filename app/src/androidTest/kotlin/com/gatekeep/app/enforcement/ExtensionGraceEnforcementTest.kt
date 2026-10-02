@@ -145,10 +145,9 @@ class ExtensionGraceEnforcementTest : EnforcementCrossAppTestBase() {
                 usageRepository,
                 seeded.profileId,
                 seeded.packageName,
-                sessionState = com.gatekeep.domain.model.SessionState(
-                    packageName = seeded.packageName,
-                    sessionStartEpochMs = System.currentTimeMillis() -
-                        GatekeepTestFixtures.TestDurations.SESSION_OVER_CAP_MS,
+                sessionState = com.gatekeep.app.support.GatekeepTestFixtures.continuedSession(
+                    seeded.packageName,
+                    GatekeepTestFixtures.TestDurations.SESSION_OVER_CAP_MS,
                 ),
             )
         }

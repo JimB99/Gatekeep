@@ -15,6 +15,7 @@ import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
 import com.gatekeep.domain.OpenGatePassPolicy
 import com.gatekeep.domain.SessionContinuityPolicy
+import com.gatekeep.domain.SessionStartDecision
 import com.gatekeep.domain.EnforcementPollInterval
 import com.gatekeep.domain.ExtensionDisplayLogic
 import com.gatekeep.domain.ExtensionGrantEngine
@@ -92,11 +93,27 @@ class EnforcementCoordinator @Inject constructor(
 
     init {
         screenStateMonitor.register { offMs ->
-            scope.launch { applyScreenOffExclusion(offMs) }
+            scope.launch {
+                applyScreenOffExclusion(offMs)
+                if (!blockOverlay.hasActiveWait()) {
+                    restoreOverlayAfterScreenOn()
+                }
+            }
         }
     }
 
+    private var currentForegroundSinceMs: Long = 0L
     private var currentForegroundPackage: String? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            if (value != null &&
+                value != "com.android.systemui" &&
+                !ForegroundStabilizationPolicy.isTransientForegroundPackage(value)
+            ) {
+                currentForegroundSinceMs = System.currentTimeMillis()
+            }
+        }
     private var previousForegroundPackage: String? = null
     private var previousSessionStartMs: Long = 0
     private var previousProfileId: Long = 0
@@ -131,6 +148,9 @@ class EnforcementCoordinator @Inject constructor(
     private var showCountdownNotification = false
     private var openGatePassedPackage: String? = null
     private var blockEnteredAtMs: Long = 0
+    private var lastOverlayRestoreAtMs: Long = 0
+    private var lastLeftPackage: String? = null
+    private var lastLeftAtMs: Long = 0
     private val warnedPackagesToday = mutableSetOf<String>()
     private var warnedDayStartMs: Long = 0L
     private var lastNotificationBody: String? = null
@@ -171,6 +191,20 @@ class EnforcementCoordinator @Inject constructor(
     fun onForegroundAppChanged(packageName: String, windowClassName: String? = null) {
         if (packageName == context.packageName) {
             if (isEnforcementTestTargetActivity(windowClassName)) {
+                val snapshots = ForegroundMonitorAccessibilityService.instance?.overlayWindowSnapshots().orEmpty()
+                if (snapshots.isNotEmpty()) {
+                    applyForegroundRoute(
+                        OverlayRestorePolicy.decide(
+                            overlayRestoreInput(snapshots).copy(
+                                reportedForegroundPackage = packageName,
+                            ),
+                        ),
+                    )
+                    return
+                }
+                if (blockPresentationState.presentation is BlockPresentation.HiddenForOtherApp) {
+                    lastOverlayRestoreAtMs = System.currentTimeMillis()
+                }
                 val prevPackage = currentForegroundPackage
                 currentForegroundPackage = packageName
                 scope.launch {
@@ -198,8 +232,22 @@ class EnforcementCoordinator @Inject constructor(
         if (!ForegroundTransitionPolicy.shouldProcessThirdPartyForegroundChange(
                 packageName,
                 currentForegroundPackage,
-            )
+            ) &&
+            !(isBlockingActive &&
+                blockPresentationState.presentation is BlockPresentation.HiddenForOtherApp &&
+                packageName == blockedPackage)
         ) {
+            val snapshots = ForegroundMonitorAccessibilityService.instance?.overlayWindowSnapshots().orEmpty()
+            if (snapshots.isNotEmpty()) {
+                applyForegroundRoute(
+                    OverlayRestorePolicy.decide(
+                        overlayRestoreInput(snapshots).copy(
+                            reportedForegroundPackage = packageName,
+                        ),
+                    ),
+                )
+                return
+            }
             if (isBlockingActive &&
                 blockPresentationState.presentation is BlockPresentation.HiddenForOtherApp &&
                 packageName == blockedPackage
@@ -209,44 +257,25 @@ class EnforcementCoordinator @Inject constructor(
             return
         }
 
-        val kind = OverlayWindowClassifier.classify(
-            packageName,
-            windowClassName,
-            blockedPackage,
-        )
-        when (
-            val route = ForegroundRoutingPolicy.decide(
-                incomingPackage = packageName,
-                currentForegroundPackage = currentForegroundPackage,
-                blockedPackage = blockedPackage,
-                blockingActive = isBlockingActive,
-                blockEnteredAtMs = blockEnteredAtMs,
-                nowMs = System.currentTimeMillis(),
-                presentation = blockPresentationState.presentation,
-                kind = kind,
+        val snapshots = ForegroundMonitorAccessibilityService.instance?.overlayWindowSnapshots().orEmpty()
+        val windows = snapshots.ifEmpty {
+            listOf(
+                OverlayWindowSnapshot(
+                    packageName = packageName,
+                    className = windowClassName,
+                    isOverlay = false,
+                    isFocused = true,
+                    isActive = true,
+                ),
             )
-        ) {
-            ForegroundRoutingPolicy.Route.Ignore -> return
-            is ForegroundRoutingPolicy.Route.Commit -> scheduleForegroundCommit(
-                route.packageName,
-                holdMs = route.holdMs,
-                confirmExit = false,
-            )
-            is ForegroundRoutingPolicy.Route.ConfirmExit -> scheduleForegroundCommit(
-                route.packageName,
-                holdMs = route.holdMs,
-                confirmExit = true,
-            )
-            is ForegroundRoutingPolicy.Route.HideNow -> {
-                transitionToHiddenForOtherApp()
-                scheduleForegroundCommit(
-                    route.packageName,
-                    holdMs = 0L,
-                    confirmExit = false,
-                )
-            }
-            is ForegroundRoutingPolicy.Route.Restore -> restoreOverlayForPackage(route.packageName)
         }
+        applyForegroundRoute(
+            OverlayRestorePolicy.decide(
+                overlayRestoreInput(windows).copy(
+                    reportedForegroundPackage = packageName,
+                ),
+            ),
+        )
     }
 
     fun onWindowsLayoutChanged() {
@@ -259,25 +288,74 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     fun onTopWindowChanged(windows: List<OverlayWindowSnapshot>) {
-        val top = OverlayWindowClassifier.pickTopRelevantWindow(
-            windows = windows,
-            blockedPackage = blockedPackage,
-            overlayOwnerPackage = context.packageName,
-        ) ?: return
-        onForegroundAppChanged(top.packageName, top.className)
+        if (windows.isEmpty()) return
+        applyForegroundRoute(OverlayRestorePolicy.decide(overlayRestoreInput(windows)))
+    }
+
+    fun injectWindowStackForTests(windows: List<OverlayWindowSnapshot>) {
+        if (!BuildConfig.DEBUG) return
+        onTopWindowChanged(windows)
+    }
+
+    private fun overlayRestoreInput(windows: List<OverlayWindowSnapshot>) = OverlayRestorePolicy.Input(
+        windows = windows,
+        usageStatsForegroundPackage = usageStatsCollector.getForegroundPackageFallback(),
+        currentForegroundPackage = currentForegroundPackage,
+        blockedPackage = blockedPackage,
+        blockingActive = isBlockingActive,
+        presentation = blockPresentationState.presentation,
+        overlayOwnerPackage = context.packageName,
+        lastMonitoredPackage = lastMonitoredForegroundPackage,
+        lastMonitoredAtMs = lastMonitoredForegroundAtMs,
+        nowMs = System.currentTimeMillis(),
+        blockEnteredAtMs = blockEnteredAtMs,
+        lastRestoreAtMs = lastOverlayRestoreAtMs,
+        ignoredPackages = ignoredForegroundPackages,
+    )
+
+    private fun applyForegroundRoute(route: ForegroundRoutingPolicy.Route) {
+        when (route) {
+            ForegroundRoutingPolicy.Route.Ignore -> return
+            is ForegroundRoutingPolicy.Route.Commit -> scheduleForegroundCommit(
+                route.packageName,
+                holdMs = route.holdMs,
+                confirmExit = false,
+            )
+            is ForegroundRoutingPolicy.Route.ConfirmExit -> scheduleForegroundCommit(
+                route.packageName,
+                holdMs = route.holdMs,
+                confirmExit = true,
+            )
+            is ForegroundRoutingPolicy.Route.HideNow -> {
+                val prev = currentForegroundPackage
+                if (prev != null &&
+                    prev != route.packageName &&
+                    prev !in ignoredForegroundPackages &&
+                    !ForegroundStabilizationPolicy.isTransientForegroundPackage(prev)
+                ) {
+                    lastLeftPackage = prev
+                    lastLeftAtMs = System.currentTimeMillis()
+                }
+                transitionToHiddenForOtherApp()
+                currentForegroundPackage = route.packageName
+                clearPendingForegroundCommit()
+                scope.launch {
+                    try {
+                        handleForegroundChange(route.packageName, prev)
+                    } catch (e: Exception) {
+                        enforcementLog.logError("Foreground evaluation failed", e)
+                    }
+                }
+            }
+            is ForegroundRoutingPolicy.Route.Restore -> restoreOverlayForPackage(route.packageName)
+        }
     }
 
     private fun restoreOverlayForPackage(packageName: String) {
         clearPendingForegroundCommit()
+        lastOverlayRestoreAtMs = System.currentTimeMillis()
+        currentForegroundPackage = packageName
         restoreVisibleBlockIfNeeded(packageName)
-        if (packageName != currentForegroundPackage) {
-            scheduleForegroundCommit(
-                packageName,
-                holdMs = 0L,
-                confirmExit = false,
-            )
-            return
-        }
         scope.launch {
             try {
                 evaluate(packageName)
@@ -338,6 +416,14 @@ class EnforcementCoordinator @Inject constructor(
             }
             clearPendingForegroundCommit()
             val prevPackage = currentForegroundPackage
+            if (prevPackage != null &&
+                candidate != prevPackage &&
+                prevPackage !in ignoredForegroundPackages &&
+                !ForegroundStabilizationPolicy.isTransientForegroundPackage(prevPackage)
+            ) {
+                lastLeftPackage = prevPackage
+                lastLeftAtMs = System.currentTimeMillis()
+            }
             currentForegroundPackage = candidate
             scope.launch {
                 try {
@@ -395,7 +481,7 @@ class EnforcementCoordinator @Inject constructor(
     private fun transitionToHiddenForOtherApp() {
         if (blockPresentationState.presentation is BlockPresentation.Visible) {
             blockPresentationState = BlockPresentationReducer.onHideForOtherApp(blockPresentationState)
-            mainHandler.post { blockOverlay.hideTemporarily() }
+            blockOverlay.hideTemporarily()
         }
     }
 
@@ -462,6 +548,9 @@ class EnforcementCoordinator @Inject constructor(
             effectiveForegroundPackage(),
         )
         blockEnteredAtMs = System.currentTimeMillis()
+        if (blockPresentationState.presentation is BlockPresentation.Visible) {
+            lastOverlayRestoreAtMs = blockEnteredAtMs
+        }
         stopCountdownTicker()
     }
 
@@ -895,8 +984,15 @@ class EnforcementCoordinator @Inject constructor(
         return !blockOverlay.isVisible()
     }
 
+    fun pauseForegroundMonitoringForTests() {
+        if (!BuildConfig.DEBUG) return
+        stopForegroundPolling()
+        stopEnforcementLoop()
+    }
+
     fun resetInstrumentationState() {
         if (!BuildConfig.DEBUG) return
+        pauseForegroundMonitoringForTests()
         evaluationEpoch++
         stopCountdownTicker()
         clearPendingForegroundCommit()
@@ -908,6 +1004,10 @@ class EnforcementCoordinator @Inject constructor(
         previousProfileId = 0
         lastMonitoredForegroundPackage = null
         lastMonitoredForegroundAtMs = 0
+        lastOverlayRestoreAtMs = 0
+        lastLeftPackage = null
+        lastLeftAtMs = 0
+        currentForegroundSinceMs = 0L
         notifiedLimitKeys.clear()
         warnedPackagesToday.clear()
         warnedDayStartMs = 0L
@@ -1022,10 +1122,14 @@ class EnforcementCoordinator @Inject constructor(
     private suspend fun applyScreenOffExclusion(screenOffDurationMs: Long) {
         if (screenOffDurationMs <= 0 || previousProfileId <= 0) return
         val pkg = currentForegroundPackage ?: return
-        if (pkg in ignoredForegroundPackages || pkg == context.packageName) return
+        if (pkg in ignoredForegroundPackages) return
+        if (pkg == context.packageName && pkg !in monitoredPackagesCache) return
         val state = usageRepository.getSessionState(previousProfileId, pkg) ?: return
         usageRepository.saveSessionState(
-            SessionTracker.addExcludedTime(state, screenOffDurationMs),
+            SessionTracker.extendPendingWait(
+                SessionTracker.addExcludedTime(state, screenOffDurationMs),
+                screenOffDurationMs,
+            ),
             previousProfileId,
         )
         if (sessionDeadlineMs != null) {
@@ -1042,6 +1146,16 @@ class EnforcementCoordinator @Inject constructor(
         }
         if (showCountdownNotification) {
             mainHandler.post { refreshCountdownNotification() }
+        }
+    }
+
+    private fun restoreOverlayAfterScreenOn() {
+        val blocked = blockedPackage ?: return
+        val fg = currentForegroundPackage
+        if (fg == null || fg == blocked) {
+            restoreOverlayForPackage(blocked)
+        } else {
+            syncOverlayVisibility()
         }
     }
 
@@ -1201,6 +1315,9 @@ class EnforcementCoordinator @Inject constructor(
         )
 
         if (SessionTracker.hasPendingWait(sessionForEval, now)) {
+            if (blockOverlay.hasActiveWait() || !screenStateMonitor.isScreenOn()) {
+                return
+            }
             val remainingSec = ((SessionTracker.pendingWaitRemainingMs(sessionForEval, now) + 999) / 1000)
                 .toInt().coerceAtLeast(1)
             showPendingWait(
@@ -1653,32 +1770,79 @@ class EnforcementCoordinator @Inject constructor(
         )
 
     private fun pollForegroundIfChanged() {
-        val snapshots = ForegroundMonitorAccessibilityService.instance?.overlayWindowSnapshots()
-        if (!snapshots.isNullOrEmpty()) {
+        val snapshots = ForegroundMonitorAccessibilityService.instance?.overlayWindowSnapshots().orEmpty()
+        if (snapshots.isNotEmpty()) {
             onTopWindowChanged(snapshots)
-            return
         }
         val pkg = usageStatsCollector.getForegroundPackageFallback() ?: return
         val className = usageStatsCollector.getForegroundActivityClassFallback()
         val blocked = blockedPackage
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(
+            windows = snapshots,
+            blockedPackage = blocked,
+            overlayOwnerPackage = context.packageName,
+        )
+        if (pkg == lastLeftPackage && System.currentTimeMillis() - lastLeftAtMs < USAGE_LAG_GUARD_MS) {
+            return
+        }
         if (blockPresentationState.presentation is BlockPresentation.HiddenForOtherApp &&
             blocked != null &&
             pkg == blocked
         ) {
-            restoreOverlayForPackage(blocked)
+            val topKind = top?.let {
+                OverlayWindowClassifier.classify(it.packageName, it.className, blocked)
+            }
+            val launcherStillOnTop = topKind == OverlayWindowKind.Launcher ||
+                topKind == OverlayWindowKind.Recents
+            if (!launcherStillOnTop) {
+                restoreOverlayForPackage(blocked)
+                return
+            }
+        }
+        val focusedOnBlocked = isBlockingActive &&
+            blocked != null &&
+            top != null &&
+            top.packageName == blocked &&
+            (top.isFocused || top.isActive)
+        val latestResume = usageStatsCollector.latestForegroundResume()
+        val launcherLeave = ForegroundRoutingPolicy.launcherLeaveFromUsage(
+            latestResumePackage = latestResume?.packageName,
+            latestResumeAtMs = latestResume?.timestamp ?: 0L,
+            currentPackage = currentForegroundPackage,
+            currentPackageLastResumeAtMs = currentForegroundSinceMs.takeIf { it > 0L },
+            accessibilityFocusedOnBlockedApp = blocked != null &&
+                top != null &&
+                top.packageName == blocked &&
+                top.isFocused,
+        )
+        if (launcherLeave != null) {
+            if (isBlockingActive && blockPresentationState.presentation is BlockPresentation.Visible) {
+                applyForegroundRoute(ForegroundRoutingPolicy.Route.HideNow(launcherLeave))
+            } else if (!isBlockingActive) {
+                applyForegroundRoute(
+                    ForegroundRoutingPolicy.Route.Commit(
+                        launcherLeave,
+                        ForegroundStabilizationPolicy.DEBOUNCE_MS,
+                    ),
+                )
+            }
             return
         }
-        if (blocked != null) {
-            if (!ForegroundRoutingPolicy.confirmsExit(pkg, blocked)) return
-        } else if (isBlockingActive) {
+        val adopt = ForegroundRoutingPolicy.usageStatsPackageToCommit(
+            usageStatsPackage = pkg,
+            currentForegroundPackage = currentForegroundPackage,
+            accessibilityFocusedOnBlockedApp = focusedOnBlocked,
+            blockedPackage = blocked,
+            blockingActive = isBlockingActive,
+            ignoredPackages = ignoredForegroundPackages,
+        ) ?: return
+        if (adopt == context.packageName &&
+            adopt !in monitoredPackagesCache &&
+            !isEnforcementTestTargetActivity(className)
+        ) {
             return
         }
-        if (pkg == context.packageName && !isEnforcementTestTargetActivity(className)) return
-        val treatingAsExit = blocked != null && ForegroundRoutingPolicy.confirmsExit(pkg, blocked)
-        if (!treatingAsExit && pkg in ignoredForegroundPackages) return
-        if (pkg != currentForegroundPackage) {
-            onForegroundAppChanged(pkg, windowClassName = className)
-        }
+        onForegroundAppChanged(adopt, windowClassName = className)
     }
 
     private fun isEnforcementTestTargetActivity(className: String?): Boolean =
@@ -1697,7 +1861,7 @@ class EnforcementCoordinator @Inject constructor(
                 mainHandler.postDelayed(this, FOREGROUND_POLL_MS)
             }
         }
-        mainHandler.postDelayed(foregroundPollRunnable!!, FOREGROUND_POLL_MS)
+        mainHandler.postDelayed(foregroundPollRunnable!!, 100L)
     }
 
     private fun stopForegroundPolling() {
@@ -1869,11 +2033,7 @@ class EnforcementCoordinator @Inject constructor(
             reason.isOpenGateFlow -> profile.openWaitDurationSeconds
             else -> profile.sessionWaitDurationSeconds
         }
-        val waitWallClock = when {
-            blocked.sessionDeterrent == FrictionMethod.waitOneMin -> !reason.isOpenGateFlow
-            reason.isOpenGateFlow && friction == FrictionMethod.waitOneMin -> false
-            else -> false
-        }
+        val waitWallClock = false
         val dayStart = usageStatsCollector.dayStartEpochMs()
         val usedToday = usageRepository.countExtensionOverridesToday(
             profile.id, packageName, dayStart,
@@ -1957,7 +2117,7 @@ class EnforcementCoordinator @Inject constructor(
             blocked = blocked,
         ).copy(
             waitDurationSeconds = waitSeconds,
-            waitWallClock = true,
+            waitWallClock = false,
         )
         presentBlockOverlay(request, generation)
         scope.launch { recordFrictionStart(packageName, profile.id) }
@@ -1985,16 +2145,25 @@ class EnforcementCoordinator @Inject constructor(
     ): SessionState {
         val onBreak = existingState?.breakUntilEpochMs?.let { now < it } == true
         val pendingWait = SessionTracker.hasPendingWait(existingState, now)
-        val state = when {
-            existingState == null -> SessionTracker.startSession(packageName, now)
-            pendingWait || onBreak -> existingState
-            SessionContinuityPolicy.shouldContinueSession(
-                existingState.lastForegroundEndEpochMs,
-                now,
-            ) -> SessionContinuityPolicy.resumeAfterGap(existingState, now)
-            else -> SessionTracker.startSession(packageName, now).copy(
-                breakUntilEpochMs = existingState.breakUntilEpochMs?.takeIf { now < it },
+        val action = SessionStartDecision.decide(
+            existingState = existingState,
+            nowEpochMs = now,
+            dayStartEpochMs = usageStatsCollector.dayStartEpochMs(now),
+            liveInMemorySession = sessionStartedForPackage == packageName,
+            pendingWait = pendingWait,
+            onBreak = onBreak,
+        )
+        val state = when (action) {
+            SessionStartDecision.Action.StartFresh -> SessionTracker.startSession(packageName, now).copy(
+                breakUntilEpochMs = existingState?.breakUntilEpochMs?.takeIf { now < it },
             )
+            SessionStartDecision.Action.Continue -> existingState
+                ?: SessionTracker.startSession(packageName, now)
+            SessionStartDecision.Action.ResumeAfterGap ->
+                SessionContinuityPolicy.resumeAfterGap(
+                    existingState ?: SessionTracker.startSession(packageName, now),
+                    now,
+                )
         }
         if (state != existingState || sessionStartedForPackage != packageName) {
             usageRepository.saveSessionState(state, profileId)
@@ -2107,7 +2276,8 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     companion object {
-        private const val FOREGROUND_POLL_MS = 1_000L
+        private const val FOREGROUND_POLL_MS = 250L
+        private const val USAGE_LAG_GUARD_MS = 3_000L
         private const val OPEN_GATE_GRACE_MS = OpenGatePassPolicy.DEFAULT_GRACE_MS
     }
 }

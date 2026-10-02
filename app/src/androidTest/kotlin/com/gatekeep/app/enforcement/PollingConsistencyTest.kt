@@ -48,10 +48,9 @@ class PollingConsistencyTest : EnforcementCrossAppTestBase() {
                 usageRepository,
                 seeded.profileId,
                 seeded.packageName,
-                sessionState = com.gatekeep.domain.model.SessionState(
-                    packageName = seeded.packageName,
-                    sessionStartEpochMs = System.currentTimeMillis() -
-                        (GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS - 500L),
+                sessionState = com.gatekeep.app.support.GatekeepTestFixtures.continuedSession(
+                    seeded.packageName,
+                    GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS - 500L,
                 ),
             )
         }
@@ -94,13 +93,28 @@ class PollingConsistencyTest : EnforcementCrossAppTestBase() {
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
                     onOpenAction = com.gatekeep.domain.model.OnOpenAction.deterrentWait,
-                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.SESSION_WAIT_SEC,
+                    openWaitDurationSeconds = 12,
+                    sessionLimitMs = null,
+                    dailyLimitMs = null,
                 ),
             )
         }
+        harness.wakeDevice()
         harness.launchTargetA()
-        harness.sleepDevice()
-        harness.waitForElapsedMs(300)
+        assertTrue("countdown missing ${harness.screenDiagnostics()}", harness.waitForCountdown() != null)
+        val atOff = harness.sleepDeviceCapturingCountdown()
+        assertTrue("screen did not turn off ${harness.screenDiagnostics()}", !harness.isScreenOn())
+        assertTrue("countdown unreadable at lock ${harness.screenDiagnostics()}", atOff != null && atOff >= 8)
+        harness.sleepMs(3_000)
+        val stillOff = !harness.isScreenOn()
+        harness.wakeDevice()
+        harness.sleepMs(400)
+        val after = harness.countdownSeconds()
+        assertTrue("screen woke during the lock", stillOff)
+        assertTrue(
+            "countdown ran through lock atOff=$atOff after=$after ${harness.screenDiagnostics()}",
+            after != null && atOff!! - after <= 1,
+        )
     }
 
     @Test

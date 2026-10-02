@@ -22,12 +22,25 @@ class EffectiveForegroundResolverTest {
     }
 
     @Test
-    fun resolve_visibleBlock_usageStillLauncher_treatsAsLeft() {
+    fun resolve_visibleBlock_usageStillLauncher_keepsBlocked() {
         assertEquals(
-            launcher,
+            blocked,
             EffectiveForegroundResolver.resolve(
                 accessibilityForeground = blocked,
                 usageStatsForeground = launcher,
+                blockedPackage = blocked,
+                presentation = BlockPresentation.Visible(blocked, 1L),
+            ),
+        )
+    }
+
+    @Test
+    fun resolve_visibleBlock_usageOtherApp_treatsAsLeft() {
+        assertEquals(
+            "com.example.other",
+            EffectiveForegroundResolver.resolve(
+                accessibilityForeground = blocked,
+                usageStatsForeground = "com.example.other",
                 blockedPackage = blocked,
                 presentation = BlockPresentation.Visible(blocked, 1L),
             ),
@@ -56,6 +69,32 @@ class EffectiveForegroundResolverTest {
                 usageStatsForeground = launcher,
                 blockedPackage = null,
                 presentation = BlockPresentation.Visible(blocked, 1L),
+            ),
+        )
+    }
+
+    @Test
+    fun resolve_hidden_launcherUsageStillBlocked_staysOnLauncher() {
+        assertEquals(
+            launcher,
+            EffectiveForegroundResolver.resolve(
+                accessibilityForeground = launcher,
+                usageStatsForeground = blocked,
+                blockedPackage = blocked,
+                presentation = BlockPresentation.HiddenForOtherApp(blocked, 1L),
+            ),
+        )
+    }
+
+    @Test
+    fun resolve_hidden_systemuiDoesNotReturnFromStaleUsage() {
+        assertEquals(
+            "com.android.systemui",
+            EffectiveForegroundResolver.resolve(
+                accessibilityForeground = "com.android.systemui",
+                usageStatsForeground = blocked,
+                blockedPackage = blocked,
+                presentation = BlockPresentation.HiddenForOtherApp(blocked, 1L),
             ),
         )
     }

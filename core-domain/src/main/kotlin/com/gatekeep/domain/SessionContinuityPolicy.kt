@@ -11,7 +11,7 @@ object SessionContinuityPolicy {
         nowEpochMs: Long,
         graceMs: Long = RESUME_GRACE_MS,
     ): Boolean {
-        if (lastForegroundEndEpochMs == null) return true
+        if (lastForegroundEndEpochMs == null) return false
         return nowEpochMs - lastForegroundEndEpochMs < graceMs
     }
 

@@ -133,7 +133,8 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
         harness.pressRecents()
         assertOverlayHidden()
         harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
+        injectStaleRecentsRestoreStack()
+        assertBlockedWithOverlay()
     }
 
     @Test
@@ -150,6 +151,7 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
                 profileRepository = profileRepository,
                 config = GatekeepTestFixtures.ProfileSeedConfig(
                     delayOpenSeconds = GatekeepTestFixtures.TestDurations.DELAY_OPEN_SEC,
+                    sessionLimitMs = 20 * 60_000L,
                     onLimitAction = OnLimitAction.hardBlock,
                 ),
             )
@@ -205,5 +207,66 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
         }
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay() || harness.isFrictionVisible())
+    }
+
+    @Test
+    fun o15_overviewThenTapRecentsCard_reshowsOverlay() {
+        seedHardBlockProfile()
+        harness.launchTargetA()
+        assertTrue(harness.waitForOverlay())
+        harness.resumeFromRecents()
+        injectStaleRecentsRestoreStack()
+        assertBlockedWithOverlay()
+    }
+
+    @Test
+    fun o16_staleRecentsWindowStack_restoresOverlay() {
+        seedHardBlockProfile()
+        harness.launchTargetA()
+        assertTrue(harness.waitForOverlay())
+        harness.pressRecents()
+        assertOverlayHidden()
+        injectStaleRecentsRestoreStack()
+        assertBlockedWithOverlay()
+    }
+
+    @Test
+    fun o17_instagramOverviewClass_doesNotHideOverlay() {
+        seedHardBlockProfile()
+        harness.launchTargetA()
+        assertTrue(harness.waitForOverlay())
+        enforcementCoordinator.injectWindowStackForTests(
+            listOf(
+                OverlayWindowSnapshot(
+                    packageName = EnforcementTestPackages.TARGET_A,
+                    className = "com.instagram.feed.overview.MediaOverviewActivity",
+                    isOverlay = false,
+                    isFocused = true,
+                    isActive = true,
+                ),
+            ),
+        )
+        assertTrue(harness.waitForOverlay())
+    }
+
+    private fun injectStaleRecentsRestoreStack() {
+        enforcementCoordinator.injectWindowStackForTests(
+            listOf(
+                OverlayWindowSnapshot(
+                    packageName = "com.android.systemui",
+                    className = "com.android.quickstep.RecentsActivity",
+                    isOverlay = false,
+                    isFocused = false,
+                    isActive = false,
+                ),
+                OverlayWindowSnapshot(
+                    packageName = EnforcementTestPackages.TARGET_A,
+                    className = "com.gatekeep.app.testsupport.EnforcementTargetActivity",
+                    isOverlay = false,
+                    isFocused = true,
+                    isActive = true,
+                ),
+            ),
+        )
     }
 }

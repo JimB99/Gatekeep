@@ -106,14 +106,9 @@ class NotificationEnforcementTest : EnforcementCrossAppTestBase() {
 
                 seeded.packageName,
 
-                sessionState = com.gatekeep.domain.model.SessionState(
-
-                    packageName = seeded.packageName,
-
-                    sessionStartEpochMs = System.currentTimeMillis() -
-
-                        GatekeepTestFixtures.TestDurations.SESSION_TIMER_ELAPSED_MS,
-
+                sessionState = com.gatekeep.app.support.GatekeepTestFixtures.continuedSession(
+                    seeded.packageName,
+                    GatekeepTestFixtures.TestDurations.SESSION_TIMER_ELAPSED_MS,
                 ),
 
             )

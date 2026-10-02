@@ -61,11 +61,9 @@ class ForegroundRoutingPolicyTest {
     }
 
     @Test
-    fun decide_unknownSystemUiWhileBlocked_confirmExit() {
+    fun decide_unknownSystemUiWhileBlocked_ignore() {
         val route = decide(incoming = systemUi, kind = OverlayWindowKind.Unknown)
-        assertTrue(route is ForegroundRoutingPolicy.Route.ConfirmExit)
-        val confirm = route as ForegroundRoutingPolicy.Route.ConfirmExit
-        assertEquals(ForegroundRoutingPolicy.SHADE_CONFIRM_HOLD_MS, confirm.holdMs)
+        assertEquals(ForegroundRoutingPolicy.Route.Ignore, route)
     }
 
     @Test
@@ -78,11 +76,9 @@ class ForegroundRoutingPolicyTest {
     }
 
     @Test
-    fun decide_shadeWhileBlocked_confirmExit() {
+    fun decide_shadeWhileBlocked_ignore() {
         val route = decide(incoming = systemUi, kind = OverlayWindowKind.Shade)
-        assertTrue(route is ForegroundRoutingPolicy.Route.ConfirmExit)
-        val confirm = route as ForegroundRoutingPolicy.Route.ConfirmExit
-        assertEquals(ForegroundRoutingPolicy.SHADE_CONFIRM_HOLD_MS, confirm.holdMs)
+        assertEquals(ForegroundRoutingPolicy.Route.Ignore, route)
     }
 
     @Test
@@ -134,15 +130,133 @@ class ForegroundRoutingPolicyTest {
     }
 
     @Test
-    fun decide_noiseWhileNotBlocking_ignore() {
+    fun decide_shadeWhileNotBlocking_ignore() {
+        val route = decide(
+            incoming = systemUi,
+            blocked = null,
+            blocking = false,
+            presentation = BlockPresentation.None,
+            kind = OverlayWindowKind.Shade,
+        )
+        assertEquals(ForegroundRoutingPolicy.Route.Ignore, route)
+    }
+
+    @Test
+    fun decide_homeWhileNotBlocking_commitsLeave() {
         val route = decide(
             incoming = launcher,
+            current = blockedPkg,
             blocked = null,
             blocking = false,
             presentation = BlockPresentation.None,
             kind = OverlayWindowKind.Launcher,
         )
-        assertEquals(ForegroundRoutingPolicy.Route.Ignore, route)
+        assertTrue(route is ForegroundRoutingPolicy.Route.Commit)
+        assertEquals(launcher, (route as ForegroundRoutingPolicy.Route.Commit).packageName)
+        assertEquals(
+            ForegroundStabilizationPolicy.DEBOUNCE_MS,
+            (route as ForegroundRoutingPolicy.Route.Commit).holdMs,
+        )
+    }
+
+    @Test
+    fun decide_recentsWhileNotBlocking_commitsLeave() {
+        val route = decide(
+            incoming = systemUi,
+            current = blockedPkg,
+            blocked = null,
+            blocking = false,
+            presentation = BlockPresentation.None,
+            kind = OverlayWindowKind.Recents,
+        )
+        assertTrue(route is ForegroundRoutingPolicy.Route.Commit)
+    }
+
+    @Test
+    fun usageStats_staleLauncher_commitsRealApp() {
+        assertEquals(
+            blockedPkg,
+            ForegroundRoutingPolicy.usageStatsPackageToCommit(
+                usageStatsPackage = blockedPkg,
+                currentForegroundPackage = launcher,
+                accessibilityFocusedOnBlockedApp = false,
+                blockedPackage = null,
+                blockingActive = false,
+                ignoredPackages = setOf(systemUi),
+            ),
+        )
+    }
+
+    @Test
+    fun usageStats_focusedBlockedApp_ignoresOtherPackage() {
+        assertEquals(
+            null,
+            ForegroundRoutingPolicy.usageStatsPackageToCommit(
+                usageStatsPackage = otherApp,
+                currentForegroundPackage = blockedPkg,
+                accessibilityFocusedOnBlockedApp = true,
+                blockedPackage = blockedPkg,
+                blockingActive = true,
+                ignoredPackages = setOf(systemUi),
+            ),
+        )
+    }
+
+    @Test
+    fun launcherLeave_newerThanAppResume_whenAppIsNotFocused() {
+        assertEquals(
+            launcher,
+            ForegroundRoutingPolicy.launcherLeaveFromUsage(
+                latestResumePackage = launcher,
+                latestResumeAtMs = 5_000L,
+                currentPackage = blockedPkg,
+                currentPackageLastResumeAtMs = 1_000L,
+                accessibilityFocusedOnBlockedApp = false,
+            ),
+        )
+    }
+
+    @Test
+    fun launcherLeave_ignoredWhenBlockedAppStillFocused() {
+        assertEquals(
+            null,
+            ForegroundRoutingPolicy.launcherLeaveFromUsage(
+                latestResumePackage = launcher,
+                latestResumeAtMs = 5_000L,
+                currentPackage = blockedPkg,
+                currentPackageLastResumeAtMs = 1_000L,
+                accessibilityFocusedOnBlockedApp = true,
+            ),
+        )
+    }
+
+    @Test
+    fun launcherLeave_ignoredWhenLauncherResumeIsOlder() {
+        assertEquals(
+            null,
+            ForegroundRoutingPolicy.launcherLeaveFromUsage(
+                latestResumePackage = launcher,
+                latestResumeAtMs = 500L,
+                currentPackage = blockedPkg,
+                currentPackageLastResumeAtMs = 1_000L,
+                accessibilityFocusedOnBlockedApp = false,
+            ),
+        )
+    }
+
+    @Test
+    fun usageStats_launcherBlip_ignored() {
+        assertEquals(
+            null,
+            ForegroundRoutingPolicy.usageStatsPackageToCommit(
+                usageStatsPackage = launcher,
+                currentForegroundPackage = blockedPkg,
+                accessibilityFocusedOnBlockedApp = true,
+                blockedPackage = blockedPkg,
+                blockingActive = true,
+                ignoredPackages = setOf(systemUi),
+            ),
+        )
     }
 
     @Test
