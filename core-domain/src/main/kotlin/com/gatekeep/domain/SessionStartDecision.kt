@@ -22,6 +22,7 @@ object SessionStartDecision {
         if (existingState == null) return Action.StartFresh
         if (pendingWait || onBreak) return Action.Continue
         if (liveInMemorySession) {
+            if (existingState.lastForegroundEndEpochMs == null) return Action.Continue
             return if (SessionContinuityPolicy.shouldContinueSession(
                     existingState.lastForegroundEndEpochMs,
                     nowEpochMs,
@@ -30,7 +31,7 @@ object SessionStartDecision {
             ) {
                 Action.ResumeAfterGap
             } else {
-                Action.Continue
+                Action.StartFresh
             }
         }
         if (existingState.sessionStartEpochMs < dayStartEpochMs) return Action.StartFresh

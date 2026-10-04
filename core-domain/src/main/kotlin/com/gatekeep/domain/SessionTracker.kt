@@ -6,10 +6,11 @@ object SessionTracker {
 
     fun sessionDurationMs(session: SessionState?, nowEpochMs: Long): Long {
         if (session == null) return 0
-        var duration = (nowEpochMs - session.sessionStartEpochMs).coerceAtLeast(0)
+        val clockMs = sessionClockMs(session, nowEpochMs)
+        var duration = (clockMs - session.sessionStartEpochMs).coerceAtLeast(0)
         duration -= session.excludedMs
         session.frictionStartedAtEpochMs?.let { started ->
-            duration -= (nowEpochMs - started).coerceAtLeast(0)
+            duration -= (clockMs - started).coerceAtLeast(0)
         }
         return duration.coerceAtLeast(0)
     }
@@ -50,11 +51,26 @@ object SessionTracker {
             return SessionCheckResult.Allowed(remainingSessionMs = null)
         }
 
-        val elapsed = session?.let { (nowEpochMs - it.sessionStartEpochMs).coerceAtLeast(0) } ?: 0L
+        val clockMs = sessionClockMs(session, nowEpochMs)
+        val elapsed = session?.let { (clockMs - it.sessionStartEpochMs).coerceAtLeast(0) } ?: 0L
         val activeFrictionMs = session?.frictionStartedAtEpochMs?.let { started ->
-            (nowEpochMs - started).coerceAtLeast(0)
+            (clockMs - started).coerceAtLeast(0)
         } ?: 0L
         val excludedMs = session?.excludedMs ?: 0L
+        val netConsumedMs = (elapsed - excludedMs).coerceAtLeast(0)
+
+        // RES-02: once wall-clock usage (minus exclusions) reached the cap, friction pause must not re-allow.
+        if (netConsumedMs >= sessionLimit) {
+            val limitCrossedAt = session?.let {
+                it.sessionStartEpochMs + sessionLimit - excludedMs + activeFrictionMs
+            } ?: nowEpochMs
+            val breakUntil = breakUntilFromCrossed(limitCrossedAt, limit.breakDurationMs)
+            return SessionCheckResult.SessionExceeded(
+                breakUntilEpochMs = breakUntil,
+                limitCrossedAtEpochMs = limitCrossedAt,
+            )
+        }
+
         val remaining = sessionLimit - elapsed + excludedMs + activeFrictionMs
 
         return if (remaining <= 0) {
@@ -135,6 +151,11 @@ object SessionTracker {
 
     fun resetConsecutiveExtensions(session: SessionState): SessionState =
         session.copy(consecutiveExtensionCount = 0)
+
+    private fun sessionClockMs(session: SessionState?, nowEpochMs: Long): Long {
+        val endedAt = session?.lastForegroundEndEpochMs ?: return nowEpochMs
+        return minOf(endedAt, nowEpochMs)
+    }
 
     sealed class SessionCheckResult {
         data class Allowed(val remainingSessionMs: Long?) : SessionCheckResult()

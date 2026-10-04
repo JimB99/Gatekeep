@@ -142,6 +142,8 @@ class BlockOverlayManager @Inject constructor(
             if (epoch != overlayEpoch && overlayVisible) return@Runnable
             clearOverlayTimers()
             removeOverlayOnly()
+            // RES-02: frictionInProgress guards active math/wait UI, not an unresolved limit decision.
+            frictionInProgress = LimitOverlayHidePolicy.frictionInProgressAfterTemporaryHide()
         }
         if (Looper.myLooper() == Looper.getMainLooper()) {
             remove.run()

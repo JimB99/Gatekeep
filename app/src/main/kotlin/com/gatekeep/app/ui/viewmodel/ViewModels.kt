@@ -29,6 +29,7 @@ import com.gatekeep.domain.PauseManager
 import com.gatekeep.domain.PeriodDuration
 import com.gatekeep.domain.PolicyTimelineResolver
 import com.gatekeep.domain.ProfileMergeEngine
+import com.gatekeep.domain.UsageSnapshotResolver
 import com.gatekeep.domain.SchedulePolicyResolver
 import com.gatekeep.domain.StatsPeriodKind
 import com.gatekeep.domain.StatsPeriodLogic
@@ -42,6 +43,7 @@ import com.gatekeep.domain.model.PauseType
 import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.ScheduleSegment
 import com.gatekeep.domain.model.ScheduleWindow
+import com.gatekeep.domain.model.UsageSnapshot
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
@@ -414,6 +416,23 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch { loadCurrentUsage(profileId) }
     }
 
+    private suspend fun usageSnapshotForDisplay(
+        profileId: Long,
+        packageName: String,
+        now: Long,
+    ): UsageSnapshot {
+        val dayStart = usageStatsCollector.dayStartEpochMs(now)
+        val hourStart = usageStatsCollector.hourStartEpochMs(now)
+        val weekStart = usageStatsCollector.weekStartEpochMs(now)
+        val stats = usageStatsCollector.getUsageSnapshot(packageName, now)
+        val persisted = UsageSnapshot(
+            dailyMs = usageRepository.getDailyUsage(profileId, packageName, dayStart),
+            hourlyMs = usageRepository.getHourlyUsage(profileId, packageName, hourStart),
+            weeklyMs = usageRepository.getWeeklyUsage(profileId, packageName, weekStart),
+        )
+        return UsageSnapshotResolver.merge(stats, persisted)
+    }
+
     private suspend fun loadCurrentUsage(profileId: Long) {
         val profile = profileRepository.observeProfiles().first().find { it.id == profileId } ?: return
         val apps = profileRepository.observeMonitoredApps(profileId).first()
@@ -500,7 +519,7 @@ class ProfileViewModel @Inject constructor(
         }
 
         if (sharedPool) {
-            val snapshots = apps.map { usageStatsCollector.getUsageSnapshot(it.packageName, now) }
+            val snapshots = apps.map { usageSnapshotForDisplay(profileId, it.packageName, now) }
             val usage = ProfileMergeEngine.sumUsageSnapshots(snapshots)
             val baseLimit = profile.toAppLimit(apps.first().packageName)
             val sharedLimits = buildRows(apps.first().packageName, baseLimit, usage)
@@ -513,7 +532,7 @@ class ProfileViewModel @Inject constructor(
             val perApp = apps.map { app ->
                 val perAppLimit = profileRepository.getLimit(profileId, app.packageName)
                 val limit = ProfileMergeEngine.mergeProfileAndAppLimit(profile, app.packageName, perAppLimit)
-                val usage = usageStatsCollector.getUsageSnapshot(app.packageName, now)
+                val usage = usageSnapshotForDisplay(profileId, app.packageName, now)
                 CurrentUsageAppRow(
                     packageName = app.packageName,
                     label = app.label,

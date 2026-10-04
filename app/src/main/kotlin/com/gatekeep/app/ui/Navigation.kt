@@ -183,6 +183,7 @@ fun GatekeepNavHost(
             ProfilePolicyScreen(
                 profileId = profileId,
                 initialTab = policyTab,
+                onPersistPolicyTab = { tab -> entry.savedStateHandle["policyTab"] = tab },
                 onBack = { navController.popBackStack() },
                 onNavigateLimits = { navController.navigate(Routes.profilePolicyLimits(profileId)) },
                 onNavigateRulesOpen = { navController.navigate(Routes.profilePolicyRulesOpen(profileId)) },

@@ -44,6 +44,7 @@ import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.Pause
 import com.gatekeep.domain.model.PauseType
 import com.gatekeep.domain.model.Profile
+import com.gatekeep.domain.model.RuleEvaluation
 import com.gatekeep.domain.model.RuleEvaluationContext
 import com.gatekeep.domain.model.RuleResult
 import com.gatekeep.domain.model.SessionState
@@ -98,6 +99,8 @@ class EnforcementCoordinator @Inject constructor(
                 if (!blockOverlay.hasActiveWait()) {
                     restoreOverlayAfterScreenOn()
                 }
+                // Resume: keyguard often does not change foreground package (RES-01).
+                resumeMonitoredForegroundAfterScreenOn()
             }
         }
     }
@@ -129,6 +132,7 @@ class EnforcementCoordinator @Inject constructor(
     private var weeklyDeadlineMs: Long? = null
     private var graceDeadlineMs: Long? = null
     private var lastHudRefreshMs: Long = 0
+    private var countdownSessionPausedRemainingMs: Long? = null
     private var countdownDailyBaseMs: Long? = null
     private var countdownHourlyBaseMs: Long? = null
     private var countdownWeeklyBaseMs: Long? = null
@@ -167,6 +171,8 @@ class EnforcementCoordinator @Inject constructor(
     private var pendingForegroundConfirmExit: Boolean = false
     private var pendingForegroundRunnable: Runnable? = null
     private var evaluationEpoch = 0L
+    private var enforcementPeriodHourStartMs: Long? = null
+    private var enforcementPeriodDayStartMs: Long? = null
     private var accessibilityRevokedNotified = false
 
     private val isBlockingActive: Boolean
@@ -253,6 +259,10 @@ class EnforcementCoordinator @Inject constructor(
                 packageName == blockedPackage
             ) {
                 restoreOverlayForPackage(packageName)
+                return
+            }
+            if (shouldReevaluateSamePackageCommit(packageName)) {
+                reevaluateSamePackage(packageName)
             }
             return
         }
@@ -411,7 +421,11 @@ class EnforcementCoordinator @Inject constructor(
                 }
             }
             if (candidate == currentForegroundPackage) {
+                val reevaluate = shouldReevaluateSamePackageCommit(candidate)
                 clearPendingForegroundCommit()
+                if (reevaluate) {
+                    reevaluateSamePackage(candidate)
+                }
                 return@Runnable
             }
             clearPendingForegroundCommit()
@@ -439,6 +453,28 @@ class EnforcementCoordinator @Inject constructor(
         )
     }
 
+    private fun shouldReevaluateSamePackageCommit(packageName: String): Boolean =
+        SamePackageReevaluationPolicy.shouldReevaluateSamePackageCommit(
+            packageName = packageName,
+            currentForegroundPackage = currentForegroundPackage,
+            blockedPackage = blockedPackage,
+            blockingActive = isBlockingActive,
+            presentation = blockPresentationState.presentation,
+            sessionStartedForPackage = sessionStartedForPackage,
+            openGatePassedPackage = openGatePassedPackage,
+        )
+
+    private fun reevaluateSamePackage(packageName: String) {
+        scope.launch {
+            try {
+                evaluate(packageName)
+                syncOverlayVisibility()
+            } catch (e: Exception) {
+                enforcementLog.logError("Same-package reevaluation failed", e)
+            }
+        }
+    }
+
     private fun clearPendingForegroundCommit() {
         pendingForegroundRunnable?.let { mainHandler.removeCallbacks(it) }
         pendingForegroundRunnable = null
@@ -449,7 +485,7 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private suspend fun handleForegroundChange(packageName: String, prevPackage: String?) {
-        finalizePreviousSession()
+        finalizePreviousSession(prevPackage)
         previousForegroundPackage = prevPackage
 
         if (prevPackage != null &&
@@ -592,15 +628,8 @@ class EnforcementCoordinator @Inject constructor(
                     if (currentForegroundPackage != pkg) {
                         val prev = currentForegroundPackage
                         currentForegroundPackage = pkg
-                        if (prev != null &&
-                            prev in monitoredPackagesCache &&
-                            prev != pkg &&
-                            sessionStartedForPackage == prev
-                        ) {
-                            sessionStartedForPackage = null
-                        }
-                    }
-                    if (enforcementLoopRunnable != null &&
+                        handleForegroundChange(pkg, prev)
+                    } else if (enforcementLoopRunnable != null &&
                         countdownPackageName == pkg &&
                         pkg == currentForegroundPackage
                     ) {
@@ -1095,6 +1124,7 @@ class EnforcementCoordinator @Inject constructor(
         enforcementLoopRunnable = null
         countdownRunnable = null
         sessionDeadlineMs = null
+        countdownSessionPausedRemainingMs = null
         dailyDeadlineMs = null
         hourlyDeadlineMs = null
         weeklyDeadlineMs = null
@@ -1116,6 +1146,8 @@ class EnforcementCoordinator @Inject constructor(
         countdownSharedPool = false
         countdownMonitoredPackages = emptyList()
         showCountdownNotification = false
+        enforcementPeriodHourStartMs = null
+        enforcementPeriodDayStartMs = null
         notificationHelper.hideCountdown()
     }
 
@@ -1149,6 +1181,37 @@ class EnforcementCoordinator @Inject constructor(
         }
     }
 
+    /**
+     * Screen-on / USER_PRESENT: re-run enforcement when the user unlocks into the same monitored app.
+     * Accessibility often emits no foreground change, so open gate and HUD never start without this (RES-01).
+     */
+    private suspend fun resumeMonitoredForegroundAfterScreenOn() {
+        val now = System.currentTimeMillis()
+        val target = currentForegroundPackage
+            ?: usageStatsCollector.getForegroundPackageFallback()
+            ?: lastMonitoredForegroundPackage
+        val input = MonitoredForegroundResumePolicy.Input(
+            targetPackage = target,
+            monitoredPackages = monitoredPackagesCache,
+            lastMonitoredPackage = lastMonitoredForegroundPackage,
+            lastMonitoredAtMs = lastMonitoredForegroundAtMs,
+            nowMs = now,
+        )
+        if (!MonitoredForegroundResumePolicy.shouldForceEvaluateOnScreenResume(input)) {
+            pollForegroundIfChanged()
+            return
+        }
+        val pkg = target ?: return
+        // Usage-stats poll: fallback when accessibility stayed silent across keyguard.
+        pollForegroundIfChanged()
+        try {
+            evaluate(pkg)
+            syncOverlayVisibility()
+        } catch (e: Exception) {
+            enforcementLog.logError("Screen resume evaluation failed", e)
+        }
+    }
+
     private fun restoreOverlayAfterScreenOn() {
         val blocked = blockedPackage ?: return
         val fg = currentForegroundPackage
@@ -1159,19 +1222,41 @@ class EnforcementCoordinator @Inject constructor(
         }
     }
 
-    private suspend fun finalizePreviousSession() {
-        val prev = previousForegroundPackage ?: currentForegroundPackage ?: return
+    private suspend fun finalizePreviousSession(leavingPackage: String?) {
+        val prev = SessionLeavePolicy.packageToFinalize(
+            leavingPackage = leavingPackage,
+            newlyForegroundPackage = currentForegroundPackage,
+        ) ?: return
         val now = System.currentTimeMillis()
+        val oldState = if (previousProfileId > 0) {
+            usageRepository.getSessionState(previousProfileId, prev)
+        } else {
+            null
+        }
+        if (oldState != null && previousProfileId > 0) {
+            val onBreak = oldState.breakUntilEpochMs?.let { now < it } == true
+            val updated = if (onBreak) {
+                oldState
+            } else {
+                SessionContinuityPolicy.markForegroundEnded(oldState, now)
+            }
+            usageRepository.saveSessionState(updated, previousProfileId)
+        }
         if (countdownPackageName == prev) {
+            val remaining = SessionHudDeadline.displayedSessionRemainingMs(
+                nowEpochMs = now,
+                sessionDeadlineEpochMs = sessionDeadlineMs,
+                pausedRemainingMs = countdownSessionPausedRemainingMs,
+            )
+            sessionDeadlineMs = null
+            countdownSessionPausedRemainingMs = remaining
             val deadlinePassed = listOfNotNull(
-                sessionDeadlineMs,
                 dailyDeadlineMs,
                 hourlyDeadlineMs,
                 weeklyDeadlineMs,
             ).any { now >= it }
             if (deadlinePassed) {
                 evaluate(prev)
-                return
             }
         }
         if (previousSessionStartMs > 0 && previousProfileId > 0) {
@@ -1185,16 +1270,6 @@ class EnforcementCoordinator @Inject constructor(
                     excludedMs = excluded,
                 )
             }
-        }
-        val oldState = usageRepository.getSessionState(previousProfileId, prev)
-        if (oldState != null && previousProfileId > 0) {
-            val onBreak = oldState.breakUntilEpochMs?.let { now < it } == true
-            val updated = if (onBreak) {
-                oldState
-            } else {
-                SessionContinuityPolicy.markForegroundEnded(oldState, now)
-            }
-            usageRepository.saveSessionState(updated, previousProfileId)
         }
     }
 
@@ -1315,6 +1390,7 @@ class EnforcementCoordinator @Inject constructor(
         )
 
         if (SessionTracker.hasPendingWait(sessionForEval, now)) {
+            // Resume: while locked, wait overlay is suppressed; screen-on must re-enter this path (RES-01).
             if (blockOverlay.hasActiveWait() || !screenStateMonitor.isScreenOn()) {
                 return
             }
@@ -1357,7 +1433,12 @@ class EnforcementCoordinator @Inject constructor(
 
         val openAlreadyPassed = openGatePassedPackage == packageName ||
             OpenGatePassPolicy.shouldSkipOpenGate(sessionForEval, now, OPEN_GATE_GRACE_MS)
-        val result = when (val ruleResult = RuleEngine.evaluate(evalContext, openAlreadyPassed)) {
+        val fullEvaluation = RuleEngine.evaluateAll(evalContext)
+        val result = when (val ruleResult = RuleEngine.mergeForPresentation(
+            evaluation = fullEvaluation,
+            config = config,
+            openAlreadyPassed = openAlreadyPassed,
+        )) {
             is RuleResult.Blocked -> ruleResult
             is RuleResult.DelayOpen -> {
                 mainHandler.post {
@@ -1394,7 +1475,34 @@ class EnforcementCoordinator @Inject constructor(
 
         when (result) {
             is RuleResult.Allowed -> {
-                if (blockedPackage == packageName || blockOverlay.isVisible()) {
+                if (BlockClearOnAllowedPolicy.evaluationStillRequiresBlock(fullEvaluation)) {
+                    // Limit axes still block after merge edge cases; re-show overlay instead of clearing (RES-02).
+                    val blockedAxis = fullEvaluation.session as? RuleResult.Blocked
+                        ?: fullEvaluation.period as? RuleResult.Blocked
+                    if (blockedAxis != null && currentForegroundPackage == packageName) {
+                        val blockMessage = BlockMessageResolver.blockMessage(
+                            localizedContext, blockedAxis.reason, appLabel,
+                        )
+                        showBlocked(
+                            packageName, blockMessage,
+                            BlockPresentationReason.fromBlockReason(blockedAxis.reason),
+                            blockedAxis.breakUntilEpochMs, primaryProfile, mergedLimit, blockedAxis,
+                            evaluationEpochAtStart,
+                        )
+                        return
+                    }
+                }
+                if (currentForegroundPackage == packageName) {
+                    openGatePassedPackage = packageName
+                }
+                if (BlockClearOnAllowedPolicy.shouldClearBlockOnAllowed(
+                        evaluation = fullEvaluation,
+                        blockingActive = isBlockingActive,
+                        blockedPackage = blockedPackage,
+                        packageName = packageName,
+                        overlayVisible = blockOverlay.isVisible(),
+                    )
+                ) {
                     clearBlockState()
                 }
                 if (currentForegroundPackage != packageName) {
@@ -1522,6 +1630,7 @@ class EnforcementCoordinator @Inject constructor(
                         sharedPool = sharedPool,
                         monitoredPackages = hudMonitoredPackages,
                         showNotification = true,
+                        lastForegroundEndEpochMs = sessionForEval.lastForegroundEndEpochMs,
                     )
                 } else {
                     startEnforcementLoop(
@@ -1546,6 +1655,7 @@ class EnforcementCoordinator @Inject constructor(
                         sharedPool = sharedPool,
                         monitoredPackages = hudMonitoredPackages,
                         showNotification = false,
+                        lastForegroundEndEpochMs = sessionForEval.lastForegroundEndEpochMs,
                     )
                 }
                 _state.value = EnforcementState(
@@ -1683,10 +1793,17 @@ class EnforcementCoordinator @Inject constructor(
         sharedPool: Boolean,
         monitoredPackages: List<String>,
         showNotification: Boolean,
+        lastForegroundEndEpochMs: Long? = null,
     ) {
         enforcementLoopRunnable?.let { mainHandler.removeCallbacks(it) }
         val now = System.currentTimeMillis()
-        sessionDeadlineMs = remainingSessionMs?.takeIf { it > 0 }?.let { now + it }
+        sessionDeadlineMs = SessionHudDeadline.sessionDeadlineEpochMs(
+            nowEpochMs = now,
+            remainingSessionMs = remainingSessionMs,
+            lastForegroundEndEpochMs = lastForegroundEndEpochMs,
+        )
+        countdownSessionPausedRemainingMs = remainingSessionMs
+            ?.takeIf { it > 0 && lastForegroundEndEpochMs != null }
         dailyDeadlineMs = remainingDailyMs?.takeIf { it > 0 }?.let { now + it }
         hourlyDeadlineMs = remainingHourlyMs?.takeIf { it > 0 }?.let { now + it }
         weeklyDeadlineMs = remainingWeeklyMs?.takeIf { it > 0 }?.let { now + it }
@@ -1711,6 +1828,8 @@ class EnforcementCoordinator @Inject constructor(
         countdownHourlyUsedMs = hourlyUsedMs
         countdownWeeklyUsedMs = weeklyUsedMs
         showCountdownNotification = showNotification
+        enforcementPeriodHourStartMs = usageStatsCollector.hourStartEpochMs(now)
+        enforcementPeriodDayStartMs = usageStatsCollector.dayStartEpochMs(now)
 
         if (showNotification) {
             notificationHelper.resetCountdownDismissState()
@@ -1725,6 +1844,23 @@ class EnforcementCoordinator @Inject constructor(
                 val nowMs = System.currentTimeMillis()
                 val pkg = countdownPackageName
                 if (pkg != null) {
+                    val hourStart = usageStatsCollector.hourStartEpochMs(nowMs)
+                    val dayStart = usageStatsCollector.dayStartEpochMs(nowMs)
+                    val periodBoundaryCrossed =
+                        enforcementPeriodHourStartMs != null &&
+                            enforcementPeriodDayStartMs != null &&
+                            (hourStart != enforcementPeriodHourStartMs || dayStart != enforcementPeriodDayStartMs)
+                    if (periodBoundaryCrossed) {
+                        enforcementPeriodHourStartMs = hourStart
+                        enforcementPeriodDayStartMs = dayStart
+                        scope.launch { evaluate(pkg) }
+                        val delayMs = enforcementLoopDelayMs(nowMs)
+                            ?: EnforcementPollInterval.FINE_INTERVAL_MS
+                        mainHandler.postDelayed(this, delayMs)
+                        return
+                    }
+                    enforcementPeriodHourStartMs = hourStart
+                    enforcementPeriodDayStartMs = dayStart
                     val deadlineReached = listOfNotNull(
                         sessionDeadlineMs,
                         dailyDeadlineMs,
@@ -1878,10 +2014,12 @@ class EnforcementCoordinator @Inject constructor(
             }
         val now = System.currentTimeMillis()
         lastHudRefreshMs = now
-        val sessionRemaining = sessionDeadlineMs
-            ?.let { (it - now).coerceAtLeast(0) }
-            ?.takeIf { it > 0 }
-        val liveUsage = HudUsageDisplay.liveSnapshot(
+        val sessionRemaining = SessionHudDeadline.displayedSessionRemainingMs(
+            nowEpochMs = now,
+            sessionDeadlineEpochMs = sessionDeadlineMs,
+            pausedRemainingMs = countdownSessionPausedRemainingMs,
+        )
+        val liveUsage = HudUsageDisplay.liveStatsSnapshot(
             packageName = countdownPackageName,
             sharedPool = countdownSharedPool,
             monitoredPackages = countdownMonitoredPackages,
@@ -1902,9 +2040,18 @@ class EnforcementCoordinator @Inject constructor(
                 UsageDisplayLimits.displayLimitMs(base, extension, countdownNoLimitToday, PeriodDuration.weekMs)
             }
         }
-        countdownUsedTodayMs = liveUsage?.dailyMs.takeIf { dailyLimitMs != null }
-        countdownHourlyUsedMs = liveUsage?.hourlyMs.takeIf { hourlyLimitMs != null }
-        countdownWeeklyUsedMs = liveUsage?.weeklyMs.takeIf { weeklyLimitMs != null }
+        countdownUsedTodayMs = UsageSnapshotResolver.applyLivePeriodMs(
+            countdownUsedTodayMs,
+            liveUsage?.dailyMs.takeIf { dailyLimitMs != null },
+        )
+        countdownHourlyUsedMs = UsageSnapshotResolver.applyLivePeriodMs(
+            countdownHourlyUsedMs,
+            liveUsage?.hourlyMs.takeIf { hourlyLimitMs != null },
+        )
+        countdownWeeklyUsedMs = UsageSnapshotResolver.applyLivePeriodMs(
+            countdownWeeklyUsedMs,
+            liveUsage?.weeklyMs.takeIf { weeklyLimitMs != null },
+        )
         val pollIntervalMs = enforcementLoopDelayMs(now)
             ?: EnforcementPollInterval.FINE_INTERVAL_MS
         val shown = notificationHelper.showCountdown(
@@ -1973,6 +2120,10 @@ class EnforcementCoordinator @Inject constructor(
         evaluationEpochAtStart: Long = evaluationEpoch,
     ) {
         if (evaluationEpochAtStart != evaluationEpoch) return
+        // RES-02: hideTemporarily can leave frictionInProgress true while the view is gone; do not skip re-block.
+        if (blockOverlay.isFrictionInProgress() && !blockOverlay.isVisible()) {
+            blockOverlay.clearFrictionState()
+        }
         if (blockOverlay.isFrictionInProgress()) return
         lastBlockReason = blocked.reason
         lastBlockProfileId = profile.id

@@ -15,6 +15,11 @@ object SessionContinuityPolicy {
         return nowEpochMs - lastForegroundEndEpochMs < graceMs
     }
 
+    fun activeAwayMs(session: SessionState?, nowEpochMs: Long): Long {
+        val endedAt = session?.lastForegroundEndEpochMs ?: return 0L
+        return (nowEpochMs - endedAt).coerceAtLeast(0)
+    }
+
     fun markForegroundEnded(session: SessionState, nowEpochMs: Long): SessionState =
         session.copy(lastForegroundEndEpochMs = nowEpochMs)
 

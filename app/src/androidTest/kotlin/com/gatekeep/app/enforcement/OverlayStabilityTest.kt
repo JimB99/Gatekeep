@@ -9,6 +9,9 @@ import com.gatekeep.domain.model.ExtensionPolicy
 import com.gatekeep.domain.model.ExtensionSurfaceMode
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -123,6 +126,45 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
         assertTrue(harness.waitForOverlay())
         harness.pressRecents()
         assertOverlayHidden()
+    }
+
+    @Test
+    fun o18_leaveViaHomeOrRecents_noOverlayFlicker() {
+        seedHardBlockProfile()
+        harness.useRealForegroundDetection()
+        harness.launchTargetA()
+        assertTrue(harness.waitForOverlay())
+        harness.pressHome()
+        assertTrue(
+            "overlay did not hide after home ${harness.screenDiagnostics()}",
+            harness.waitForOverlayGone(1_500),
+        )
+        assertNoOverlayFlickerForMs(2_000)
+        harness.launchTargetA()
+        assertTrue(harness.waitForOverlay())
+        harness.pressRecents()
+        assertTrue(
+            "overlay did not hide after recents ${harness.screenDiagnostics()}",
+            harness.waitForOverlayGone(1_500),
+        )
+        assertNoOverlayFlickerForMs(2_000)
+    }
+
+    private fun assertNoOverlayFlickerForMs(stableMs: Long) {
+        val overlayPackage = InstrumentationRegistry.getInstrumentation().targetContext.packageName
+        val deadline = System.currentTimeMillis() + stableMs
+        var visibleSamples = 0
+        while (System.currentTimeMillis() < deadline) {
+            if (harness.device.hasObject(By.res(overlayPackage, "block_message"))) {
+                visibleSamples++
+            }
+            harness.sleepMs(50)
+        }
+        assertEquals(
+            "overlay flickered after leave ${harness.screenDiagnostics()}",
+            0,
+            visibleSamples,
+        )
     }
 
     @Test

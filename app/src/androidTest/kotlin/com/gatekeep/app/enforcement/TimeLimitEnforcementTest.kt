@@ -10,6 +10,9 @@ import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.PauseType
+import com.gatekeep.domain.model.RuleResult
+import com.gatekeep.domain.model.SessionState
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -261,5 +264,36 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
         }
         harness.launchTargetA()
         assertAllowedWithoutBlockingOverlay()
+    }
+
+    @Test
+    fun tl21_awayUnderOneMinute_doesNotExpireSession() {
+        lateinit var seeded: GatekeepTestFixtures.SeededProfile
+        val now = System.currentTimeMillis()
+        val sessionLimitMs = 6_000L
+        runSeed {
+            seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    sessionLimitMs = sessionLimitMs,
+                    dailyLimitMs = null,
+                    onSessionLimitAction = OnSessionLimitAction.hardBlock,
+                    onOpenAction = OnOpenAction.none,
+                ),
+            )
+            usageRepository.saveSessionState(
+                SessionState(
+                    packageName = seeded.packageName,
+                    sessionStartEpochMs = now - 8_000L,
+                    lastForegroundEndEpochMs = now - 5_000L,
+                ),
+                seeded.profileId,
+            )
+        }
+        val result = runBlocking {
+            enforcementCoordinator.evaluateMonitoredPackageForTests(seeded.packageName)
+        }
+        assertTrue("away time must not consume session remaining", result is RuleResult.Allowed)
+        assertOverlayHidden()
     }
 }

@@ -86,6 +86,15 @@ class SessionStartDecisionTest {
     }
 
     @Test
+    fun liveInMemory_gapAtLeastOneMinute_startsFresh() {
+        val leftAt = now - SessionContinuityPolicy.RESUME_GRACE_MS
+        assertEquals(
+            SessionStartDecision.Action.StartFresh,
+            decide(session(lastEnd = leftAt), live = true),
+        )
+    }
+
+    @Test
     fun processDeath_nullLastEnd_startsFresh() {
         val yesterday = session(start = dayStart - 12 * 60 * 60_000L, lastEnd = null)
         assertEquals(

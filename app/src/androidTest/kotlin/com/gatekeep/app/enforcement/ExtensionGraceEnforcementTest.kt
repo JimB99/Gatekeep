@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
+import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.ExtensionPolicy
 import com.gatekeep.domain.model.ExtensionSurfaceMode
@@ -156,5 +157,44 @@ class ExtensionGraceEnforcementTest : EnforcementCrossAppTestBase() {
         assertTrue(harness.clickOverlayNoLimitToday())
         assertOverlayHidden()
         assertAllowedWithoutBlockingOverlay()
+    }
+
+    @Test
+    fun e15_openWait_afterExistingGrace_doesNotAskForAnotherExtension() {
+        lateinit var seeded: GatekeepTestFixtures.SeededProfile
+        runSeed {
+            seeded = seedBlockedProfile(
+                config = extensionOverlayConfig().copy(
+                    onOpenAction = OnOpenAction.deterrentWait,
+                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.CANCELLED_OPEN_WAIT_SEC,
+                    sessionLimitMs = 20 * 60_000L,
+                    dailyLimitMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
+                ),
+                dailyMs = GatekeepTestFixtures.TestDurations.OVER_DAILY_CAP_MS,
+            )
+            assertTrue(
+                enforcementCoordinator.grantExtensionForProfileAwait(
+                    seeded.profileId,
+                    seeded.packageName,
+                    minutes = 5,
+                ),
+            )
+        }
+        harness.launchTargetA()
+        assertTrue(harness.waitForOpenFriction())
+        runBlocking {
+            enforcementCoordinator.onOpenGatePassed(seeded.packageName)
+        }
+        assertAllowedWithoutBlockingOverlay()
+        assertOverlayHidden()
+        assertTrue(
+            "extension overlay must not appear after open-wait when grace remains",
+            !harness.isExtensionButtonsVisible(),
+        )
+        val result = runBlocking {
+            enforcementCoordinator.evaluateMonitoredPackageForTests(seeded.packageName)
+        }
+        assertTrue("post-wait evaluation should stay allowed", result is RuleResult.Allowed)
+        assertTrue(!harness.isExtensionButtonsVisible())
     }
 }

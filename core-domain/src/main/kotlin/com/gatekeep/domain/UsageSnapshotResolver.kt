@@ -10,11 +10,24 @@ object UsageSnapshotResolver {
      * fall back to persisted totals when stats report zero.
      */
     fun merge(stats: UsageSnapshot, persisted: UsageSnapshot): UsageSnapshot = UsageSnapshot(
-        dailyMs = preferStats(stats.dailyMs, persisted.dailyMs),
-        hourlyMs = preferStats(stats.hourlyMs, persisted.hourlyMs),
-        weeklyMs = preferStats(stats.weeklyMs, persisted.weeklyMs),
+        dailyMs = mergePeriodMs(stats.dailyMs, persisted.dailyMs),
+        hourlyMs = mergePeriodMs(stats.hourlyMs, persisted.hourlyMs),
+        weeklyMs = mergePeriodMs(stats.weeklyMs, persisted.weeklyMs),
     )
 
-    private fun preferStats(statsMs: Long, persistedMs: Long): Long =
+    /**
+     * UsageStats is authoritative when it reports usage for a period.
+     * When stats report zero, keep persisted totals (transient query gaps must not erase usage).
+     */
+    fun mergePeriodMs(statsMs: Long, persistedMs: Long): Long =
         if (statsMs > 0L) statsMs else persistedMs
+
+    /**
+     * HUD / live refresh: advance when stats report usage; hold last displayed value when stats briefly report zero.
+     */
+    fun applyLivePeriodMs(displayedMs: Long?, liveStatsMs: Long?): Long? {
+        if (liveStatsMs == null) return displayedMs
+        if (liveStatsMs > 0L) return liveStatsMs
+        return displayedMs ?: liveStatsMs
+    }
 }

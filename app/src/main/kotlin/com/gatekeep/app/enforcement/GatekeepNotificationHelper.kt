@@ -186,6 +186,7 @@ class GatekeepNotificationHelper @Inject constructor(
             }
         }
         if (parts.isEmpty()) {
+            if (lastBody != null) return true
             hideCountdown()
             return false
         }

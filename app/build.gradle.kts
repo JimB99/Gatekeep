@@ -15,8 +15,8 @@ android {
         applicationId = "com.gatekeep.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 33
-        versionName = "3.7.3"
+        versionCode = 38
+        versionName = "3.7.8"
         testInstrumentationRunner = "com.gatekeep.app.HiltTestRunner"
         ndk {
             abiFilters += "arm64-v8a"

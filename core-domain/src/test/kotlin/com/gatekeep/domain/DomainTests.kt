@@ -594,6 +594,71 @@ class SessionTrackerTest {
     }
 
     @Test
+    fun `away time after leave does not consume session remaining`() {
+        val now = 1_000_000L
+        val sessionLimit = 15 * 60_000L
+        val usedMs = 5 * 60_000L
+        val leftAt = now
+        val session = SessionTracker.startSession("com.test", leftAt - usedMs).copy(
+            lastForegroundEndEpochMs = leftAt,
+        )
+        val atLeave = SessionTracker.evaluateSession(
+            AppLimit(1, "com.test", sessionLimitMs = sessionLimit),
+            session,
+            leftAt,
+        )
+        val later = SessionTracker.evaluateSession(
+            AppLimit(1, "com.test", sessionLimitMs = sessionLimit),
+            session,
+            leftAt + 30_000L,
+        )
+        assertTrue(atLeave is SessionTracker.SessionCheckResult.Allowed)
+        assertTrue(later is SessionTracker.SessionCheckResult.Allowed)
+        assertEquals(
+            (atLeave as SessionTracker.SessionCheckResult.Allowed).remainingSessionMs,
+            (later as SessionTracker.SessionCheckResult.Allowed).remainingSessionMs,
+        )
+        assertEquals(sessionLimit - usedMs, later.remainingSessionMs)
+        assertEquals(usedMs, SessionTracker.sessionDurationMs(session, leftAt + 30_000L))
+    }
+
+    @Test
+    fun `away time at one minute grace boundary still does not consume session remaining`() {
+        val now = 1_000_000L
+        val sessionLimit = 15 * 60_000L
+        val usedMs = 5 * 60_000L
+        val leftAt = now
+        val session = SessionTracker.startSession("com.test", leftAt - usedMs).copy(
+            lastForegroundEndEpochMs = leftAt,
+        )
+        val later = SessionTracker.evaluateSession(
+            AppLimit(1, "com.test", sessionLimitMs = sessionLimit),
+            session,
+            leftAt + SessionContinuityPolicy.RESUME_GRACE_MS,
+        )
+        assertTrue(later is SessionTracker.SessionCheckResult.Allowed)
+        assertEquals(
+            sessionLimit - usedMs,
+            (later as SessionTracker.SessionCheckResult.Allowed).remainingSessionMs,
+        )
+        assertEquals(
+            usedMs,
+            SessionTracker.sessionDurationMs(session, leftAt + SessionContinuityPolicy.RESUME_GRACE_MS),
+        )
+    }
+
+    @Test
+    fun `away after leave does not double-count active friction`() {
+        val now = 1_000_000L
+        val session = SessionTracker.startSession("com.test", now - 10 * 60_000L)
+            .copy(
+                frictionStartedAtEpochMs = now - 60_000L,
+                lastForegroundEndEpochMs = now - 30_000L,
+            )
+        assertEquals(9 * 60_000L, SessionTracker.sessionDurationMs(session, now))
+    }
+
+    @Test
     fun `session counts time during open wait when friction is not excluded`() {
         val now = 1_000_000L
         val sessionLimit = 5 * 60_000L
@@ -607,6 +672,22 @@ class SessionTrackerTest {
         val allowed = result as SessionTracker.SessionCheckResult.Allowed
         assertEquals(sessionLimit - 30_000L, allowed.remainingSessionMs)
     }
+
+    @Test
+    fun `session at cap stays exceeded while limit block friction is active`() {
+        // RES-02: friction on the extension overlay must not re-allow a session that already hit its cap.
+        val now = 1_000_000L
+        val sessionLimit = 15 * 60_000L
+        val session = SessionTracker.startSession("com.test", now - sessionLimit)
+            .copy(frictionStartedAtEpochMs = now - 30_000L)
+        val result = SessionTracker.evaluateSession(
+            AppLimit(1, "com.test", sessionLimitMs = sessionLimit),
+            session,
+            now,
+        )
+        assertTrue(result is SessionTracker.SessionCheckResult.SessionExceeded)
+    }
+
     @Test
     fun `pending wait blocks until deadline`() {
         val now = 1_000_000L

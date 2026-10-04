@@ -17,6 +17,7 @@ import com.gatekeep.domain.ExtensionDisplayAnchors
 import com.gatekeep.domain.ExtensionPeriodDisplay
 import com.gatekeep.domain.UsageAggregator
 import com.gatekeep.domain.UsageSessionRecord
+import com.gatekeep.domain.UsageSnapshotResolver
 import com.gatekeep.domain.model.Pause
 import com.gatekeep.domain.model.PauseType
 import com.gatekeep.domain.model.SessionState
@@ -100,17 +101,24 @@ class UsageRepository(
         packageName: String,
         period: UsagePeriod,
         periodStart: Long,
-        totalMs: Long,
+        statsMs: Long,
     ) {
+        val existingMs = usageAggregateDao.getTotal(profileId, packageName, period.name, periodStart) ?: 0L
+        val mergedMs = UsageSnapshotResolver.mergePeriodMs(statsMs, existingMs)
+        if (mergedMs <= 0L) {
+            if (existingMs <= 0L) return
+            // Stats reported zero but we still have persisted usage — do not wipe the aggregate.
+            return
+        }
+        if (mergedMs == existingMs) return
         usageAggregateDao.deleteForPeriod(profileId, packageName, period.name, periodStart)
-        if (totalMs <= 0L) return
         usageAggregateDao.insert(
             UsageAggregateEntity(
                 packageName = packageName,
                 profileId = profileId,
                 period = period.name,
                 periodStart = periodStart,
-                totalMs = totalMs,
+                totalMs = mergedMs,
             ),
         )
     }

@@ -103,7 +103,7 @@ class OverlayRestorePolicyTest {
     }
 
     @Test
-    fun hiddenRecentsTop_reportedForegroundBlocked_restore() {
+    fun hiddenRecentsTop_reportedForegroundBlocked_staysHidden() {
         val route = OverlayRestorePolicy.decide(
             input(
                 windows = listOf(recents(focused = true)),
@@ -113,8 +113,7 @@ class OverlayRestorePolicyTest {
                 reported = blocked,
             ),
         )
-        assertTrue(route is ForegroundRoutingPolicy.Route.Restore)
-        assertEquals(blocked, (route as ForegroundRoutingPolicy.Route.Restore).packageName)
+        assertEquals(ForegroundRoutingPolicy.Route.Ignore, route)
     }
 
     @Test

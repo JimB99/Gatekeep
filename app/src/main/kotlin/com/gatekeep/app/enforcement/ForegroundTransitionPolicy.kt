@@ -14,4 +14,19 @@ object ForegroundTransitionPolicy {
         incomingPackage != currentForegroundPackage -> true
         else -> false
     }
+
+    /**
+     * Same-package window events are usually in-app navigation. Re-evaluate when the
+     * session was ended (return from background) or on-open friction has not run yet
+     * (stale foreground package skipped the first open).
+     */
+    fun shouldReevaluateSamePackage(
+        incomingPackage: String,
+        currentForegroundPackage: String?,
+        lastForegroundEnded: Boolean,
+        openGatePassedForPackage: Boolean,
+    ): Boolean {
+        if (incomingPackage != currentForegroundPackage) return false
+        return lastForegroundEnded || !openGatePassedForPackage
+    }
 }

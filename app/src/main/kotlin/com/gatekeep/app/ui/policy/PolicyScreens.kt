@@ -77,6 +77,7 @@ fun ProfilePolicyScreen(
     profileId: Long,
     onBack: () -> Unit,
     initialTab: Int = 0,
+    onPersistPolicyTab: (Int) -> Unit = {},
     onNavigateLimits: () -> Unit,
     onNavigateRulesOpen: () -> Unit,
     onNavigateRulesLimit: () -> Unit,
@@ -104,6 +105,18 @@ fun ProfilePolicyScreen(
     LaunchedEffect(profileId) {
         viewModel.bindProfile(profileId)
         viewModel.refreshEffectivePolicy(profileId)
+    }
+
+    fun selectTab(tab: Int) {
+        selectedTab = tab
+        // Nav savedStateHandle only updated on segment editor open; sync on tab change so
+        // time limits / rules sub-screens restore the tab the user was viewing (not stale Schedules).
+        onPersistPolicyTab(tab)
+    }
+
+    fun navigateFromCurrentTab(action: () -> Unit) {
+        onPersistPolicyTab(selectedTab)
+        action()
     }
 
     val backGuard = rememberUnsavedChangesGuard(
@@ -135,7 +148,7 @@ fun ProfilePolicyScreen(
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
                     selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
+                    onClick = { selectTab(0) },
                     text = {
                         Text(
                             stringResource(R.string.policy_default_tab),
@@ -146,7 +159,7 @@ fun ProfilePolicyScreen(
                 )
                 Tab(
                     selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
+                    onClick = { selectTab(1) },
                     text = {
                         Text(
                             stringResource(R.string.policy_schedules_tab),
@@ -157,7 +170,7 @@ fun ProfilePolicyScreen(
                 )
                 Tab(
                     selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
+                    onClick = { selectTab(2) },
                     text = {
                         Text(
                             stringResource(R.string.policy_week_tab),
@@ -171,12 +184,12 @@ fun ProfilePolicyScreen(
                 0 -> PolicyDefaultTab(
                     profile = profile,
                     effectivePolicy = effectivePolicy,
-                    onNavigateLimits = onNavigateLimits,
-                    onNavigateRulesOpen = onNavigateRulesOpen,
-                    onNavigateRulesLimit = onNavigateRulesLimit,
-                    onNavigateRulesSession = onNavigateRulesSession,
-                    onNavigateNoMatchLimits = onNavigateNoMatchLimits,
-                    onNavigateNoMatchRules = onNavigateNoMatchRules,
+                    onNavigateLimits = { navigateFromCurrentTab(onNavigateLimits) },
+                    onNavigateRulesOpen = { navigateFromCurrentTab(onNavigateRulesOpen) },
+                    onNavigateRulesLimit = { navigateFromCurrentTab(onNavigateRulesLimit) },
+                    onNavigateRulesSession = { navigateFromCurrentTab(onNavigateRulesSession) },
+                    onNavigateNoMatchLimits = { navigateFromCurrentTab(onNavigateNoMatchLimits) },
+                    onNavigateNoMatchRules = { navigateFromCurrentTab(onNavigateNoMatchRules) },
                     onSaveProfile = { viewModel.saveProfileAwait(it) },
                     onDirtyChange = { defaultTabDirty = it },
                     onSetupHandlers = { save, discard ->

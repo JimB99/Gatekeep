@@ -33,8 +33,7 @@ object OverlayRestorePolicy {
             val blocked = input.blockedPackage
             if (input.presentation is BlockPresentation.HiddenForOtherApp &&
                 blocked != null &&
-                (input.usageStatsForegroundPackage == blocked ||
-                    input.reportedForegroundPackage == blocked)
+                input.usageStatsForegroundPackage == blocked
             ) {
                 return ForegroundRoutingPolicy.Route.Restore(blocked)
             }
@@ -101,8 +100,10 @@ object OverlayRestorePolicy {
 
         val blocked = input.blockedPackage
         if (input.presentation is BlockPresentation.HiddenForOtherApp && blocked != null) {
-            if (input.reportedForegroundPackage == blocked) {
-                return ForegroundRoutingPolicy.Route.Restore(blocked)
+            if (input.reportedForegroundPackage == blocked &&
+                (kind == OverlayWindowKind.Recents || kind == OverlayWindowKind.Launcher)
+            ) {
+                return ForegroundRoutingPolicy.Route.Ignore
             }
             if (kind == OverlayWindowKind.Recents || kind == OverlayWindowKind.Launcher) {
                 val blockedWindow = input.windows.firstOrNull {

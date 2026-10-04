@@ -35,4 +35,40 @@ class ForegroundTransitionPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun samePackage_reevaluatesWhenReturningFromBackground() {
+        assertTrue(
+            ForegroundTransitionPolicy.shouldReevaluateSamePackage(
+                incomingPackage = "com.google.android.youtube",
+                currentForegroundPackage = "com.google.android.youtube",
+                lastForegroundEnded = true,
+                openGatePassedForPackage = true,
+            ),
+        )
+    }
+
+    @Test
+    fun samePackage_reevaluatesWhenOpenGateNotPassed() {
+        assertTrue(
+            ForegroundTransitionPolicy.shouldReevaluateSamePackage(
+                incomingPackage = "com.google.android.youtube",
+                currentForegroundPackage = "com.google.android.youtube",
+                lastForegroundEnded = false,
+                openGatePassedForPackage = false,
+            ),
+        )
+    }
+
+    @Test
+    fun samePackage_skipsWhenLiveAndOpenGateAlreadyPassed() {
+        assertFalse(
+            ForegroundTransitionPolicy.shouldReevaluateSamePackage(
+                incomingPackage = "com.google.android.youtube",
+                currentForegroundPackage = "com.google.android.youtube",
+                lastForegroundEnded = false,
+                openGatePassedForPackage = true,
+            ),
+        )
+    }
 }

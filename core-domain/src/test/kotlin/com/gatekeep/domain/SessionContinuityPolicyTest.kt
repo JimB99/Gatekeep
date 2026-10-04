@@ -56,6 +56,26 @@ class SessionContinuityPolicyTest {
     }
 
     @Test
+    fun activeAwayMs_isZeroWhenStillForeground() {
+        val session = SessionState(
+            packageName = "com.test",
+            sessionStartEpochMs = 1_000L,
+            lastForegroundEndEpochMs = null,
+        )
+        assertEquals(0L, SessionContinuityPolicy.activeAwayMs(session, nowEpochMs = 40_000L))
+    }
+
+    @Test
+    fun activeAwayMs_countsGapFromLastForegroundEnd() {
+        val session = SessionState(
+            packageName = "com.test",
+            sessionStartEpochMs = 1_000L,
+            lastForegroundEndEpochMs = 10_000L,
+        )
+        assertEquals(30_000L, SessionContinuityPolicy.activeAwayMs(session, nowEpochMs = 40_000L))
+    }
+
+    @Test
     fun markForegroundEnded_preservesPassAndStart() {
         val session = SessionState(
             packageName = "com.test",

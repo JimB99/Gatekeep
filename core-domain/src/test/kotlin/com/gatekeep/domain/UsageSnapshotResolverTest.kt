@@ -27,4 +27,16 @@ class UsageSnapshotResolverTest {
         assertEquals(3 * 60_000L, merged.hourlyMs)
         assertEquals(40 * 60_000L, merged.weeklyMs)
     }
+
+    @Test
+    fun `mergePeriodMs keeps persisted when stats report zero`() {
+        assertEquals(12 * 60_000L, UsageSnapshotResolver.mergePeriodMs(0L, 12 * 60_000L))
+    }
+
+    @Test
+    fun `applyLivePeriodMs holds displayed usage when stats briefly zero`() {
+        assertEquals(12 * 60_000L, UsageSnapshotResolver.applyLivePeriodMs(12 * 60_000L, 0L))
+        assertEquals(14 * 60_000L, UsageSnapshotResolver.applyLivePeriodMs(12 * 60_000L, 14 * 60_000L))
+        assertEquals(0L, UsageSnapshotResolver.applyLivePeriodMs(null, 0L))
+    }
 }

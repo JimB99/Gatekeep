@@ -53,13 +53,11 @@ class HudUsageDisplayTest {
     }
 
     @Test
-    fun `shared pool HUD ignores inflated persisted totals path`() {
-        val snapshot = HudUsageDisplay.liveSnapshot(
-            packageName = "com.example.a",
-            sharedPool = false,
-            monitoredPackages = listOf("com.example.a"),
-            statsForPackage = { UsageSnapshot(dailyMs = 14 * 60_000L) },
+    fun mergeWithPersisted_usesPersistedWhenStatsZero() {
+        val merged = HudUsageDisplay.mergeWithPersisted(
+            stats = UsageSnapshot(),
+            persisted = UsageSnapshot(dailyMs = 12 * 60_000L),
         )
-        assertEquals(14 * 60_000L, snapshot?.dailyMs)
+        assertEquals(12 * 60_000L, merged?.dailyMs)
     }
 }

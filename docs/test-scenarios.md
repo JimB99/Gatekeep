@@ -145,6 +145,7 @@ Gradle uses JDK 21 via `org.gradle.java.home` in `gradle.properties` (Studio JBR
 | O-15 | Overview then tap recents card reshows overlay | `OverlayStabilityTest.o15_overviewThenTapRecentsCard_reshowsOverlay` |
 | O-16 | Stale recents window stack restores overlay | `OverlayStabilityTest.o16_staleRecentsWindowStack_restoresOverlay` |
 | O-17 | Instagram overview class does not hide overlay | `OverlayStabilityTest.o17_instagramOverviewClass_doesNotHideOverlay` |
+| O-18 | Home or Recents hides overlay without a flicker | `OverlayStabilityTest.o18_leaveViaHomeOrRecents_noOverlayFlicker` |
 
 ---
 
@@ -167,6 +168,7 @@ Gradle uses JDK 21 via `org.gradle.java.home` in `gradle.properties` (Studio JBR
 | G-13 | Quick return within 60s grace skips open gate | `OpenGateTest.g13_quickReturn_withinGrace_skipsOpenGate` |
 | G-14 | Launcher blip does not reopen open gate | `OpenGateTest.g14_spuriousLauncherBlip_doesNotReopenGate` |
 | G-15 | Quick bounce without passing still shows open gate | `OpenGateTest.g15_quickBounce_neverPassed_stillShowsOpenGate` |
+| G-16 | Same-package event re-evaluates when open gate not passed | `ForegroundTransitionPolicyTest.samePackage_reevaluatesWhenOpenGateNotPassed` |
 
 ---
 
@@ -220,6 +222,20 @@ These cases launch with `am start` and read `block_message` / `wait_countdown`. 
 | TL-18 | Live in-memory session continues across 4am | `SessionStartDecisionTest.liveInMemory_acrossDayStart_continues` |
 | TL-19 | Away under 1 min resumes same session | `SessionStartDecisionTest.notLive_gapUnderOneMinute_sameDay_resumes` |
 | TL-20 | Away 1 min or more starts a new session | `SessionStartDecisionTest.notLive_gapAtLeastOneMinute_startsFresh` |
+| TL-21 | Live in-memory session starts fresh after 1 min away | `SessionStartDecisionTest.liveInMemory_gapAtLeastOneMinute_startsFresh` |
+| TL-22 | Away time does not consume session remaining | `SessionTrackerTest.away time after leave does not consume session remaining` |
+| TL-23 | Away under 1 min does not expire a session that would fail on wall clock | `TimeLimitEnforcementTest.tl21_awayUnderOneMinute_doesNotExpireSession` |
+| TL-24 | Calendar hour boundary with 4am day reset: zero stats must not wipe usage / HUD | `UsageSnapshotResolverTest.mergePeriodMs keeps persisted when stats report zero`, `UsageSnapshotResolverTest.applyLivePeriodMs holds displayed usage when stats briefly zero`, `HudUsageDisplayTest.mergeWithPersisted_usesPersistedWhenStatsZero` |
+
+---
+
+## RES — Resume without foreground change
+
+| ID | Scenario | Automated test |
+|----|----------|----------------|
+| RES-01 | Screen unlock into same monitored app re-runs open gate or HUD | `ResumeEnforcementTest.res01_screenUnlockSameApp_runsOpenGateOrCountdown`, `MonitoredForegroundResumePolicyTest` |
+| RES-02 | Session extension overlay returns after home → reopen | `ResumeEnforcementTest.res02_sessionExtensionOverlay_returnsAfterHome`, `BlockClearOnAllowedPolicyTest`, `LimitOverlayHidePolicyTest` |
+| RES-03 | Reopen after session limit still blocked (no free usage) | `ResumeEnforcementTest.res03_sessionExtensionOverlay_reopenStillBlocked`, `DomainTests.session at cap stays exceeded while limit block friction is active` |
 
 ---
 
@@ -331,6 +347,7 @@ See also `docs/test-run-report.md` for latest run summary.
 | E-12 | Grace over daily cap: HUD shows used / base+bonus (not ∞ or 289h-style) | `ExtensionGraceEnforcementTest.e12_overDailyCap_graceCountdown_showsFiniteLimitNotInfinity` |
 | E-13 | Overlay no-limit-today dismisses overlay | `ExtensionGraceEnforcementTest.e13_overlayNoLimitToday_dismissesOverlayAndStaysAllowed` |
 | E-14 | Overlay no-limit-today uses session policy when limit policy disables | `ExtensionGraceEnforcementTest.e14_overlayNoLimitToday_sessionPolicyUsedWhenLimitPolicyDisables` |
+| E-15 | Open-wait after a remaining extension does not ask for another extension | `ExtensionGraceEnforcementTest.e15_openWait_afterExistingGrace_doesNotAskForAnotherExtension` |
 
 ---
 
