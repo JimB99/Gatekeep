@@ -689,6 +689,63 @@ class SessionTrackerTest {
     }
 
     @Test
+    fun `device pause freezes remaining across wall-clock pocket time`() {
+        // RES-04: lock/screen-off must not consume session remaining.
+        val now = 1_000_000L
+        val sessionLimit = 15_000L
+        val started = now - 10_000L
+        val paused = SessionTracker.pauseDeviceUse(
+            SessionTracker.startSession("com.test", started),
+            now,
+        )
+        val later = SessionTracker.evaluateSession(
+            AppLimit(1, "com.test", sessionLimitMs = sessionLimit),
+            paused,
+            now + 30_000L,
+        )
+        assertTrue(later is SessionTracker.SessionCheckResult.Allowed)
+        assertEquals(
+            sessionLimit - 10_000L,
+            (later as SessionTracker.SessionCheckResult.Allowed).remainingSessionMs,
+        )
+    }
+
+    @Test
+    fun `device resume adds paused time to excludedMs`() {
+        val now = 1_000_000L
+        val paused = SessionTracker.pauseDeviceUse(
+            SessionTracker.startSession("com.test", now - 5_000L),
+            now,
+        )
+        val resumed = SessionTracker.resumeDeviceUse(paused, now + 12_000L)
+        assertEquals(12_000L, resumed.excludedMs)
+        assertEquals(null, resumed.devicePausedAtEpochMs)
+        val result = SessionTracker.evaluateSession(
+            AppLimit(1, "com.test", sessionLimitMs = 60_000L),
+            resumed,
+            now + 12_000L,
+        )
+        assertTrue(result is SessionTracker.SessionCheckResult.Allowed)
+        assertEquals(
+            60_000L - 5_000L,
+            (result as SessionTracker.SessionCheckResult.Allowed).remainingSessionMs,
+        )
+    }
+
+    @Test
+    fun `device pause is idempotent and uses earliest freeze with leave`() {
+        val now = 1_000_000L
+        val leftAt = now - 20_000L
+        val session = SessionTracker.startSession("com.test", now - 40_000L).copy(
+            lastForegroundEndEpochMs = leftAt,
+        )
+        val paused = SessionTracker.pauseDeviceUse(session, now)
+        val pausedAgain = SessionTracker.pauseDeviceUse(paused, now + 5_000L)
+        assertEquals(now, pausedAgain.devicePausedAtEpochMs)
+        assertEquals(20_000L, SessionTracker.sessionDurationMs(pausedAgain, now + 30_000L))
+    }
+
+    @Test
     fun `pending wait blocks until deadline`() {
         val now = 1_000_000L
         val session = SessionTracker.setPendingWait(
@@ -721,6 +778,19 @@ class SessionTrackerTest {
         val extended = SessionTracker.extendPendingWait(session, 10_000L)
         assertTrue(SessionTracker.hasPendingWait(extended, now + 65_000L))
         assertFalse(SessionTracker.hasPendingWait(extended, now + 70_000L))
+    }
+
+    @Test
+    fun `device resume extends a pending wait by paused duration`() {
+        val now = 1_000_000L
+        val waiting = SessionTracker.setPendingWait(
+            SessionTracker.startSession("com.test", now),
+            now + 60_000L,
+        )
+        val paused = SessionTracker.pauseDeviceUse(waiting, now + 10_000L)
+        val resumed = SessionTracker.resumeDeviceUse(paused, now + 25_000L)
+        assertTrue(SessionTracker.hasPendingWait(resumed, now + 70_000L))
+        assertFalse(SessionTracker.hasPendingWait(resumed, now + 75_000L))
     }
 
     @Test

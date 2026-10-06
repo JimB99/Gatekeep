@@ -2,7 +2,7 @@ package com.gatekeep.app.enforcement
 
 /**
  * Session HUD remaining must not tick on wall clock while the monitored app is away
- * ([lastForegroundEndEpochMs] set). Away time is excluded until resume-within-grace.
+ * ([lastForegroundEndEpochMs]) or the device is locked ([devicePausedAtEpochMs], RES-04).
  */
 object SessionHudDeadline {
 
@@ -10,9 +10,10 @@ object SessionHudDeadline {
         nowEpochMs: Long,
         remainingSessionMs: Long?,
         lastForegroundEndEpochMs: Long?,
+        devicePausedAtEpochMs: Long? = null,
     ): Long? {
         if (remainingSessionMs == null || remainingSessionMs <= 0) return null
-        if (lastForegroundEndEpochMs != null) return null
+        if (lastForegroundEndEpochMs != null || devicePausedAtEpochMs != null) return null
         return nowEpochMs + remainingSessionMs
     }
 

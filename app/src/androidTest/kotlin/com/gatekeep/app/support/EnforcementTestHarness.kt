@@ -450,12 +450,28 @@ class EnforcementTestHarness(
 
     fun wakeDevice() {
         runCatching { uiDevice.wakeUp() }
-        shell("wm dismiss-keyguard")
+        dismissKeyguard()
         val deadline = System.currentTimeMillis() + 2_000
         while (System.currentTimeMillis() < deadline && !uiDevice.isScreenOn) {
             Thread.sleep(POLL_INTERVAL_MS)
         }
     }
+
+    /** Wake the display without dismissing the keyguard (RES-05). */
+    fun wakeToLockScreen() {
+        runCatching { uiDevice.wakeUp() }
+        val deadline = System.currentTimeMillis() + 2_000
+        while (System.currentTimeMillis() < deadline && !uiDevice.isScreenOn) {
+            Thread.sleep(POLL_INTERVAL_MS)
+        }
+    }
+
+    fun dismissKeyguard() {
+        shell("wm dismiss-keyguard")
+    }
+
+    fun isKeyguardLocked(): Boolean =
+        context.getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true
 
     fun clearLogcat() {
         shell("logcat -c")

@@ -93,16 +93,10 @@ class EnforcementCoordinator @Inject constructor(
     val state: StateFlow<EnforcementState> = _state.asStateFlow()
 
     init {
-        screenStateMonitor.register { offMs ->
-            scope.launch {
-                applyScreenOffExclusion(offMs)
-                if (!blockOverlay.hasActiveWait()) {
-                    restoreOverlayAfterScreenOn()
-                }
-                // Resume: keyguard often does not change foreground package (RES-01).
-                resumeMonitoredForegroundAfterScreenOn()
-            }
-        }
+        screenStateMonitor.register(
+            onPaused = { scope.launch { onDeviceUsePaused() } },
+            onBecameUsing = { scope.launch { onDeviceBecameUsing() } },
+        )
     }
 
     private var currentForegroundSinceMs: Long = 0L
@@ -1151,41 +1145,67 @@ class EnforcementCoordinator @Inject constructor(
         notificationHelper.hideCountdown()
     }
 
-    private suspend fun applyScreenOffExclusion(screenOffDurationMs: Long) {
-        if (screenOffDurationMs <= 0 || previousProfileId <= 0) return
-        val pkg = currentForegroundPackage ?: return
+    private suspend fun onDeviceUsePaused() {
+        freezeSessionHudForDevicePause()
+        persistDevicePauseOnCurrentSession()
+    }
+
+    private suspend fun persistDevicePauseOnCurrentSession() {
+        val now = System.currentTimeMillis()
+        val pausedAt = screenStateMonitor.persistedPausedAtEpochMs() ?: now
+        if (previousProfileId <= 0) return
+        val pkg = currentForegroundPackage ?: lastMonitoredForegroundPackage ?: return
         if (pkg in ignoredForegroundPackages) return
         if (pkg == context.packageName && pkg !in monitoredPackagesCache) return
         val state = usageRepository.getSessionState(previousProfileId, pkg) ?: return
-        usageRepository.saveSessionState(
-            SessionTracker.extendPendingWait(
-                SessionTracker.addExcludedTime(state, screenOffDurationMs),
-                screenOffDurationMs,
-            ),
-            previousProfileId,
-        )
+        if (state.lastForegroundEndEpochMs != null) return
+        usageRepository.saveSessionState(SessionTracker.pauseDeviceUse(state, pausedAt), previousProfileId)
+    }
+
+    private suspend fun onDeviceBecameUsing() {
+        val now = System.currentTimeMillis()
+        resumePersistedDevicePause(screenStateMonitor.persistedPausedAtEpochMs(), now)
+        screenStateMonitor.clearPersistedPause()
+        if (!blockOverlay.hasActiveWait()) {
+            restoreOverlayAfterScreenOn()
+        }
+        resumeMonitoredForegroundAfterUnlock()
+    }
+
+    private suspend fun resumePersistedDevicePause(pausedAt: Long?, now: Long) {
+        if (previousProfileId <= 0) return
+        val pkg = currentForegroundPackage ?: lastMonitoredForegroundPackage ?: return
+        if (pkg in ignoredForegroundPackages) return
+        val state = usageRepository.getSessionState(previousProfileId, pkg) ?: return
+        val paused = if (state.devicePausedAtEpochMs == null &&
+            pausedAt != null &&
+            state.lastForegroundEndEpochMs == null
+        ) {
+            SessionTracker.pauseDeviceUse(state, pausedAt)
+        } else {
+            state
+        }
+        usageRepository.saveSessionState(SessionTracker.resumeDeviceUse(paused, now), previousProfileId)
+    }
+
+    private fun freezeSessionHudForDevicePause() {
+        val now = System.currentTimeMillis()
         if (sessionDeadlineMs != null) {
-            sessionDeadlineMs = sessionDeadlineMs!! + screenOffDurationMs
+            countdownSessionPausedRemainingMs = SessionHudDeadline.displayedSessionRemainingMs(
+                nowEpochMs = now,
+                sessionDeadlineEpochMs = sessionDeadlineMs,
+                pausedRemainingMs = countdownSessionPausedRemainingMs,
+            )
+            sessionDeadlineMs = null
         }
-        if (dailyDeadlineMs != null) {
-            dailyDeadlineMs = dailyDeadlineMs!! + screenOffDurationMs
-        }
-        if (hourlyDeadlineMs != null) {
-            hourlyDeadlineMs = hourlyDeadlineMs!! + screenOffDurationMs
-        }
-        if (weeklyDeadlineMs != null) {
-            weeklyDeadlineMs = weeklyDeadlineMs!! + screenOffDurationMs
-        }
-        if (showCountdownNotification) {
-            mainHandler.post { refreshCountdownNotification() }
-        }
+        scope.launch { persistDevicePauseOnCurrentSession() }
     }
 
     /**
-     * Screen-on / USER_PRESENT: re-run enforcement when the user unlocks into the same monitored app.
-     * Accessibility often emits no foreground change, so open gate and HUD never start without this (RES-01).
+     * Unlock (Paused → Using): re-run enforcement when the user returns to the same monitored app.
+     * SCREEN_ON onto the keyguard must not evaluate (RES-05); accessibility often stays silent.
      */
-    private suspend fun resumeMonitoredForegroundAfterScreenOn() {
+    private suspend fun resumeMonitoredForegroundAfterUnlock() {
         val now = System.currentTimeMillis()
         val target = currentForegroundPackage
             ?: usageStatsCollector.getForegroundPackageFallback()
@@ -1202,13 +1222,12 @@ class EnforcementCoordinator @Inject constructor(
             return
         }
         val pkg = target ?: return
-        // Usage-stats poll: fallback when accessibility stayed silent across keyguard.
         pollForegroundIfChanged()
         try {
             evaluate(pkg)
             syncOverlayVisibility()
         } catch (e: Exception) {
-            enforcementLog.logError("Screen resume evaluation failed", e)
+            enforcementLog.logError("Unlock resume evaluation failed", e)
         }
     }
 
@@ -1376,22 +1395,36 @@ class EnforcementCoordinator @Inject constructor(
         val sessionStateRaw = usageRepository.getSessionState(primaryProfile.id, packageName)
         previousProfileId = primaryProfile.id
 
-        val sessionState = ensureSessionStarted(
+        var sessionState = ensureSessionStarted(
             packageName = packageName,
             profileId = primaryProfile.id,
             now = now,
             existingState = sessionStateRaw,
         )
+        val prefsPausedAt = screenStateMonitor.persistedPausedAtEpochMs()
+        val livePaused = screenStateMonitor.deviceUsePhase(
+            hasLeftApp = sessionState.lastForegroundEndEpochMs != null,
+        ) == DeviceUsePhase.Paused
+        if (sessionState.devicePausedAtEpochMs == null &&
+            sessionState.lastForegroundEndEpochMs == null &&
+            (prefsPausedAt != null || livePaused)
+        ) {
+            sessionState = SessionTracker.pauseDeviceUse(sessionState, prefsPausedAt ?: now)
+            usageRepository.saveSessionState(sessionState, primaryProfile.id)
+        }
         val sessionForEval = resolveSessionAfterBreak(
             packageName = packageName,
             profileId = primaryProfile.id,
             sessionState = sessionState,
             now = now,
         )
+        val devicePaused = screenStateMonitor.deviceUsePhase(
+            hasLeftApp = sessionForEval.lastForegroundEndEpochMs != null,
+        ) == DeviceUsePhase.Paused
 
         if (SessionTracker.hasPendingWait(sessionForEval, now)) {
-            // Resume: while locked, wait overlay is suppressed; screen-on must re-enter this path (RES-01).
-            if (blockOverlay.hasActiveWait() || !screenStateMonitor.isScreenOn()) {
+            // Unlock (not mere SCREEN_ON) must resume open-wait overlay (RES-01 / RES-05).
+            if (blockOverlay.hasActiveWait() || devicePaused || !screenStateMonitor.isScreenOn()) {
                 return
             }
             val remainingSec = ((SessionTracker.pendingWaitRemainingMs(sessionForEval, now) + 999) / 1000)
@@ -1433,6 +1466,11 @@ class EnforcementCoordinator @Inject constructor(
 
         val openAlreadyPassed = openGatePassedPackage == packageName ||
             OpenGatePassPolicy.shouldSkipOpenGate(sessionForEval, now, OPEN_GATE_GRACE_MS)
+        if (devicePaused && !openAlreadyPassed) {
+            // RES-05: do not show or pass open gate on the lock screen.
+            freezeSessionHudForDevicePause()
+            return
+        }
         val fullEvaluation = RuleEngine.evaluateAll(evalContext)
         val result = when (val ruleResult = RuleEngine.mergeForPresentation(
             evaluation = fullEvaluation,
@@ -1631,6 +1669,7 @@ class EnforcementCoordinator @Inject constructor(
                         monitoredPackages = hudMonitoredPackages,
                         showNotification = true,
                         lastForegroundEndEpochMs = sessionForEval.lastForegroundEndEpochMs,
+                        devicePausedAtEpochMs = sessionForEval.devicePausedAtEpochMs,
                     )
                 } else {
                     startEnforcementLoop(
@@ -1656,6 +1695,7 @@ class EnforcementCoordinator @Inject constructor(
                         monitoredPackages = hudMonitoredPackages,
                         showNotification = false,
                         lastForegroundEndEpochMs = sessionForEval.lastForegroundEndEpochMs,
+                        devicePausedAtEpochMs = sessionForEval.devicePausedAtEpochMs,
                     )
                 }
                 _state.value = EnforcementState(
@@ -1794,6 +1834,7 @@ class EnforcementCoordinator @Inject constructor(
         monitoredPackages: List<String>,
         showNotification: Boolean,
         lastForegroundEndEpochMs: Long? = null,
+        devicePausedAtEpochMs: Long? = null,
     ) {
         enforcementLoopRunnable?.let { mainHandler.removeCallbacks(it) }
         val now = System.currentTimeMillis()
@@ -1801,9 +1842,10 @@ class EnforcementCoordinator @Inject constructor(
             nowEpochMs = now,
             remainingSessionMs = remainingSessionMs,
             lastForegroundEndEpochMs = lastForegroundEndEpochMs,
+            devicePausedAtEpochMs = devicePausedAtEpochMs,
         )
         countdownSessionPausedRemainingMs = remainingSessionMs
-            ?.takeIf { it > 0 && lastForegroundEndEpochMs != null }
+            ?.takeIf { it > 0 && (lastForegroundEndEpochMs != null || devicePausedAtEpochMs != null) }
         dailyDeadlineMs = remainingDailyMs?.takeIf { it > 0 }?.let { now + it }
         hourlyDeadlineMs = remainingHourlyMs?.takeIf { it > 0 }?.let { now + it }
         weeklyDeadlineMs = remainingWeeklyMs?.takeIf { it > 0 }?.let { now + it }
@@ -1853,7 +1895,11 @@ class EnforcementCoordinator @Inject constructor(
                     if (periodBoundaryCrossed) {
                         enforcementPeriodHourStartMs = hourStart
                         enforcementPeriodDayStartMs = dayStart
-                        scope.launch { evaluate(pkg) }
+                        if (screenStateMonitor.deviceUsePhase(hasLeftApp = false) == DeviceUsePhase.Paused) {
+                            freezeSessionHudForDevicePause()
+                        } else {
+                            scope.launch { evaluate(pkg) }
+                        }
                         val delayMs = enforcementLoopDelayMs(nowMs)
                             ?: EnforcementPollInterval.FINE_INTERVAL_MS
                         mainHandler.postDelayed(this, delayMs)
@@ -1861,6 +1907,9 @@ class EnforcementCoordinator @Inject constructor(
                     }
                     enforcementPeriodHourStartMs = hourStart
                     enforcementPeriodDayStartMs = dayStart
+                    if (screenStateMonitor.deviceUsePhase(hasLeftApp = false) == DeviceUsePhase.Paused) {
+                        freezeSessionHudForDevicePause()
+                    }
                     val deadlineReached = listOfNotNull(
                         sessionDeadlineMs,
                         dailyDeadlineMs,
@@ -1869,7 +1918,11 @@ class EnforcementCoordinator @Inject constructor(
                         graceDeadlineMs,
                     ).any { nowMs >= it }
                     if (deadlineReached) {
-                        scope.launch { evaluate(pkg) }
+                        if (screenStateMonitor.deviceUsePhase(hasLeftApp = false) == DeviceUsePhase.Paused) {
+                            freezeSessionHudForDevicePause()
+                        } else {
+                            scope.launch { evaluate(pkg) }
+                        }
                     } else {
                         val matchesForeground = currentForegroundPackage == pkg ||
                             lastMonitoredForegroundPackage == pkg

@@ -182,6 +182,28 @@ class MigrationChainTest {
     }
 
     @Test
+    fun migrate16To17_addsDevicePausedAtColumn() {
+        LegacySchemaFixtures.createVersion12(context, TEST_DB)
+
+        val db = helper.runMigrationsAndValidate(
+            TEST_DB,
+            17,
+            true,
+            *GatekeepMigrations.ALL,
+        )
+
+        db.query("PRAGMA table_info(session_state)").use { cursor ->
+            val columns = buildList {
+                while (cursor.moveToNext()) {
+                    add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+                }
+            }
+            assertTrue("devicePausedAtEpochMs" in columns)
+        }
+        db.close()
+    }
+
+    @Test
     fun migrate8To13_fullChainProducesValidSchema() {
         LegacySchemaFixtures.createVersion8(context, TEST_DB)
         LegacySchemaFixtures.insertProfileV8(context, TEST_DB, name = "Work")

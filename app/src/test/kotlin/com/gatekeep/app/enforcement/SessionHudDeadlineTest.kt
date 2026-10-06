@@ -15,6 +15,7 @@ class SessionHudDeadlineTest {
                 nowEpochMs = now,
                 remainingSessionMs = 45_000L,
                 lastForegroundEndEpochMs = null,
+                devicePausedAtEpochMs = null,
             ),
         )
     }
@@ -26,6 +27,19 @@ class SessionHudDeadlineTest {
                 nowEpochMs = 1_000_000L,
                 remainingSessionMs = 45_000L,
                 lastForegroundEndEpochMs = 970_000L,
+                devicePausedAtEpochMs = null,
+            ),
+        )
+    }
+
+    @Test
+    fun sessionDeadline_pausedWhileDeviceLocked() {
+        assertNull(
+            SessionHudDeadline.sessionDeadlineEpochMs(
+                nowEpochMs = 1_000_000L,
+                remainingSessionMs = 45_000L,
+                lastForegroundEndEpochMs = null,
+                devicePausedAtEpochMs = 990_000L,
             ),
         )
     }

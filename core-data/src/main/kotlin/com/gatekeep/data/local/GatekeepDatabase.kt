@@ -36,7 +36,7 @@ import com.gatekeep.data.local.entity.UsageSessionEntity
         OverrideEventEntity::class,
         SessionStateEntity::class,
     ],
-    version = 16,
+    version = 17,
     exportSchema = true,
 )
 abstract class GatekeepDatabase : RoomDatabase() {

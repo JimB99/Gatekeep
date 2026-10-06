@@ -1,5 +1,6 @@
 package com.gatekeep.app.enforcement
 
+import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -16,24 +17,43 @@ import javax.inject.Singleton
 @Singleton
 class ScreenStateMonitor @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val devicePauseStore: DevicePauseStore,
 ) {
     private var registered = false
     private val pauseTracker = ScreenPauseTracker { SystemClock.elapsedRealtime() }
     private val powerManager = context.getSystemService(PowerManager::class.java)
-    private var onScreenOnListener: ((Long) -> Unit)? = null
+    private val keyguardManager = context.getSystemService(KeyguardManager::class.java)
+    private var onPausedListener: (() -> Unit)? = null
+    private var onBecameUsingListener: (() -> Unit)? = null
+    private var deviceUsePhase: DeviceUsePhase = DeviceUsePhase.Using
+    private var keyguardLockedListener: KeyguardManager.KeyguardLockedStateListener? = null
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
             when (intent?.action) {
-                Intent.ACTION_SCREEN_OFF -> onScreenOff()
-                Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> onScreenOn()
+                Intent.ACTION_SCREEN_OFF -> {
+                    onScreenOff()
+                    emitDeviceUsePhase()
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    onScreenOn()
+                    emitDeviceUsePhase()
+                }
+                Intent.ACTION_USER_PRESENT -> emitDeviceUsePhase()
             }
         }
     }
 
-    fun register(onScreenOn: ((screenOffDurationMs: Long) -> Unit)? = null) {
-        onScreenOnListener = onScreenOn
-        if (registered) return
+    fun register(
+        onPaused: (() -> Unit)? = null,
+        onBecameUsing: (() -> Unit)? = null,
+    ) {
+        onPausedListener = onPaused
+        onBecameUsingListener = onBecameUsing
+        if (registered) {
+            emitDeviceUsePhase()
+            return
+        }
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_SCREEN_ON)
@@ -45,22 +65,77 @@ class ScreenStateMonitor @Inject constructor(
             @Suppress("UnspecifiedRegisterReceiverFlag")
             context.registerReceiver(receiver, filter)
         }
+        registerKeyguardListener()
         registered = true
+        emitDeviceUsePhase()
     }
 
     fun unregister() {
         if (!registered) return
         runCatching { context.unregisterReceiver(receiver) }
+        unregisterKeyguardListener()
         registered = false
-        onScreenOnListener = null
+        onPausedListener = null
+        onBecameUsingListener = null
     }
 
-    fun isScreenOn(): Boolean {
+    fun isScreenOn(): Boolean = currentScreenOn()
+
+    fun isKeyguardLocked(): Boolean = keyguardManager?.isKeyguardLocked == true
+
+    fun persistedPausedAtEpochMs(): Long? = devicePauseStore.pausedAtEpochMs()
+
+    fun clearPersistedPause() {
+        devicePauseStore.clear()
+    }
+
+    fun deviceUsePhase(hasLeftApp: Boolean): DeviceUsePhase =
+        DeviceUsePolicy.phase(
+            screenOn = currentScreenOn(),
+            keyguardLocked = isKeyguardLocked(),
+            hasLeftApp = hasLeftApp,
+        )
+
+    private fun currentScreenOn(): Boolean {
         if (isDisplayOff()) {
             if (pauseTracker.screenOn) onScreenOff()
             return false
         }
         return pauseTracker.screenOn
+    }
+
+    private fun emitDeviceUsePhase() {
+        val next = DeviceUsePolicy.phase(
+            screenOn = currentScreenOn(),
+            keyguardLocked = isKeyguardLocked(),
+            hasLeftApp = false,
+        )
+        val previous = deviceUsePhase
+        if (next == DeviceUsePhase.Paused) {
+            devicePauseStore.setPausedAt(System.currentTimeMillis())
+        }
+        if (previous == next) return
+        deviceUsePhase = next
+        when {
+            DeviceUsePolicy.shouldEvaluateOnResume(previous, next) -> onBecameUsingListener?.invoke()
+            next == DeviceUsePhase.Paused -> onPausedListener?.invoke()
+        }
+    }
+
+    private fun registerKeyguardListener() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S_V2) return
+        val listener = KeyguardManager.KeyguardLockedStateListener { emitDeviceUsePhase() }
+        keyguardLockedListener = listener
+        runCatching {
+            keyguardManager?.addKeyguardLockedStateListener(context.mainExecutor, listener)
+        }
+    }
+
+    private fun unregisterKeyguardListener() {
+        val listener = keyguardLockedListener ?: return
+        keyguardLockedListener = null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S_V2) return
+        runCatching { keyguardManager?.removeKeyguardLockedStateListener(listener) }
     }
 
     private fun isDisplayOff(): Boolean {
@@ -75,10 +150,7 @@ class ScreenStateMonitor @Inject constructor(
     }
 
     fun onScreenOn() {
-        val offDuration = pauseTracker.onScreenOn()
-        if (offDuration > 0) {
-            onScreenOnListener?.invoke(offDuration)
-        }
+        pauseTracker.onScreenOn()
     }
 
     fun pausedElapsedMs(): Long = pauseTracker.pausedElapsedMs()

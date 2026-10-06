@@ -278,6 +278,7 @@ data class SessionState(
     val consecutiveExtensionCount: Int = 0,
     val openGatePassedEpochMs: Long? = null,
     val lastForegroundEndEpochMs: Long? = null,
+    val devicePausedAtEpochMs: Long? = null,
 )
 
 data class RuleEvaluationContext(

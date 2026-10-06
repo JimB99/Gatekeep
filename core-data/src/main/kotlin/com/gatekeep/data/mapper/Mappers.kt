@@ -240,6 +240,7 @@ fun SessionStateEntity.toDomain() = SessionState(
     consecutiveExtensionCount = consecutiveExtensionCount,
     openGatePassedEpochMs = openGatePassedEpochMs,
     lastForegroundEndEpochMs = lastForegroundEndEpochMs,
+    devicePausedAtEpochMs = devicePausedAtEpochMs,
 )
 
 fun SessionState.toEntity(profileId: Long) = SessionStateEntity(
@@ -254,4 +255,5 @@ fun SessionState.toEntity(profileId: Long) = SessionStateEntity(
     consecutiveExtensionCount = consecutiveExtensionCount,
     openGatePassedEpochMs = openGatePassedEpochMs,
     lastForegroundEndEpochMs = lastForegroundEndEpochMs,
+    devicePausedAtEpochMs = devicePausedAtEpochMs,
 )

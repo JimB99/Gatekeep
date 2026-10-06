@@ -236,6 +236,8 @@ These cases launch with `am start` and read `block_message` / `wait_countdown`. 
 | RES-01 | Screen unlock into same monitored app re-runs open gate or HUD | `ResumeEnforcementTest.res01_screenUnlockSameApp_runsOpenGateOrCountdown`, `MonitoredForegroundResumePolicyTest` |
 | RES-02 | Session extension overlay returns after home → reopen | `ResumeEnforcementTest.res02_sessionExtensionOverlay_returnsAfterHome`, `BlockClearOnAllowedPolicyTest`, `LimitOverlayHidePolicyTest` |
 | RES-03 | Reopen after session limit still blocked (no free usage) | `ResumeEnforcementTest.res03_sessionExtensionOverlay_reopenStillBlocked`, `DomainTests.session at cap stays exceeded while limit block friction is active` |
+| RES-04 | Screen off longer than session remaining does not expire the session | `ResumeEnforcementTest.res04_screenOffLongerThanRemaining_doesNotExpireSession`, `DeviceUsePolicyTest`, `DomainTests.device pause freezes remaining across wall-clock pocket time` |
+| RES-05 | SCREEN_ON onto lock screen does not pass open gate; unlock does | `ResumeEnforcementTest.res05_wakeToLockScreen_openGateRunsOnUnlock`, `DeviceUsePolicyTest.screenOnWhileLocked_doesNotResumeEvaluate` |
 
 ---
 

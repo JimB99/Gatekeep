@@ -121,6 +121,30 @@ object SessionTracker {
     fun addExcludedTime(session: SessionState, ms: Long): SessionState =
         session.copy(excludedMs = session.excludedMs + ms.coerceAtLeast(0))
 
+    /**
+     * Freeze the session clock at [nowEpochMs] while the device is locked / screen-off (RES-04).
+     * Idempotent: a second pause keeps the original timestamp so pocket time cannot resume the clock.
+     */
+    fun pauseDeviceUse(session: SessionState, nowEpochMs: Long): SessionState {
+        if (session.devicePausedAtEpochMs != null) return session
+        return session.copy(devicePausedAtEpochMs = nowEpochMs)
+    }
+
+    /**
+     * Unpause: add locked time to [SessionState.excludedMs] and extend a pending wait (RES-04).
+     */
+    fun resumeDeviceUse(session: SessionState, nowEpochMs: Long): SessionState {
+        val pausedAt = session.devicePausedAtEpochMs ?: return session
+        val pausedMs = (nowEpochMs - pausedAt).coerceAtLeast(0)
+        return extendPendingWait(
+            session.copy(
+                excludedMs = session.excludedMs + pausedMs,
+                devicePausedAtEpochMs = null,
+            ),
+            pausedMs,
+        )
+    }
+
     fun hasPendingWait(session: SessionState?, nowEpochMs: Long): Boolean {
         val until = session?.pendingWaitUntilEpochMs ?: return false
         return nowEpochMs < until
@@ -153,8 +177,11 @@ object SessionTracker {
         session.copy(consecutiveExtensionCount = 0)
 
     private fun sessionClockMs(session: SessionState?, nowEpochMs: Long): Long {
-        val endedAt = session?.lastForegroundEndEpochMs ?: return nowEpochMs
-        return minOf(endedAt, nowEpochMs)
+        val freezeAt = listOfNotNull(
+            session?.devicePausedAtEpochMs,
+            session?.lastForegroundEndEpochMs,
+        ).minOrNull() ?: return nowEpochMs
+        return minOf(freezeAt, nowEpochMs)
     }
 
     sealed class SessionCheckResult {
