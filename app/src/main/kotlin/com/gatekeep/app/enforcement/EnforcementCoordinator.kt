@@ -13,7 +13,10 @@ import com.gatekeep.app.util.withAppLocale
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
+import com.gatekeep.domain.OpenGateCompletionPolicy
 import com.gatekeep.domain.OpenGatePassPolicy
+import com.gatekeep.domain.PendingWaitResumePolicy
+import com.gatekeep.domain.PendingWaitResumeSurface
 import com.gatekeep.domain.SessionContinuityPolicy
 import com.gatekeep.domain.SessionStartDecision
 import com.gatekeep.domain.EnforcementPollInterval
@@ -86,6 +89,7 @@ class EnforcementCoordinator @Inject constructor(
     private val enforcementLog: EnforcementLog,
     private val screenStateMonitor: ScreenStateMonitor,
     private val extensionGrantUseCase: ExtensionGrantUseCase,
+    private val enforcementTrace: EnforcementTrace,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -376,11 +380,23 @@ class EnforcementCoordinator @Inject constructor(
         confirmExit: Boolean = false,
     ) {
         val now = System.currentTimeMillis()
+        val effectiveHoldMs = if (
+            packageName in monitoredPackagesCache &&
+            openGatePassedPackage != packageName
+        ) {
+            0L
+        } else {
+            holdMs
+        }
         if (pendingForegroundPackage != packageName) {
             pendingForegroundPackage = packageName
             pendingForegroundFirstSeenMs = now
         }
-        pendingForegroundHoldMs = holdMs
+        pendingForegroundHoldMs = effectiveHoldMs
+        enforcementTrace.record(
+            EnforcementTrace.FOREGROUND_COMMIT,
+            mapOf("pkg" to packageName, "holdMs" to effectiveHoldMs.toString()),
+        )
         pendingForegroundConfirmExit = confirmExit
         pendingForegroundRunnable?.let { mainHandler.removeCallbacks(it) }
         pendingForegroundRunnable = Runnable {
@@ -490,7 +506,9 @@ class EnforcementCoordinator @Inject constructor(
             sessionStartedForPackage = null
         }
 
-        if (packageName != openGatePassedPackage) {
+        if (prevPackage != null && prevPackage != packageName) {
+            openGatePassedPackage = null
+        } else if (packageName != openGatePassedPackage) {
             openGatePassedPackage = null
         }
 
@@ -545,12 +563,19 @@ class EnforcementCoordinator @Inject constructor(
         }
     }
 
-    fun shouldPresentBlockOverlay(packageName: String): Boolean =
-        BlockPresentationReducer.shouldPresentOverlay(
+    fun shouldPresentBlockOverlay(packageName: String): Boolean {
+        if (!DeviceUsePolicy.shouldRunEnforcement(
+                screenStateMonitor.deviceUsePhase(hasLeftApp = false),
+            )
+        ) {
+            return false
+        }
+        return BlockPresentationReducer.shouldPresentOverlay(
             blockPresentationState,
             effectiveForegroundPackage(),
             packageName,
         )
+    }
 
     private fun effectiveForegroundPackage(): String? =
         EffectiveForegroundResolver.resolve(
@@ -819,8 +844,15 @@ class EnforcementCoordinator @Inject constructor(
             try {
                 val profiles = profileRepository.observeActiveProfiles().first()
                 val profileId = profiles.firstOrNull()?.id ?: return@launch
-                recordFrictionEnd(packageName, profileId)
-                persistOpenGatePassed(packageName, profileId)
+                val now = System.currentTimeMillis()
+                val state = usageRepository.getSessionState(profileId, packageName)
+                    ?: SessionTracker.startSession(packageName, now)
+                val updated = OpenGateCompletionPolicy.sessionAfterOpenGatePassed(state, now)
+                usageRepository.saveSessionState(updated, profileId)
+                enforcementTrace.record(
+                    EnforcementTrace.OPEN_GATE_PASSED,
+                    mapOf("pkg" to packageName, "pendingCleared" to "true"),
+                )
                 evaluate(packageName)
             } catch (e: Exception) {
                 enforcementLog.logError("Open gate passed failed", e)
@@ -1040,7 +1072,20 @@ class EnforcementCoordinator @Inject constructor(
         monitoredPackagesCache = emptySet()
         blockOverlay.clearFrictionState()
         clearBlockState()
+        screenStateMonitor.resetPauseTracking()
+        screenStateMonitor.clearPersistedPause()
+        enforcementTrace.clear()
         _state.value = EnforcementState()
+    }
+
+    fun enforcementTraceSnapshot(): List<EnforcementTrace.Entry> {
+        if (!BuildConfig.DEBUG) return emptyList()
+        return enforcementTrace.snapshot()
+    }
+
+    fun enforcementTraceCount(event: String): Int {
+        if (!BuildConfig.DEBUG) return 0
+        return enforcementTrace.count(event)
     }
 
     fun onAccessibilityConnected() {
@@ -1301,6 +1346,7 @@ class EnforcementCoordinator @Inject constructor(
     private suspend fun evaluateInternal(packageName: String) {
         val evaluationEpochAtStart = evaluationEpoch
         val evaluationToken = EvaluationToken(packageName, blockGeneration)
+        enforcementTrace.record(EnforcementTrace.EVALUATE, mapOf("pkg" to packageName))
         val settings = settingsRepository.settings.first()
         if (!settings.enforcementEnabled) {
             stopCountdownTicker()
@@ -1402,14 +1448,27 @@ class EnforcementCoordinator @Inject constructor(
             existingState = sessionStateRaw,
         )
         val prefsPausedAt = screenStateMonitor.persistedPausedAtEpochMs()
-        val livePaused = screenStateMonitor.deviceUsePhase(
-            hasLeftApp = sessionState.lastForegroundEndEpochMs != null,
-        ) == DeviceUsePhase.Paused
-        if (sessionState.devicePausedAtEpochMs == null &&
-            sessionState.lastForegroundEndEpochMs == null &&
-            (prefsPausedAt != null || livePaused)
-        ) {
-            sessionState = SessionTracker.pauseDeviceUse(sessionState, prefsPausedAt ?: now)
+        val hasLeftApp = sessionState.lastForegroundEndEpochMs != null
+        val livePaused = screenStateMonitor.deviceUsePhase(hasLeftApp = hasLeftApp) ==
+            DeviceUsePhase.Paused
+        val hasPauseMarker = sessionState.devicePausedAtEpochMs != null || prefsPausedAt != null
+        val sessionBeforePause = sessionState
+        sessionState = when {
+            DeviceUsePolicy.shouldPauseSessionClock(livePaused, hasLeftApp) -> {
+                SessionTracker.pauseDeviceUse(sessionState, prefsPausedAt ?: now)
+            }
+            DeviceUsePolicy.shouldResumeSessionClock(livePaused, hasLeftApp, hasPauseMarker) -> {
+                val paused = if (sessionState.devicePausedAtEpochMs == null && prefsPausedAt != null) {
+                    SessionTracker.pauseDeviceUse(sessionState, prefsPausedAt)
+                } else {
+                    sessionState
+                }
+                screenStateMonitor.clearPersistedPause()
+                SessionTracker.resumeDeviceUse(paused, now)
+            }
+            else -> sessionState
+        }
+        if (sessionState != sessionBeforePause) {
             usageRepository.saveSessionState(sessionState, primaryProfile.id)
         }
         val sessionForEval = resolveSessionAfterBreak(
@@ -1429,14 +1488,34 @@ class EnforcementCoordinator @Inject constructor(
             }
             val remainingSec = ((SessionTracker.pendingWaitRemainingMs(sessionForEval, now) + 999) / 1000)
                 .toInt().coerceAtLeast(1)
-            showPendingWait(
-                packageName = packageName,
-                appLabel = appLabel,
-                profile = primaryProfile,
-                waitSeconds = remainingSec,
-                sessionState = sessionForEval,
-                evaluationEpochAtStart = evaluationEpochAtStart,
-            )
+            when (PendingWaitResumePolicy.surfaceFor(primaryProfile.onOpenAction)) {
+                PendingWaitResumeSurface.OPEN_GATE -> {
+                    enforcementTrace.record(
+                        EnforcementTrace.PENDING_WAIT_RESUME,
+                        mapOf("pkg" to packageName, "surface" to "open_gate", "sec" to remainingSec.toString()),
+                    )
+                    showPendingOpenGateWait(
+                        packageName = packageName,
+                        profile = primaryProfile,
+                        waitSeconds = remainingSec,
+                        evaluationEpochAtStart = evaluationEpochAtStart,
+                    )
+                }
+                PendingWaitResumeSurface.SESSION_LIMIT -> {
+                    enforcementTrace.record(
+                        EnforcementTrace.PENDING_WAIT_RESUME,
+                        mapOf("pkg" to packageName, "surface" to "session_limit", "sec" to remainingSec.toString()),
+                    )
+                    showPendingWait(
+                        packageName = packageName,
+                        appLabel = appLabel,
+                        profile = primaryProfile,
+                        waitSeconds = remainingSec,
+                        sessionState = sessionForEval,
+                        evaluationEpochAtStart = evaluationEpochAtStart,
+                    )
+                }
+            }
             return
         }
 
@@ -1466,8 +1545,14 @@ class EnforcementCoordinator @Inject constructor(
 
         val openAlreadyPassed = openGatePassedPackage == packageName ||
             OpenGatePassPolicy.shouldSkipOpenGate(sessionForEval, now, OPEN_GATE_GRACE_MS)
-        if (devicePaused && !openAlreadyPassed) {
-            // RES-05: do not show or pass open gate on the lock screen.
+        if (!DeviceUsePolicy.shouldRunEnforcement(
+                screenStateMonitor.deviceUsePhase(
+                    hasLeftApp = sessionForEval.lastForegroundEndEpochMs != null,
+                ),
+            )
+        ) {
+            // RES-04/05: lock/screen-off must not overlay or burn remaining, even after open gate.
+            enforcementTrace.record(EnforcementTrace.EVALUATE_SKIP_PAUSED, mapOf("pkg" to packageName))
             freezeSessionHudForDevicePause()
             return
         }
@@ -1479,6 +1564,10 @@ class EnforcementCoordinator @Inject constructor(
         )) {
             is RuleResult.Blocked -> ruleResult
             is RuleResult.DelayOpen -> {
+                enforcementTrace.record(
+                    EnforcementTrace.SHOW_DELAY_OPEN,
+                    mapOf("pkg" to packageName, "sec" to ruleResult.delaySeconds.toString()),
+                )
                 mainHandler.post {
                     blockOverlay.showDelay(
                         ruleResult.delaySeconds,
@@ -1784,6 +1873,14 @@ class EnforcementCoordinator @Inject constructor(
         evaluationEpochAtStart: Long = evaluationEpoch,
     ) {
         if (evaluationEpochAtStart != evaluationEpoch) return
+        enforcementTrace.record(
+            EnforcementTrace.SHOW_OPEN_DETERRENT,
+            mapOf(
+                "pkg" to packageName,
+                "method" to deterrent.method.name,
+                "pending" to "false",
+            ),
+        )
         enterBlockState(packageName)
         val generation = blockGeneration
         presentBlockOverlay(
@@ -2295,6 +2392,39 @@ class EnforcementCoordinator @Inject constructor(
         }
     }
 
+    private suspend fun showPendingOpenGateWait(
+        packageName: String,
+        profile: Profile,
+        waitSeconds: Int,
+        evaluationEpochAtStart: Long = evaluationEpoch,
+    ) {
+        if (evaluationEpochAtStart != evaluationEpoch) return
+        enforcementTrace.record(
+            EnforcementTrace.SHOW_OPEN_DETERRENT,
+            mapOf("pkg" to packageName, "sec" to waitSeconds.toString(), "pending" to "true"),
+        )
+        enterBlockState(packageName)
+        val generation = blockGeneration
+        presentBlockOverlay(
+            BlockOverlayRequest(
+                packageName = packageName,
+                message = BlockMessageResolver.openDeterrentMessage(
+                    localizedContext,
+                    FrictionMethod.waitOneMin,
+                ),
+                reason = BlockPresentationReason.openGate,
+                bypassAllowed = true,
+                frictionMethod = FrictionMethod.waitOneMin,
+                difficulty = profile.defaultFrictionDifficulty,
+                waitDurationSeconds = waitSeconds,
+                profilePasswordHash = profile.passwordHash,
+                isOpenGate = true,
+            ),
+            generation,
+        )
+        scope.launch { recordFrictionStart(packageName, profile.id) }
+    }
+
     private suspend fun showPendingWait(
         packageName: String,
         appLabel: String,
@@ -2304,6 +2434,10 @@ class EnforcementCoordinator @Inject constructor(
         evaluationEpochAtStart: Long = evaluationEpoch,
     ) {
         if (evaluationEpochAtStart != evaluationEpoch) return
+        enforcementTrace.record(
+            EnforcementTrace.SHOW_PENDING_SESSION_WAIT,
+            mapOf("pkg" to packageName, "sec" to waitSeconds.toString()),
+        )
         enterBlockState(packageName)
         val generation = blockGeneration
         val blocked = RuleResult.Blocked(

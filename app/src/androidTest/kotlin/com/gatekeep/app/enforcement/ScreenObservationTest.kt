@@ -96,6 +96,37 @@ class ScreenObservationTest : EnforcementCrossAppTestBase() {
         assertEquals("message flickered from $first to $last", 0, changes)
     }
 
+    /**
+     * Open-gate wait must appear without harness-injected foreground (real usage stats / a11y path).
+     * Regression for delayed overlay until in-app taps on physical devices.
+     */
+    @Test
+    fun obs08_openWait_noInjection_overlayWithin2s() {
+        runSeed {
+            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.deterrentWait,
+                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.OPEN_WAIT_SEC,
+                    sessionLimitMs = null,
+                    dailyLimitMs = null,
+                ),
+            )
+        }
+        harness.useRealForegroundDetection()
+        val launchStart = System.currentTimeMillis()
+        harness.launchTargetA()
+        val launchMs = System.currentTimeMillis() - launchStart
+        val extraStart = System.currentTimeMillis()
+        val shown = harness.waitForOpenFriction(2_000) ||
+            harness.waitForOverlay(2_000) ||
+            harness.waitForCountdown(2_000) != null
+        val extraMs = System.currentTimeMillis() - extraStart
+        Log.i(TAG, "obs08 launch=${launchMs}ms extra=${extraMs}ms ${harness.screenDiagnostics()}")
+        assertTrue("open wait missing ${harness.screenDiagnostics()}", shown)
+        assertTrue("open wait took ${extraMs}ms after launch", extraMs <= 2_000)
+    }
+
     @Test
     fun obs04_openWait_pausesWhileScreenOff() {
         runSeed {

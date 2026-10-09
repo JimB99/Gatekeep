@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.display.DisplayManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.view.Display
@@ -27,6 +29,15 @@ class ScreenStateMonitor @Inject constructor(
     private var onBecameUsingListener: (() -> Unit)? = null
     private var deviceUsePhase: DeviceUsePhase = DeviceUsePhase.Using
     private var keyguardLockedListener: KeyguardManager.KeyguardLockedStateListener? = null
+    private val displayManager = context.getSystemService(DisplayManager::class.java)
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) = Unit
+        override fun onDisplayRemoved(displayId: Int) = Unit
+        override fun onDisplayChanged(displayId: Int) {
+            if (displayId != Display.DEFAULT_DISPLAY) return
+            emitDeviceUsePhase()
+        }
+    }
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -66,6 +77,7 @@ class ScreenStateMonitor @Inject constructor(
             context.registerReceiver(receiver, filter)
         }
         registerKeyguardListener()
+        displayManager?.registerDisplayListener(displayListener, Handler(Looper.getMainLooper()))
         registered = true
         emitDeviceUsePhase()
     }
@@ -74,6 +86,7 @@ class ScreenStateMonitor @Inject constructor(
         if (!registered) return
         runCatching { context.unregisterReceiver(receiver) }
         unregisterKeyguardListener()
+        runCatching { displayManager?.unregisterDisplayListener(displayListener) }
         registered = false
         onPausedListener = null
         onBecameUsingListener = null
@@ -81,7 +94,12 @@ class ScreenStateMonitor @Inject constructor(
 
     fun isScreenOn(): Boolean = currentScreenOn()
 
-    fun isKeyguardLocked(): Boolean = keyguardManager?.isKeyguardLocked == true
+    fun isKeyguardLocked(): Boolean {
+        val km = keyguardManager ?: return false
+        if (km.isKeyguardLocked) return true
+        // Samsung can report the lock screen up while isKeyguardLocked is still false.
+        return km.isDeviceLocked
+    }
 
     fun persistedPausedAtEpochMs(): Long? = devicePauseStore.pausedAtEpochMs()
 
@@ -98,18 +116,25 @@ class ScreenStateMonitor @Inject constructor(
 
     private fun currentScreenOn(): Boolean {
         if (isDisplayOff()) {
-            if (pauseTracker.screenOn) onScreenOff()
+            pauseTracker.syncFromHardware(displayOn = false)
             return false
         }
-        return pauseTracker.screenOn
+        // Display is on: treat as screen-on even if SCREEN_ON was missed, so lock-pause
+        // cannot stick after unlock (RES-04 / later tests skipping overlays).
+        return true
     }
 
+    fun isWaitClockFrozen(): Boolean =
+        DeviceUsePolicy.shouldFreezeSessionClock(deviceUsePhase(hasLeftApp = false))
+
     private fun emitDeviceUsePhase() {
+        val screenOn = currentScreenOn()
         val next = DeviceUsePolicy.phase(
-            screenOn = currentScreenOn(),
+            screenOn = screenOn,
             keyguardLocked = isKeyguardLocked(),
             hasLeftApp = false,
         )
+        syncWaitTracker(next, screenOn)
         val previous = deviceUsePhase
         if (next == DeviceUsePhase.Paused) {
             devicePauseStore.setPausedAt(System.currentTimeMillis())
@@ -119,6 +144,17 @@ class ScreenStateMonitor @Inject constructor(
         when {
             DeviceUsePolicy.shouldEvaluateOnResume(previous, next) -> onBecameUsingListener?.invoke()
             next == DeviceUsePhase.Paused -> onPausedListener?.invoke()
+        }
+    }
+
+    private fun syncWaitTracker(phase: DeviceUsePhase, screenOn: Boolean) {
+        when (phase) {
+            DeviceUsePhase.Paused, DeviceUsePhase.Left -> {
+                if (pauseTracker.screenOn) onScreenOff()
+            }
+            DeviceUsePhase.Using -> {
+                if (!pauseTracker.screenOn && screenOn) onScreenOn()
+            }
         }
     }
 
@@ -173,6 +209,10 @@ internal class ScreenPauseTracker(
         private set
     private var screenOffAtElapsed: Long? = null
     private var accumulatedOffMs: Long = 0
+
+    fun syncFromHardware(displayOn: Boolean) {
+        if (displayOn) onScreenOn() else onScreenOff()
+    }
 
     fun onScreenOff() {
         if (!screenOn) return

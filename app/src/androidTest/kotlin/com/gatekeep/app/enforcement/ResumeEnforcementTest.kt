@@ -88,6 +88,7 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
                 ),
             )
         }
+        harness.wakeDevice()
         harness.launchTargetA()
         assertTrue(
             "session extension overlay expected ${harness.screenDiagnostics()}",
@@ -137,8 +138,12 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
                 ),
             )
         }
+        harness.wakeDevice()
         harness.launchTargetA()
-        assertTrue(harness.waitForOverlay(8_000))
+        assertTrue(
+            "session extension overlay expected ${harness.screenDiagnostics()}",
+            harness.waitForOverlay(8_000),
+        )
         harness.useRealForegroundDetection()
         harness.pressHome()
         harness.sleepMs(1_000)
@@ -175,7 +180,7 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
         }
         harness.wakeDevice()
         harness.launchTargetA()
-        val before = harness.waitForCountdown(timeoutMs = 8_000)
+        val before = harness.waitForSessionRemainingSeconds(timeoutMs = 8_000)
         assertTrue(
             "session HUD should start ${harness.screenDiagnostics()}",
             before != null && before >= 5,
@@ -184,7 +189,7 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
         harness.sleepMs(12_000)
         harness.wakeDevice()
         harness.sleepMs(800)
-        val after = harness.waitForCountdown(timeoutMs = 8_000)
+        val after = harness.waitForSessionRemainingSeconds(timeoutMs = 8_000)
         assertTrue(
             "session must not expire while locked before=$before after=$after ${harness.screenDiagnostics()}",
             after != null && before != null && before - after <= 2,

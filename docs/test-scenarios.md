@@ -28,6 +28,46 @@ export ANDROID_HOME="../.tools/android-sdk"
 
 Gradle uses JDK 21 via `org.gradle.java.home` in `gradle.properties` (Studio JBR).
 
+### After any enforcement change (minimum)
+
+```bash
+cd Gatekeep
+export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr"   # Studio laptop
+export ANDROID_HOME="$LOCALAPPDATA/Android/Sdk"
+
+./gradlew :core-domain:test :app:testDebugUnitTest
+# Emulator running:
+./gradlew :app:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.gatekeep.app.enforcement.OpenGateTest
+./gradlew :app:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.gatekeep.app.enforcement.ResumeEnforcementTest
+```
+
+### Enforcement decision trace (emulator + phone)
+
+**Debug** builds log every major coordinator decision to logcat tag **`GatekeepEnforcement`**
+(`evaluate`, `open_gate_passed`, `pending_wait_resume`, `show_open_deterrent`, …).
+
+The **`dist/gatekeep-*.apk` on your phone is a release (minified) build** — it does **not** write that tag to logcat
+(the in-memory trace buffer still works inside instrumented tests). To trace on device, install a debug APK:
+`./gradlew :app:assembleDebug` then `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
+
+```bash
+adb logcat -s GatekeepEnforcement
+# or clear and capture a repro:
+adb logcat -c && adb logcat -s GatekeepEnforcement
+```
+
+**Release-only crash:** if open-wait finishes then Gatekeep dies (double overlay flash), check
+`adb logcat -b crash` for `NoSuchMethodError` on `SessionState.copy` / `OpenGatePassPolicy.markOpenGatePassed`.
+That is a **stale incremental release build**, not a logic regression — rebuild with `scripts/build_apk.sh`
+(which runs `clean` + `:core-domain:test` + `assembleRelease`) and reinstall.
+
+Instrumented tests can assert the same buffer via `EnforcementCoordinator.enforcementTraceCount(...)`
+(see `OpenGateTest.g16_openWaitComplete_noSecondWaitOrSessionPendingResume`).
+
+`EnforcementLog` in SharedPreferences only stores the **last crash/error** string for the in-app banner — not a full trace.
+
 ---
 
 ## PIN — App lock
@@ -168,6 +208,7 @@ Gradle uses JDK 21 via `org.gradle.java.home` in `gradle.properties` (Studio JBR
 | G-13 | Quick return within 60s grace skips open gate | `OpenGateTest.g13_quickReturn_withinGrace_skipsOpenGate` |
 | G-14 | Launcher blip does not reopen open gate | `OpenGateTest.g14_spuriousLauncherBlip_doesNotReopenGate` |
 | G-15 | Quick bounce without passing still shows open gate | `OpenGateTest.g15_quickBounce_neverPassed_stillShowsOpenGate` |
+| G-16 | Open wait completes once — no second wait / session pending resume | `OpenGateTest.g16_openWaitComplete_noSecondWaitOrSessionPendingResume` |
 | G-16 | Same-package event re-evaluates when open gate not passed | `ForegroundTransitionPolicyTest.samePackage_reevaluatesWhenOpenGateNotPassed` |
 
 ---
@@ -195,6 +236,7 @@ These cases launch with `am start` and read `block_message` / `wait_countdown`. 
 | OBS-01 | Hard block with no injected foreground shows within 2s | `ScreenObservationTest.obs01_hardBlock_noInjection_overlayWithin2s` |
 | OBS-02 | Home hides the overlay within 1.5s | `ScreenObservationTest.obs02_home_overlayGoneWithin1500ms` |
 | OBS-03 | Blocked overlay stays up and the message does not flicker | `ScreenObservationTest.obs03_blockedOverlay_doesNotFlicker` |
+| OBS-08 | Open-gate wait with no injected foreground shows within 2s | `ScreenObservationTest.obs08_openWait_noInjection_overlayWithin2s` |
 | OBS-04 | Open-wait countdown pauses while the screen is off | `ScreenObservationTest.obs04_openWait_pausesWhileScreenOff` |
 | OBS-05 | Session-limit wait pauses while the screen is off | `ScreenObservationTest.obs05_sessionWait_pausesWhileScreenOff` |
 | OBS-06 | Home for just over 60s starts a fresh session | `ScreenObservationTest.obs06_leaveOverOneMinute_freshSessionNotImmediateTimeout` |

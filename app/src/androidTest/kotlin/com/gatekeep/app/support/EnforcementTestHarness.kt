@@ -404,6 +404,21 @@ class EnforcementTestHarness(
     fun countdownSeconds(): Int? =
         countdownText()?.filter(Char::isDigit)?.toIntOrNull()
 
+    fun hudTimeText(): String? {
+        repeat(3) {
+            try {
+                return uiDevice.findObject(By.res(packageName, "hud_time_text"))?.text
+            } catch (_: StaleObjectException) {
+                Thread.sleep(POLL_INTERVAL_MS)
+            }
+        }
+        return null
+    }
+
+    fun sessionRemainingSeconds(): Int? =
+        parseLeadingSeconds(hudTimeText())
+            ?: parseLeadingSeconds(countdownNotificationBody())
+
     fun waitForCountdown(timeoutMs: Long = DEFAULT_OVERLAY_TIMEOUT_MS): Int? {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
@@ -411,6 +426,27 @@ class EnforcementTestHarness(
             Thread.sleep(POLL_INTERVAL_MS)
         }
         return null
+    }
+
+    fun waitForSessionRemainingSeconds(timeoutMs: Long = DEFAULT_OVERLAY_TIMEOUT_MS): Int? {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            sessionRemainingSeconds()?.let { return it }
+            Thread.sleep(POLL_INTERVAL_MS)
+        }
+        return null
+    }
+
+    private fun parseLeadingSeconds(text: String?): Int? {
+        if (text.isNullOrBlank()) return null
+        val match = Regex("""(\d+)\s*s\b""").find(text)
+            ?: Regex("""\b(\d+):(\d{2})\b""").find(text)
+        if (match == null) return text.filter(Char::isDigit).takeIf { it.isNotEmpty() }?.toIntOrNull()
+        return if (match.groupValues.size >= 3 && match.groupValues[2].isNotEmpty()) {
+            match.groupValues[1].toInt() * 60 + match.groupValues[2].toInt()
+        } else {
+            match.groupValues[1].toIntOrNull()
+        }
     }
 
     fun waitForOverlayElapsedMs(timeoutMs: Long = DEFAULT_OVERLAY_TIMEOUT_MS): Long? {
@@ -490,7 +526,9 @@ class EnforcementTestHarness(
             .orEmpty()
             .take(4)
             .joinToString(" | ") { "${it.packageName.substringAfterLast('.')}:${it.isFocused}/${it.isActive}" }
-        return "pkg=$pkg overlay=${overlayMessageText()} countdown=${countdownText()} windows=[$windows] crash=$crash"
+        return "pkg=$pkg overlay=${overlayMessageText()} countdown=${countdownText()} " +
+            "hud=${hudTimeText()} notif=${countdownNotificationBody()} " +
+            "screenOn=${isScreenOn()} keyguard=${isKeyguardLocked()} windows=[$windows] crash=$crash"
     }
 
     fun overlayReasonText(): String? =

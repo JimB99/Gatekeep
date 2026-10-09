@@ -14,7 +14,8 @@ if [[ -z "$VERSION_NAME" ]]; then
   exit 1
 fi
 
-./gradlew -Dorg.gradle.java.home="$JAVA_HOME" :app:assembleRelease
+# Clean avoids stale core-domain bytecode in release (SessionState.copy NoSuchMethodError on device).
+./gradlew -Dorg.gradle.java.home="$JAVA_HOME" clean :core-domain:test :app:assembleRelease
 
 SRC="$ROOT/app/build/outputs/apk/release/app-release.apk"
 DEST_DIR="$ROOT/dist"

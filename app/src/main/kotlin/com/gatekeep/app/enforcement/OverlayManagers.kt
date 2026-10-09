@@ -112,7 +112,7 @@ class BlockOverlayManager @Inject constructor(
                 waitRunnable = object : Runnable {
                     override fun run() {
                         if (!waitActive) return
-                        if (!screenStateMonitor.isScreenOn()) {
+                        if (screenStateMonitor.isWaitClockFrozen()) {
                             if (waitActive) mainHandler.postDelayed(this, 500)
                             return
                         }
@@ -392,7 +392,7 @@ class BlockOverlayManager @Inject constructor(
                 waitRunnable = object : Runnable {
                     override fun run() {
                         if (!waitActive) return
-                        if (!screenStateMonitor.isScreenOn()) {
+                        if (screenStateMonitor.isWaitClockFrozen()) {
                             if (waitActive) mainHandler.postDelayed(this, 500)
                             return
                         }

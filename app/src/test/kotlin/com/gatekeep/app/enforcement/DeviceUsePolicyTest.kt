@@ -73,9 +73,43 @@ class DeviceUsePolicyTest {
     }
 
     @Test
+    fun enforcementRunsOnlyWhileUsing() {
+        assertTrue(DeviceUsePolicy.shouldRunEnforcement(DeviceUsePhase.Using))
+        assertFalse(DeviceUsePolicy.shouldRunEnforcement(DeviceUsePhase.Paused))
+        assertTrue(DeviceUsePolicy.shouldRunEnforcement(DeviceUsePhase.Left))
+    }
+
+    @Test
     fun freezeClock_whenPausedOrLeft() {
         assertTrue(DeviceUsePolicy.shouldFreezeSessionClock(DeviceUsePhase.Paused))
         assertTrue(DeviceUsePolicy.shouldFreezeSessionClock(DeviceUsePhase.Left))
         assertFalse(DeviceUsePolicy.shouldFreezeSessionClock(DeviceUsePhase.Using))
+    }
+
+    @Test
+    fun stalePausePrefs_doNotRePauseWhileUsing() {
+        assertFalse(
+            DeviceUsePolicy.shouldPauseSessionClock(livePaused = false, hasLeftApp = false),
+        )
+        assertTrue(
+            DeviceUsePolicy.shouldResumeSessionClock(
+                livePaused = false,
+                hasLeftApp = false,
+                hasPauseMarker = true,
+            ),
+        )
+    }
+
+    @Test
+    fun livePause_pausesOnlyWhenStillInApp() {
+        assertTrue(DeviceUsePolicy.shouldPauseSessionClock(livePaused = true, hasLeftApp = false))
+        assertFalse(DeviceUsePolicy.shouldPauseSessionClock(livePaused = true, hasLeftApp = true))
+        assertFalse(
+            DeviceUsePolicy.shouldResumeSessionClock(
+                livePaused = true,
+                hasLeftApp = false,
+                hasPauseMarker = true,
+            ),
+        )
     }
 }

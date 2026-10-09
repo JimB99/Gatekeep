@@ -32,6 +32,23 @@ object DeviceUsePolicy {
     fun shouldEvaluateOnResume(previous: DeviceUsePhase, next: DeviceUsePhase): Boolean =
         previous == DeviceUsePhase.Paused && next == DeviceUsePhase.Using
 
+    /** Lock/screen-off must not overlay or burn remaining. Leave still evaluates so home can hide. */
+    fun shouldRunEnforcement(phase: DeviceUsePhase): Boolean = phase != DeviceUsePhase.Paused
+
     fun shouldFreezeSessionClock(phase: DeviceUsePhase): Boolean =
         phase == DeviceUsePhase.Paused || phase == DeviceUsePhase.Left
+
+    /** Live lock/screen-off pauses the session clock only while still in the app. */
+    fun shouldPauseSessionClock(livePaused: Boolean, hasLeftApp: Boolean): Boolean =
+        livePaused && !hasLeftApp
+
+    /**
+     * Resume leftover pause markers when the user is actually using the app.
+     * Stale prefs after a missed SCREEN_ON must not keep the session frozen.
+     */
+    fun shouldResumeSessionClock(
+        livePaused: Boolean,
+        hasLeftApp: Boolean,
+        hasPauseMarker: Boolean,
+    ): Boolean = !livePaused && !hasLeftApp && hasPauseMarker
 }

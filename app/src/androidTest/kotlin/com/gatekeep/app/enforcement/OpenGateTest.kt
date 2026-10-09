@@ -294,6 +294,50 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
         assertTrue(harness.waitForOpenFriction())
     }
 
+    /**
+     * Regression: completing open-gate wait must clear [pendingWaitUntil] before the next
+     * evaluate — otherwise a second wait overlay appears and can crash the a11y service.
+     */
+    @Test
+    fun g16_openWaitComplete_noSecondWaitOrSessionPendingResume() {
+        val pkg = EnforcementTestPackages.TARGET_A
+        runSeed {
+            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.deterrentWait,
+                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.OPEN_WAIT_SEC,
+                    dailyLimitMs = null,
+                    sessionLimitMs = null,
+                ),
+            )
+        }
+        harness.launchTargetA()
+        assertTrue(harness.waitForOpenFriction())
+        harness.waitForElapsedMs(
+            GatekeepTestFixtures.TestDurations.msAfterTimer(GatekeepTestFixtures.TestDurations.OPEN_WAIT_SEC),
+        )
+        runBlocking {
+            assertTrue(
+                "allowed after open wait ${harness.screenDiagnostics()}",
+                enforcementCoordinator.awaitAllowedWithoutOverlay(pkg),
+            )
+            enforcementCoordinator.evaluateMonitoredPackageForTests(pkg)
+            assertTrue(
+                "re-evaluate must not start another wait ${harness.screenDiagnostics()}",
+                enforcementCoordinator.awaitAllowedWithoutOverlay(pkg),
+            )
+        }
+        assertTrue(
+            "trace: no session-limit pending resume after open wait",
+            enforcementCoordinator.enforcementTraceCount(EnforcementTrace.SHOW_PENDING_SESSION_WAIT) == 0,
+        )
+        assertTrue(
+            "trace: open gate passed once",
+            enforcementCoordinator.enforcementTraceCount(EnforcementTrace.OPEN_GATE_PASSED) == 1,
+        )
+    }
+
     @Test
     fun g13_quickReturn_withinGrace_skipsOpenGate() {
         runSeed {
