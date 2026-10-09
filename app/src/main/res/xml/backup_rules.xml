@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Tied to Android Keystore; restoring without keys crashes on launch. -->
+    <exclude domain="sharedpref" path="gatekeep_pins.xml" />
+</full-backup-content>
