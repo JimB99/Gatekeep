@@ -28,6 +28,7 @@ class ScreenStateMonitor @Inject constructor(
     private var onPausedListener: (() -> Unit)? = null
     private var onBecameUsingListener: (() -> Unit)? = null
     private var deviceUsePhase: DeviceUsePhase = DeviceUsePhase.Using
+    private val phaseLock = Any()
     private var keyguardLockedListener: KeyguardManager.KeyguardLockedStateListener? = null
     private val displayManager = context.getSystemService(DisplayManager::class.java)
     private val displayListener = object : DisplayManager.DisplayListener {
@@ -114,6 +115,11 @@ class ScreenStateMonitor @Inject constructor(
             hasLeftApp = hasLeftApp,
         )
 
+    /** Re-read hardware if SCREEN_ON / USER_PRESENT was missed (emulator sleep/wake). */
+    fun refreshDeviceUsePhase() {
+        emitDeviceUsePhase()
+    }
+
     private fun currentScreenOn(): Boolean {
         if (isDisplayOff()) {
             pauseTracker.syncFromHardware(displayOn = false)
@@ -134,16 +140,22 @@ class ScreenStateMonitor @Inject constructor(
             keyguardLocked = isKeyguardLocked(),
             hasLeftApp = false,
         )
-        syncWaitTracker(next, screenOn)
-        val previous = deviceUsePhase
-        if (next == DeviceUsePhase.Paused) {
-            devicePauseStore.setPausedAt(System.currentTimeMillis())
+        val notify = synchronized(phaseLock) {
+            syncWaitTracker(next, screenOn)
+            if (next == DeviceUsePhase.Paused) {
+                devicePauseStore.setPausedAt(System.currentTimeMillis())
+            }
+            val previous = deviceUsePhase
+            val decision = DeviceUsePhaseEmit.notify(previous, next)
+            if (decision != null) {
+                deviceUsePhase = next
+            }
+            decision
         }
-        if (previous == next) return
-        deviceUsePhase = next
-        when {
-            DeviceUsePolicy.shouldEvaluateOnResume(previous, next) -> onBecameUsingListener?.invoke()
-            next == DeviceUsePhase.Paused -> onPausedListener?.invoke()
+        when (notify) {
+            DeviceUsePhaseEmit.Notify.BecameUsing -> onBecameUsingListener?.invoke()
+            DeviceUsePhaseEmit.Notify.Paused -> onPausedListener?.invoke()
+            null -> Unit
         }
     }
 

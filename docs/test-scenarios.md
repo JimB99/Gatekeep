@@ -46,11 +46,14 @@ export ANDROID_HOME="$LOCALAPPDATA/Android/Sdk"
 ### Enforcement decision trace (emulator + phone)
 
 **Debug** builds log every major coordinator decision to logcat tag **`GatekeepEnforcement`**
-(`evaluate`, `open_gate_passed`, `pending_wait_resume`, `show_open_deterrent`, …).
+(`evaluate`, `unlock_skip`, `unlock_resume`, `open_gate_passed`, `pending_wait_resume`, `show_open_deterrent`, …).
 
-The **`dist/gatekeep-*.apk` on your phone is a release (minified) build** — it does **not** write that tag to logcat
-(the in-memory trace buffer still works inside instrumented tests). To trace on device, install a debug APK:
+The **`dist/gatekeep-*.apk` on your phone is a release (minified) build** — it does **not** write that tag to logcat.
+The in-memory buffer is still filled, persisted to `enforcement-trace.log`, and exportable from **Settings → About → Copy enforcement log** (choose a time range first). Repeated identical `foreground_commit` lines are coalesced.
+To also stream traces live, install a debug APK:
 `./gradlew :app:assembleDebug` then `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
+
+Run connected tests against the emulator only (`ANDROID_SERIAL=emulator-5554`) so the phone is not included.
 
 ```bash
 adb logcat -s GatekeepEnforcement
@@ -241,6 +244,7 @@ These cases launch with `am start` and read `block_message` / `wait_countdown`. 
 | OBS-05 | Session-limit wait pauses while the screen is off | `ScreenObservationTest.obs05_sessionWait_pausesWhileScreenOff` |
 | OBS-06 | Home for just over 60s starts a fresh session | `ScreenObservationTest.obs06_leaveOverOneMinute_freshSessionNotImmediateTimeout` |
 | OBS-07 | Home for about 5s keeps the session and excludes the gap | `ScreenObservationTest.obs07_leaveFiveSeconds_sameSessionGapExcluded` |
+| OBS-09 | Home without opening another app freezes the session clock within 1s | `ScreenObservationTest.obs09_home_freezesSessionWithoutOtherApp` |
 
 ---
 
@@ -280,6 +284,9 @@ These cases launch with `am start` and read `block_message` / `wait_countdown`. 
 | RES-03 | Reopen after session limit still blocked (no free usage) | `ResumeEnforcementTest.res03_sessionExtensionOverlay_reopenStillBlocked`, `DomainTests.session at cap stays exceeded while limit block friction is active` |
 | RES-04 | Screen off longer than session remaining does not expire the session | `ResumeEnforcementTest.res04_screenOffLongerThanRemaining_doesNotExpireSession`, `DeviceUsePolicyTest`, `DomainTests.device pause freezes remaining across wall-clock pocket time` |
 | RES-05 | SCREEN_ON onto lock screen does not pass open gate; unlock does | `ResumeEnforcementTest.res05_wakeToLockScreen_openGateRunsOnUnlock`, `DeviceUsePolicyTest.screenOnWhileLocked_doesNotResumeEvaluate` |
+| RES-06 | Lock ≥60s at session limit starts a fresh session (open wait), does not restore session-limit overlay | `ResumeEnforcementTest.res06_lockAtLeastOneMinute_atSessionLimit_startsFreshOpenWait`, `SessionStartDecisionTest.liveInMemory_pauseSixMinutes_startsFresh` |
+| RES-07 | Lock ~5s mid-session continues the same session with remaining frozen | `ResumeEnforcementTest.res07_shortLock_continuesSameSessionRemainingFrozen` |
+| RES-08 | Unlock on home / launcher must not flash open wait for the last monitored app | `ResumeEnforcementTest.res08_unlockOnHome_doesNotFlashOpenWait`, `UnlockOverlayPolicyTest` |
 
 ---
 
@@ -431,6 +438,7 @@ See also `docs/test-run-report.md` for latest run summary.
 | SET-01 | Session timer toggle | `EnforcementSettingsTest.set01_sessionTimerToggle` |
 | SET-02 | Weekly report toggle | `EnforcementSettingsTest.set02_weeklyReportToggle` |
 | SET-03 | HUD toggle linked to timer | `EnforcementSettingsTest.set03_hudToggle_linkedToTimer` |
+| SET-04 | About is last in Settings; enforcement log range chips copy | `EnforcementSettingsTest.set04_aboutIsLast_logRangeChipsVisible` |
 
 ---
 

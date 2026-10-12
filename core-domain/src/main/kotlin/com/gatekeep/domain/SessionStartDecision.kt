@@ -20,19 +20,17 @@ object SessionStartDecision {
         graceMs: Long = SessionContinuityPolicy.RESUME_GRACE_MS,
     ): Action {
         if (existingState == null) return Action.StartFresh
-        if (pendingWait || onBreak) return Action.Continue
+        if (onBreak) return Action.Continue
+        val awayAt = SessionContinuityPolicy.lastInactiveAtEpochMs(existingState)
+        if (awayAt != null &&
+            !SessionContinuityPolicy.shouldContinueSession(awayAt, nowEpochMs, graceMs)
+        ) {
+            return Action.StartFresh
+        }
+        if (pendingWait) return Action.Continue
         if (liveInMemorySession) {
             if (existingState.lastForegroundEndEpochMs == null) return Action.Continue
-            return if (SessionContinuityPolicy.shouldContinueSession(
-                    existingState.lastForegroundEndEpochMs,
-                    nowEpochMs,
-                    graceMs,
-                )
-            ) {
-                Action.ResumeAfterGap
-            } else {
-                Action.StartFresh
-            }
+            return Action.ResumeAfterGap
         }
         if (existingState.sessionStartEpochMs < dayStartEpochMs) return Action.StartFresh
         return if (SessionContinuityPolicy.shouldContinueSession(

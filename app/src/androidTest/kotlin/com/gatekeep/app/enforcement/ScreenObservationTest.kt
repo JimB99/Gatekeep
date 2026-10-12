@@ -7,8 +7,10 @@ import androidx.test.uiautomator.By
 import dagger.hilt.android.testing.HiltAndroidTest
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
+import com.gatekeep.domain.SessionTracker
 import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.OnSessionLimitAction
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -236,6 +238,51 @@ class ScreenObservationTest : EnforcementCrossAppTestBase() {
         assertTrue(
             "gap was counted or the session timed out ${harness.screenDiagnostics()}",
             !shown,
+        )
+    }
+
+    /**
+     * OBS-09: Home without opening another app must stamp leave and freeze the session
+     * clock within ~1s (YouTube staying "current" in usage stats must not keep ticking).
+     */
+    @Test
+    fun obs09_home_freezesSessionWithoutOtherApp() {
+        val pkg = EnforcementTestPackages.TARGET_A
+        val sessionLimitMs = 30_000L
+        lateinit var seeded: GatekeepTestFixtures.SeededProfile
+        runSeed {
+            seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.none,
+                    sessionLimitMs = sessionLimitMs,
+                    dailyLimitMs = null,
+                ),
+            )
+        }
+        harness.wakeDevice()
+        harness.launchTargetA()
+        harness.sleepMs(1_500)
+        harness.useRealForegroundDetection()
+        harness.pressHome()
+        harness.sleepMs(1_000)
+        val leftState = runBlocking { usageRepository.getSessionState(seeded.profileId, pkg) }
+        assertTrue(
+            "home must stamp lastForegroundEnd within 1s ${harness.screenDiagnostics()} state=$leftState",
+            leftState?.lastForegroundEndEpochMs != null,
+        )
+        val durationAtLeave = SessionTracker.sessionDurationMs(leftState, System.currentTimeMillis())
+        harness.sleepMs(3_000)
+        val laterState = runBlocking { usageRepository.getSessionState(seeded.profileId, pkg) }
+        val durationLater = SessionTracker.sessionDurationMs(laterState, System.currentTimeMillis())
+        assertTrue(
+            "session clock must stay frozen on home durationAtLeave=$durationAtLeave later=$durationLater ${harness.screenDiagnostics()}",
+            kotlin.math.abs(durationLater - durationAtLeave) <= 1_000L,
+        )
+        assertTrue(
+            "trace: session_leave or hud_freeze after home",
+            enforcementCoordinator.enforcementTraceCount(EnforcementTrace.SESSION_LEAVE) >= 1 ||
+                enforcementCoordinator.enforcementTraceCount(EnforcementTrace.HUD_FREEZE) >= 1,
         )
     }
 

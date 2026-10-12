@@ -157,6 +157,38 @@ class BlockPresentationReducerTest {
     }
 
     @Test
+    fun reenterSameVisiblePackage_keepsGeneration() {
+        val first = BlockPresentationReducer.enterForForeground(
+            BlockPresentationState(),
+            "com.blocked",
+            "com.blocked",
+        )
+        val second = BlockPresentationReducer.enterForForeground(
+            first,
+            "com.blocked",
+            "com.blocked",
+        )
+        assertEquals(first.generation, second.generation)
+        assertEquals(first.presentation, second.presentation)
+    }
+
+    @Test
+    fun enterHiddenThenMatchingForeground_restoresWithoutNewGeneration() {
+        val hidden = BlockPresentationReducer.enterForForeground(
+            BlockPresentationState(),
+            "com.blocked",
+            "com.launcher",
+        )
+        val restored = BlockPresentationReducer.enterForForeground(
+            hidden,
+            "com.blocked",
+            "com.blocked",
+        )
+        assertEquals(hidden.generation, restored.generation)
+        assertTrue(restored.presentation is BlockPresentation.Visible)
+    }
+
+    @Test
     fun `block entered for matching foreground is visible`() {
         val next = BlockPresentationReducer.onBlockEnteredForForeground(
             BlockPresentationState(),

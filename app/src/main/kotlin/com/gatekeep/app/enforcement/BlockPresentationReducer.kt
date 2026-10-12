@@ -33,6 +33,33 @@ object BlockPresentationReducer {
         return BlockPresentationState(presentation = presentation, generation = nextGen)
     }
 
+    /**
+     * Re-evaluate of the same blocked app must not bump [BlockPresentationState.generation];
+     * that skipped in-flight overlay posts (`overlay_skip generation`) and flashed the view.
+     */
+    fun enterForForeground(
+        state: BlockPresentationState,
+        packageName: String,
+        foregroundPackage: String?,
+    ): BlockPresentationState {
+        val fgMatches = foregroundPackage == packageName
+        when (val presentation = state.presentation) {
+            is BlockPresentation.Visible -> {
+                if (presentation.packageName == packageName && fgMatches) return state
+                if (presentation.packageName == packageName && !fgMatches) {
+                    return onHideForOtherApp(state)
+                }
+            }
+            is BlockPresentation.HiddenForOtherApp -> {
+                if (presentation.packageName == packageName && fgMatches) {
+                    return onReturnToBlockedApp(state, packageName)
+                }
+            }
+            BlockPresentation.None -> Unit
+        }
+        return onBlockEnteredForForeground(state, packageName, foregroundPackage)
+    }
+
     fun shouldPresentOverlay(
         state: BlockPresentationState,
         foregroundPackage: String?,

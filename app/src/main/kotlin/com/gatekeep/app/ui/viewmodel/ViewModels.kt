@@ -15,6 +15,7 @@ import com.gatekeep.app.data.StatsRepository
 import com.gatekeep.app.data.StatsTimeRange
 import com.gatekeep.app.data.TopAppUsage
 import com.gatekeep.app.ui.components.buildPermissionState
+import com.gatekeep.app.enforcement.EnforcementTraceQuery
 import com.gatekeep.app.util.EnforcementLog
 import com.gatekeep.app.util.LocaleController
 import com.gatekeep.app.util.UsageStatsCollector
@@ -1014,6 +1015,7 @@ class SettingsViewModel @Inject constructor(
     private val pinStorage: PinStorage,
     @ApplicationContext private val context: Context,
     private val enforcementLog: EnforcementLog,
+    private val enforcementTrace: com.gatekeep.app.enforcement.EnforcementTrace,
 ) : ViewModel() {
 
     val settings = settingsRepository.settings
@@ -1052,6 +1054,10 @@ class SettingsViewModel @Inject constructor(
     fun clearEnforcementError() {
         enforcementLog.clear()
     }
+
+    fun enforcementTraceExport(
+        window: EnforcementTraceQuery.Window = EnforcementTraceQuery.Window.ALL,
+    ): String = enforcementTrace.exportText(window)
 }
 
 @HiltViewModel

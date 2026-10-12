@@ -158,6 +158,15 @@
     <string name="schedule_next_day_suffix">(+1D)</string>
     <string name="dismiss_error">Dismiss</string>
     <string name="clear_error_log">Clear error log</string>
+    <string name="copy_enforcement_log">Copy enforcement log</string>
+    <string name="enforcement_log_copied">Enforcement log copied</string>
+    <string name="enforcement_log_empty">No enforcement events recorded yet</string>
+    <string name="enforcement_log_range">Log range</string>
+    <string name="enforcement_log_range_15m">15 min</string>
+    <string name="enforcement_log_range_1h">1 h</string>
+    <string name="enforcement_log_range_6h">6 h</string>
+    <string name="enforcement_log_range_24h">24 h</string>
+    <string name="enforcement_log_range_all">All</string>
     <string name="profile_schedule_count">%1$d schedules</string>
     <string name="no_schedules">No schedules</string>
     <string name="schedules_summary_on_default_tab">When no schedule matches is configured on the Default tab.</string>

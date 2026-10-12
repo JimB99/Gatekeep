@@ -17,4 +17,22 @@ object PendingWaitResumePolicy {
         OnOpenAction.deterrentWait -> PendingWaitResumeSurface.OPEN_GATE
         else -> PendingWaitResumeSurface.SESSION_LIMIT
     }
+
+    /**
+     * In-flight evaluate can still see [SessionTracker.hasPendingWait] after the wait
+     * finished and open-gate was recorded — that must not flash a second wait (G-16).
+     */
+    fun shouldResume(
+        hasPendingWait: Boolean,
+        openGateAlreadyPassed: Boolean,
+        overlayHasActiveWait: Boolean,
+        devicePaused: Boolean,
+        screenOn: Boolean,
+        overlayShowInFlight: Boolean = false,
+    ): Boolean {
+        if (!hasPendingWait) return false
+        if (openGateAlreadyPassed) return false
+        if (overlayHasActiveWait || overlayShowInFlight || devicePaused || !screenOn) return false
+        return true
+    }
 }

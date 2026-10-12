@@ -132,4 +132,42 @@ class SessionStartDecisionTest {
             decide(session(lastEnd = leftAt), live = false),
         )
     }
+
+    @Test
+    fun liveInMemory_pauseUnderOneMinute_continues() {
+        val paused = session().copy(devicePausedAtEpochMs = now - 5_000L)
+        assertEquals(SessionStartDecision.Action.Continue, decide(paused, live = true))
+    }
+
+    @Test
+    fun liveInMemory_pauseSixMinutes_startsFresh() {
+        val paused = session().copy(devicePausedAtEpochMs = now - 6 * 60_000L)
+        assertEquals(SessionStartDecision.Action.StartFresh, decide(paused, live = true))
+    }
+
+    @Test
+    fun liveInMemory_pauseAtLeastOneMinute_startsFresh() {
+        val paused = session().copy(
+            devicePausedAtEpochMs = now - SessionContinuityPolicy.RESUME_GRACE_MS,
+        )
+        assertEquals(SessionStartDecision.Action.StartFresh, decide(paused, live = true))
+    }
+
+    @Test
+    fun pendingWait_longPause_startsFresh() {
+        val paused = session().copy(devicePausedAtEpochMs = now - 6 * 60_000L)
+        assertEquals(
+            SessionStartDecision.Action.StartFresh,
+            decide(paused, live = true, pendingWait = true),
+        )
+    }
+
+    @Test
+    fun onBreak_longPause_continues() {
+        val paused = session().copy(devicePausedAtEpochMs = now - 6 * 60_000L)
+        assertEquals(
+            SessionStartDecision.Action.Continue,
+            decide(paused, live = true, onBreak = true),
+        )
+    }
 }

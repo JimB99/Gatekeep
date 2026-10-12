@@ -13,6 +13,7 @@ import android.content.Intent
 import androidx.compose.foundation.clickable
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 
 import androidx.compose.foundation.layout.Column
 
@@ -84,6 +85,10 @@ import com.gatekeep.app.ui.GatekeepTestTags
 
 import com.gatekeep.app.admin.GatekeepDeviceAdminReceiver
 
+import com.gatekeep.app.enforcement.EnforcementTraceQuery
+import com.gatekeep.app.ui.components.GatekeepFilterChip
+import com.gatekeep.app.ui.components.GatekeepFilterChipLabel
+import com.gatekeep.app.ui.components.GatekeepFilterChipRow
 import com.gatekeep.app.ui.viewmodel.SettingsViewModel
 
 import com.gatekeep.app.util.LocaleController
@@ -242,22 +247,23 @@ fun SettingsHubScreen(
 
             SettingsNavItem(
 
-                title = stringResource(R.string.about),
-
-                subtitle = stringResource(R.string.version_format, BuildConfig.VERSION_NAME),
-
-                onClick = onNavigateAbout,
-
-            )
-
-            SettingsNavItem(
-
                 title = stringResource(R.string.replay_onboarding),
 
                 subtitle = stringResource(R.string.permissions_and_setup),
 
                 onClick = onNavigatePermissions,
                 modifier = Modifier.testTag(GatekeepTestTags.SETTINGS_PERMISSIONS),
+
+            )
+
+            SettingsNavItem(
+
+                title = stringResource(R.string.about),
+
+                subtitle = stringResource(R.string.version_format, BuildConfig.VERSION_NAME),
+
+                onClick = onNavigateAbout,
+                modifier = Modifier.testTag(GatekeepTestTags.SETTINGS_ABOUT),
 
             )
 
@@ -616,7 +622,7 @@ fun EnforcementSettingsScreen(
 
 
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 
 @Composable
 
@@ -625,6 +631,8 @@ fun AboutSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     var lastError by remember { mutableStateOf(viewModel.lastEnforcementError()) }
+    var logWindow by remember { mutableStateOf(EnforcementTraceQuery.Window.LAST_HOUR) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     SettingsDetailScaffold(title = stringResource(R.string.about), onBack = onBack) {
         Text(
@@ -648,7 +656,45 @@ fun AboutSettingsScreen(
                 Text(stringResource(R.string.clear_error_log))
             }
         }
+        Text(
+            stringResource(R.string.enforcement_log_range),
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        GatekeepFilterChipRow {
+            EnforcementTraceQuery.Window.entries.forEach { window ->
+                GatekeepFilterChip(
+                    selected = logWindow == window,
+                    onClick = { logWindow = window },
+                    label = { GatekeepFilterChipLabel(stringResource(enforcementLogWindowLabel(window))) },
+                    modifier = Modifier.testTag(
+                        GatekeepTestTags.enforcementLogRange(window.name),
+                    ),
+                )
+            }
+        }
+        TextButton(onClick = {
+            val log = viewModel.enforcementTraceExport(logWindow)
+            val text = log.ifBlank { context.getString(R.string.enforcement_log_empty) }
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Gatekeep enforcement log", text))
+            android.widget.Toast.makeText(
+                context,
+                context.getString(R.string.enforcement_log_copied),
+                android.widget.Toast.LENGTH_SHORT,
+            ).show()
+        }) {
+            Text(stringResource(R.string.copy_enforcement_log))
+        }
     }
+}
+
+private fun enforcementLogWindowLabel(window: EnforcementTraceQuery.Window): Int = when (window) {
+    EnforcementTraceQuery.Window.LAST_15_MIN -> R.string.enforcement_log_range_15m
+    EnforcementTraceQuery.Window.LAST_HOUR -> R.string.enforcement_log_range_1h
+    EnforcementTraceQuery.Window.LAST_6_HOURS -> R.string.enforcement_log_range_6h
+    EnforcementTraceQuery.Window.LAST_24_HOURS -> R.string.enforcement_log_range_24h
+    EnforcementTraceQuery.Window.ALL -> R.string.enforcement_log_range_all
 }
 
 

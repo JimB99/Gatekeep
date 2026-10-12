@@ -373,6 +373,18 @@ class EnforcementTestHarness(
         return false
     }
 
+    /** True if the block overlay appears at any poll during [windowMs] (catches a flash). */
+    fun overlayAppearedDuring(windowMs: Long): Boolean {
+        val deadline = System.currentTimeMillis() + windowMs
+        while (System.currentTimeMillis() < deadline) {
+            if (uiDevice.hasObject(By.res(packageName, "block_message"))) {
+                return true
+            }
+            Thread.sleep(POLL_INTERVAL_MS)
+        }
+        return false
+    }
+
     fun overlayMessageText(): String? {
         repeat(3) {
             try {

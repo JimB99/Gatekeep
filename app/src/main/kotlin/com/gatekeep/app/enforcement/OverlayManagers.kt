@@ -77,7 +77,10 @@ class BlockOverlayManager @Inject constructor(
     fun show(request: BlockOverlayRequest) {
         mainHandler.post {
             try {
-                if (!coordinator.get().shouldPresentBlockOverlay(request.packageName)) return@post
+                if (!coordinator.get().shouldPresentBlockOverlay(request.packageName)) {
+                    coordinator.get().onOverlayShowAborted()
+                    return@post
+                }
                 currentRequest = request
                 if (overlayView != null && frictionInProgress) return@post
                 if (overlayView != null) {
@@ -87,6 +90,7 @@ class BlockOverlayManager @Inject constructor(
                 }
                 createBlockOverlay(request)
             } catch (e: Exception) {
+                coordinator.get().onOverlayShowAborted()
                 enforcementLog.logError("Block overlay show failed", e)
             }
         }
@@ -156,14 +160,16 @@ class BlockOverlayManager @Inject constructor(
         val epoch = ++overlayEpoch
         mainHandler.post {
             if (epoch != overlayEpoch) return@post
-            val request = currentRequest ?: return@post
-            if (!coordinator.get().shouldPresentBlockOverlay(request.packageName)) return@post
-            if (overlayVisible && overlayView != null) return@post
-            if (overlayView != null) {
-                runCatching { windowManager.removeView(overlayView) }
-                overlayView = null
-                overlayParams = null
+            val request = currentRequest
+            if (request == null) {
+                coordinator.get().onOverlayShowAborted()
+                return@post
             }
+            if (!coordinator.get().shouldPresentBlockOverlay(request.packageName)) {
+                coordinator.get().onOverlayShowAborted()
+                return@post
+            }
+            if (overlayVisible || overlayView != null) return@post
             createBlockOverlay(request)
         }
     }

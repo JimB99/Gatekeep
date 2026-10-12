@@ -153,6 +153,15 @@
     <string name="schedule_next_day_suffix">(+1T)</string>
     <string name="dismiss_error">Schließen</string>
     <string name="clear_error_log">Fehlerprotokoll löschen</string>
+    <string name="copy_enforcement_log">Durchsetzungsprotokoll kopieren</string>
+    <string name="enforcement_log_copied">Durchsetzungsprotokoll kopiert</string>
+    <string name="enforcement_log_empty">Noch keine Durchsetzungsereignisse</string>
+    <string name="enforcement_log_range">Protokollzeitraum</string>
+    <string name="enforcement_log_range_15m">15 Min</string>
+    <string name="enforcement_log_range_1h">1 Std</string>
+    <string name="enforcement_log_range_6h">6 Std</string>
+    <string name="enforcement_log_range_24h">24 Std</string>
+    <string name="enforcement_log_range_all">Alles</string>
     <string name="profile_schedule_count">%1$d Zeitpläne</string>
     <string name="no_schedules">Keine Zeitpläne</string>
     <string name="schedules_summary_on_default_tab">„Wenn kein Zeitplan passt“ ist auf dem Standard-Tab konfiguriert.</string>

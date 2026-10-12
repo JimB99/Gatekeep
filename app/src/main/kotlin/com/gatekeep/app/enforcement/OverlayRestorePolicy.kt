@@ -54,6 +54,30 @@ object OverlayRestorePolicy {
         )
 
         val reported = input.reportedForegroundPackage
+        if (kind == OverlayWindowKind.Recents || kind == OverlayWindowKind.Launcher) {
+            if (input.blockingActive &&
+                input.presentation is BlockPresentation.Visible &&
+                input.lastRestoreAtMs > 0L &&
+                input.nowMs - input.lastRestoreAtMs < ForegroundRoutingPolicy.BLOCK_STABILIZATION_MS
+            ) {
+                return ForegroundRoutingPolicy.Route.Ignore
+            }
+            if (input.blockingActive &&
+                input.presentation is BlockPresentation.Visible &&
+                input.nowMs - input.blockEnteredAtMs < ForegroundRoutingPolicy.BLOCK_STABILIZATION_MS
+            ) {
+                return ForegroundRoutingPolicy.Route.Ignore
+            }
+            if (input.blockingActive && input.presentation is BlockPresentation.Visible) {
+                return ForegroundRoutingPolicy.Route.HideNow(top.packageName)
+            }
+            if (!input.blockingActive) {
+                return ForegroundRoutingPolicy.Route.Commit(
+                    top.packageName,
+                    ForegroundStabilizationPolicy.DEBOUNCE_MS,
+                )
+            }
+        }
         if (!input.blockingActive &&
             reported != null &&
             isAppPackage(reported, input)

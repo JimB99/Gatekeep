@@ -6,6 +6,12 @@ object SessionContinuityPolicy {
 
     const val RESUME_GRACE_MS = 60_000L
 
+    fun lastInactiveAtEpochMs(session: SessionState?): Long? =
+        listOfNotNull(
+            session?.lastForegroundEndEpochMs,
+            session?.devicePausedAtEpochMs,
+        ).minOrNull()
+
     fun shouldContinueSession(
         lastForegroundEndEpochMs: Long?,
         nowEpochMs: Long,
@@ -14,6 +20,12 @@ object SessionContinuityPolicy {
         if (lastForegroundEndEpochMs == null) return false
         return nowEpochMs - lastForegroundEndEpochMs < graceMs
     }
+
+    fun shouldContinueSession(
+        session: SessionState?,
+        nowEpochMs: Long,
+        graceMs: Long = RESUME_GRACE_MS,
+    ): Boolean = shouldContinueSession(lastInactiveAtEpochMs(session), nowEpochMs, graceMs)
 
     fun activeAwayMs(session: SessionState?, nowEpochMs: Long): Long {
         val endedAt = session?.lastForegroundEndEpochMs ?: return 0L

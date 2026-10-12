@@ -9,6 +9,8 @@ import com.gatekeep.domain.model.ExtensionPolicy
 import com.gatekeep.domain.model.ExtensionSurfaceMode
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
+import com.gatekeep.domain.model.OnSessionLimitAction
+import com.gatekeep.domain.model.SessionState
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import org.junit.Assert.assertEquals
@@ -289,6 +291,40 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
             ),
         )
         assertTrue(harness.waitForOverlay())
+    }
+
+    @Test
+    fun o19_sessionLimit_doesNotSpamOverlayShow() {
+        val now = System.currentTimeMillis()
+        runSeed {
+            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.none,
+                    onSessionLimitAction = OnSessionLimitAction.hardBlock,
+                    sessionLimitMs = GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS,
+                    dailyLimitMs = null,
+                ),
+            )
+            usageRepository.saveSessionState(
+                SessionState(
+                    packageName = seeded.packageName,
+                    sessionStartEpochMs = now - GatekeepTestFixtures.TestDurations.SESSION_OVER_CAP_MS,
+                ),
+                seeded.profileId,
+            )
+        }
+        harness.launchTargetA()
+        assertTrue(harness.waitForOverlay())
+        harness.sleepMs(1_200)
+        val traces = enforcementCoordinator.enforcementTraceSnapshot()
+        val shows = traces.filter {
+            it.event == EnforcementTrace.OVERLAY_SHOW && it.fields["reason"] == "sessionLimit"
+        }
+        assertTrue(
+            "session-limit overlay_show spam (${shows.size}): $shows ${harness.screenDiagnostics()}",
+            shows.size <= 2,
+        )
     }
 
     private fun injectStaleRecentsRestoreStack() {

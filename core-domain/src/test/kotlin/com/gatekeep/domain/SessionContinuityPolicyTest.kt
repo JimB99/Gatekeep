@@ -76,6 +76,45 @@ class SessionContinuityPolicyTest {
     }
 
     @Test
+    fun shouldContinue_whenPauseUnderOneMinute() {
+        val session = SessionState(
+            packageName = "com.test",
+            sessionStartEpochMs = 1_000L,
+            devicePausedAtEpochMs = 10_000L,
+        )
+        assertTrue(
+            SessionContinuityPolicy.shouldContinueSession(session, nowEpochMs = 40_000L),
+        )
+    }
+
+    @Test
+    fun shouldNotContinue_whenPauseAtLeastOneMinute() {
+        val pausedAt = 10_000L
+        val session = SessionState(
+            packageName = "com.test",
+            sessionStartEpochMs = 1_000L,
+            devicePausedAtEpochMs = pausedAt,
+        )
+        assertFalse(
+            SessionContinuityPolicy.shouldContinueSession(
+                session,
+                nowEpochMs = pausedAt + SessionContinuityPolicy.RESUME_GRACE_MS,
+            ),
+        )
+    }
+
+    @Test
+    fun lastInactiveAt_prefersEarlierPauseOrLeave() {
+        val session = SessionState(
+            packageName = "com.test",
+            sessionStartEpochMs = 1_000L,
+            lastForegroundEndEpochMs = 40_000L,
+            devicePausedAtEpochMs = 10_000L,
+        )
+        assertEquals(10_000L, SessionContinuityPolicy.lastInactiveAtEpochMs(session))
+    }
+
+    @Test
     fun markForegroundEnded_preservesPassAndStart() {
         val session = SessionState(
             packageName = "com.test",

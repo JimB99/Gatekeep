@@ -73,6 +73,11 @@ class UsageStatsCollector(
     fun getForegroundActivityClassFallback(): String? =
         getLastForegroundResumeEvent()?.className
 
+    fun lastEventTypeForPackage(packageName: String): ForegroundEventType? {
+        val now = System.currentTimeMillis()
+        return queryEvents(now - 60_000, now).lastOrNull { it.packageName == packageName }?.type
+    }
+
     private fun getLastForegroundResumeEvent(): UsageEvent? {
         val now = System.currentTimeMillis()
         return queryEvents(now - 60_000, now)

@@ -13,6 +13,8 @@ object GatekeepTestTags {
     const val PERMISSION_ACCESSIBILITY_BUTTON = "permission_accessibility_button"
     const val SETTINGS_LANGUAGE = "settings_language"
     const val SETTINGS_PERMISSIONS = "settings_permissions"
+    const val SETTINGS_ABOUT = "settings_about"
+    const val SETTINGS_ENFORCEMENT_LOG_RANGE_PREFIX = "settings_enforcement_log_range_"
     const val PERMISSIONS_ROOT = "permissions_root"
     const val SETTINGS_ENFORCEMENT_TOGGLE = "settings_enforcement_toggle"
     const val SETTINGS_DAY_RESET = "settings_day_reset"
@@ -30,6 +32,8 @@ object GatekeepTestTags {
     const val PAUSE_END_EARLY = "pause_end_early"
 
     fun profileCard(name: String): String = PROFILE_CARD_PREFIX + name
+    fun enforcementLogRange(windowName: String): String =
+        SETTINGS_ENFORCEMENT_LOG_RANGE_PREFIX + windowName
     const val PROFILE_PIN_FIELD = "profile_pin_field"
     const val PROFILE_PIN_SAVE = "profile_pin_save"
     const val STATS_ROOT = "stats_root"

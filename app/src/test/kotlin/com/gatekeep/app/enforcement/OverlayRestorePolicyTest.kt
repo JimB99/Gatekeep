@@ -133,7 +133,7 @@ class OverlayRestorePolicyTest {
     }
 
     @Test
-    fun visibleRecents_reportedForegroundBlocked_ignore() {
+    fun visibleRecents_reportedForegroundBlocked_hideNow() {
         val route = OverlayRestorePolicy.decide(
             input(
                 windows = listOf(recents(focused = true), app()),
@@ -141,9 +141,11 @@ class OverlayRestorePolicyTest {
                 current = blocked,
                 presentation = visible,
                 reported = blocked,
+                entered = 0L,
             ),
         )
-        assertEquals(ForegroundRoutingPolicy.Route.Ignore, route)
+        assertTrue(route is ForegroundRoutingPolicy.Route.HideNow)
+        assertEquals(systemUi, (route as ForegroundRoutingPolicy.Route.HideNow).packageName)
     }
 
     @Test
@@ -244,7 +246,7 @@ class OverlayRestorePolicyTest {
     }
 
     @Test
-    fun notBlocking_recents_reportedApp_commitsReported() {
+    fun notBlocking_recents_reportedApp_commitsLauncherLeave() {
         val route = OverlayRestorePolicy.decide(
             input(
                 windows = listOf(recents()),
@@ -256,7 +258,7 @@ class OverlayRestorePolicyTest {
             ),
         )
         assertTrue(route is ForegroundRoutingPolicy.Route.Commit)
-        assertEquals(blocked, (route as ForegroundRoutingPolicy.Route.Commit).packageName)
+        assertEquals(systemUi, (route as ForegroundRoutingPolicy.Route.Commit).packageName)
     }
 
     @Test

@@ -153,6 +153,15 @@
     <string name="schedule_next_day_suffix">(+1D)</string>
     <string name="dismiss_error">Descartar</string>
     <string name="clear_error_log">Borrar registro de errores</string>
+    <string name="copy_enforcement_log">Copiar registro de aplicación</string>
+    <string name="enforcement_log_copied">Registro de aplicación copiado</string>
+    <string name="enforcement_log_empty">Aún no hay eventos de aplicación</string>
+    <string name="enforcement_log_range">Rango del registro</string>
+    <string name="enforcement_log_range_15m">15 min</string>
+    <string name="enforcement_log_range_1h">1 h</string>
+    <string name="enforcement_log_range_6h">6 h</string>
+    <string name="enforcement_log_range_24h">24 h</string>
+    <string name="enforcement_log_range_all">Todo</string>
     <string name="profile_schedule_count">%1$d horarios</string>
     <string name="no_schedules">Sin horarios</string>
     <string name="schedules_summary_on_default_tab">«Cuando no coincide ningún horario» se configura en la pestaña Predeterminado.</string>

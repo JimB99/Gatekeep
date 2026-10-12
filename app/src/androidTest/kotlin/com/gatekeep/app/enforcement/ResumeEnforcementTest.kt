@@ -8,8 +8,10 @@ import com.gatekeep.domain.model.ExtensionPolicy
 import com.gatekeep.domain.model.ExtensionSurfaceMode
 import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.OnSessionLimitAction
+import com.gatekeep.domain.model.SessionState
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -240,6 +242,173 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
             "open gate or HUD must run after unlock ${harness.screenDiagnostics()}",
             harness.waitForOverlay(timeoutMs = 8_000) ||
                 harness.waitForCountdown(timeoutMs = 8_000) != null,
+        )
+    }
+
+    /**
+     * RES-06: Session-limit overlay then lock ≥60s — unlock must start a fresh session
+     * (open wait), not restore the old session-limit overlay.
+     */
+    @Test
+    fun res06_lockAtLeastOneMinute_atSessionLimit_startsFreshOpenWait() {
+        val pkg = EnforcementTestPackages.TARGET_A
+        runSeed {
+            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.deterrentWait,
+                    onSessionLimitAction = OnSessionLimitAction.hardBlock,
+                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.OPEN_WAIT_SEC,
+                    sessionLimitMs = GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS,
+                    dailyLimitMs = null,
+                ),
+            )
+            val now = System.currentTimeMillis()
+            GatekeepTestFixtures.seedUsageAtCap(
+                usageRepository,
+                seeded.profileId,
+                seeded.packageName,
+                sessionState = SessionState(
+                    packageName = seeded.packageName,
+                    sessionStartEpochMs = now -
+                        GatekeepTestFixtures.TestDurations.SESSION_OVER_CAP_MS,
+                    lastForegroundEndEpochMs = now -
+                        GatekeepTestFixtures.TestDurations.SESSION_CONTINUE_GAP_MS,
+                    openGatePassedEpochMs = now -
+                        GatekeepTestFixtures.TestDurations.SESSION_OVER_CAP_MS + 1,
+                ),
+            )
+        }
+        harness.wakeDevice()
+        harness.launchTargetA()
+        assertTrue(
+            "session-limit overlay should show ${harness.screenDiagnostics()}",
+            harness.waitForOverlay(timeoutMs = 8_000),
+        )
+        val blockedMessage = harness.overlayMessageText().orEmpty()
+        assertTrue(
+            "expected session block, was $blockedMessage ${harness.screenDiagnostics()}",
+            blockedMessage.contains("Session", ignoreCase = true),
+        )
+        harness.sleepDevice()
+        harness.sleepMs(61_000)
+        harness.wakeDevice()
+        val seenOpenWait = harness.waitForOpenFriction(timeoutMs = 8_000)
+        val traces = enforcementCoordinator.enforcementTraceSnapshot()
+        val startFresh = traces.any {
+            it.event == EnforcementTrace.SESSION_START && it.fields["action"] == "StartFresh"
+        }
+        val openGateShown = traces.any {
+            it.event == EnforcementTrace.OVERLAY_SHOW && it.fields["openGate"] == "true"
+        }
+        assertTrue(
+            "long lock must StartFresh open wait traces=$traces ${harness.screenDiagnostics()}",
+            startFresh && (seenOpenWait || openGateShown),
+        )
+        val after = harness.overlayMessageText().orEmpty()
+        assertTrue(
+            "must not skip open wait after long lock, was $after traces=$traces ${harness.screenDiagnostics()}",
+            seenOpenWait || openGateShown,
+        )
+        assertTrue(
+            "trace: no session-limit overlay restore after long lock",
+            enforcementCoordinator.enforcementTraceSnapshot().none {
+                it.event == EnforcementTrace.OVERLAY_RESTORE && it.fields["pkg"] == pkg
+            } || enforcementCoordinator.enforcementTraceCount(EnforcementTrace.SHOW_OPEN_DETERRENT) >= 1,
+        )
+    }
+
+    /**
+     * RES-07: Mid-session lock for 5s then unlock — same session, remaining not burned.
+     */
+    @Test
+    fun res07_shortLock_continuesSameSessionRemainingFrozen() {
+        val sessionLimitMs = 20_000L
+        runSeed {
+            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.none,
+                    sessionLimitMs = sessionLimitMs,
+                    dailyLimitMs = null,
+                ),
+            )
+        }
+        harness.wakeDevice()
+        harness.launchTargetA()
+        val before = harness.waitForSessionRemainingSeconds(timeoutMs = 8_000)
+        assertTrue(
+            "session HUD should start ${harness.screenDiagnostics()}",
+            before != null && before >= 10,
+        )
+        harness.sleepDevice()
+        harness.sleepMs(5_000)
+        harness.wakeDevice()
+        harness.sleepMs(800)
+        val after = harness.waitForSessionRemainingSeconds(timeoutMs = 8_000)
+        assertTrue(
+            "short lock must keep the same session remaining before=$before after=$after ${harness.screenDiagnostics()}",
+            after != null && before != null && before - after <= 2,
+        )
+        assertTrue(
+            "must not show a session-limit overlay after a short lock ${harness.screenDiagnostics()}",
+            harness.overlayMessageText() == null,
+        )
+    }
+
+    /**
+     * RES-08: Home, then lock, then unlock on the launcher — must not flash open wait
+     * for the last monitored app.
+     */
+    @Test
+    fun res08_unlockOnHome_doesNotFlashOpenWait() {
+        val pkg = EnforcementTestPackages.TARGET_A
+        runSeed {
+            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.deterrentWait,
+                    sessionLimitMs = GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS,
+                    dailyLimitMs = null,
+                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.OPEN_WAIT_SEC,
+                ),
+            )
+        }
+        harness.wakeDevice()
+        harness.launchTargetA()
+        assertTrue(
+            "open wait should start ${harness.screenDiagnostics()}",
+            harness.waitForOverlay(timeoutMs = 8_000),
+        )
+        harness.useRealForegroundDetection()
+        harness.pressHome()
+        assertTrue(
+            "home must hide overlay first ${harness.screenDiagnostics()}",
+            harness.waitForOverlayGone(2_000),
+        )
+        harness.sleepDevice()
+        harness.sleepMs(3_000)
+        val wakeAt = System.currentTimeMillis()
+        harness.wakeDevice()
+        assertFalse(
+            "unlock on home must not flash wait overlay ${harness.screenDiagnostics()}",
+            harness.overlayAppearedDuring(2_000),
+        )
+        val afterUnlock = enforcementCoordinator.enforcementTraceSnapshot().filter { it.epochMs >= wakeAt }
+        assertTrue(
+            "must not overlay_show after unlock on home: $afterUnlock ${harness.screenDiagnostics()}",
+            afterUnlock.none { it.event == EnforcementTrace.OVERLAY_SHOW },
+        )
+        assertTrue(
+            "must not overlay_restore last monitored after unlock on home: $afterUnlock",
+            afterUnlock.none {
+                it.event == EnforcementTrace.OVERLAY_RESTORE && it.fields["pkg"] == pkg
+            },
+        )
+        assertTrue(
+            "must not show open wait after unlock on home: $afterUnlock ${harness.screenDiagnostics()}",
+            afterUnlock.none { it.event == EnforcementTrace.SHOW_OPEN_DETERRENT } &&
+                harness.overlayMessageText() == null,
         )
     }
 }
