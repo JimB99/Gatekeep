@@ -2261,14 +2261,32 @@ class EnforcementCoordinator @Inject constructor(
 
     /**
      * Home often does not emit a new foreground package until another app opens.
-     * ACTIVITY_PAUSED on the monitored app is enough to freeze the session clock.
+     * ACTIVITY_PAUSED plus launcher/recents/other-app windows freeze the session clock.
+     * Shade and heads-up pauses are not a leave while the monitored app is still in front.
      */
-    private fun stampLeaveIfUsagePaused() {
+    private fun stampLeaveIfUsagePaused(snapshots: List<OverlayWindowSnapshot>) {
         if (screenStateMonitor.deviceUsePhase(hasLeftApp = false) == DeviceUsePhase.Paused) return
         val pkg = lastMonitoredForegroundPackage ?: currentForegroundPackage ?: return
         if (pkg in ignoredForegroundPackages) return
         if (pkg !in monitoredPackagesCache && pkg != lastMonitoredForegroundPackage) return
-        if (UsagePresencePolicy.isStillForeground(usageStatsCollector.lastEventTypeForPackage(pkg))) {
+        val classifyAgainst = blockedPackage ?: pkg
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(
+            windows = snapshots,
+            blockedPackage = classifyAgainst,
+            overlayOwnerPackage = context.packageName,
+        )
+        val topKind = top?.let {
+            OverlayWindowClassifier.classify(it.packageName, it.className, classifyAgainst)
+        }
+        val focusedOnMonitored = top != null &&
+            top.packageName == pkg &&
+            (top.isFocused || top.isActive)
+        if (UsagePresencePolicy.isStillForeground(
+                lastEventType = usageStatsCollector.lastEventTypeForPackage(pkg),
+                accessibilityFocusedOnMonitoredApp = focusedOnMonitored,
+                topWindowKind = topKind,
+            )
+        ) {
             return
         }
         if (lastLeftPackage == pkg) return
@@ -2308,8 +2326,8 @@ class EnforcementCoordinator @Inject constructor(
 
     private fun pollForegroundIfChanged() {
         screenStateMonitor.refreshDeviceUsePhase()
-        stampLeaveIfUsagePaused()
         val snapshots = ForegroundMonitorAccessibilityService.instance?.overlayWindowSnapshots().orEmpty()
+        stampLeaveIfUsagePaused(snapshots)
         if (snapshots.isNotEmpty()) {
             onTopWindowChanged(snapshots)
         }
