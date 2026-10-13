@@ -164,6 +164,9 @@ class EnforcementCoordinator @Inject constructor(
     private var activeExtensionPolicy: com.gatekeep.domain.model.ExtensionPolicy? = null
     private var lastBlockReason: BlockReason? = null
     private var lastBlockProfileId: Long? = null
+    private var lastDailyUsedMs: Long? = null
+    private var lastDailyCapMs: Long? = null
+    private var lastDailyRemainingMs: Long? = null
     private var foregroundPollRunnable: Runnable? = null
     private var pendingForegroundPackage: String? = null
     private var pendingForegroundFirstSeenMs: Long = 0
@@ -662,6 +665,26 @@ class EnforcementCoordinator @Inject constructor(
             presentation = blockPresentationState.presentation,
         )
 
+    private fun skipDailyLimitOverlay(
+        packageName: String,
+        reason: BlockPresentationReason,
+    ): Boolean {
+        if (reason != BlockPresentationReason.dailyLimit) return false
+        if (EnforcementDailyTrace.shouldPresentDailyLimit(lastDailyRemainingMs)) return false
+        enforcementTrace.record(
+            EnforcementTrace.OVERLAY_SKIP,
+            mapOf(
+                "pkg" to packageName,
+                "reason" to "daily_remaining",
+            ) + EnforcementDailyTrace.fields(
+                lastDailyUsedMs,
+                lastDailyCapMs,
+                lastDailyRemainingMs,
+            ),
+        )
+        return true
+    }
+
     private fun presentBlockOverlay(request: BlockOverlayRequest, generation: Long) {
         val identity = OverlayPresentPolicy.Identity.from(request)
         if (!OverlayPresentPolicy.shouldPost(
@@ -676,15 +699,23 @@ class EnforcementCoordinator @Inject constructor(
         if (!shouldPresentBlockOverlay(request.packageName)) {
             return
         }
+        if (skipDailyLimitOverlay(request.packageName, request.reason)) {
+            return
+        }
         lastPostedOverlay = identity
         overlayShowInFlight = true
+        val dailyTrace = if (request.reason == BlockPresentationReason.dailyLimit) {
+            EnforcementDailyTrace.fields(lastDailyUsedMs, lastDailyCapMs, lastDailyRemainingMs)
+        } else {
+            emptyMap()
+        }
         enforcementTrace.record(
             EnforcementTrace.OVERLAY_SHOW,
             mapOf(
                 "pkg" to request.packageName,
                 "reason" to request.reason.name,
                 "openGate" to request.isOpenGate.toString(),
-            ),
+            ) + dailyTrace,
         )
         mainHandler.post {
             if (generation != blockGeneration) {
@@ -1548,7 +1579,6 @@ class EnforcementCoordinator @Inject constructor(
     private suspend fun evaluateInternal(packageName: String) {
         val evaluationEpochAtStart = evaluationEpoch
         val evaluationToken = EvaluationToken(packageName, blockGeneration)
-        enforcementTrace.record(EnforcementTrace.EVALUATE, mapOf("pkg" to packageName))
         val settings = settingsRepository.settings.first()
         if (!settings.enforcementEnabled) {
             stopCountdownTicker()
@@ -1790,11 +1820,23 @@ class EnforcementCoordinator @Inject constructor(
             )
         ) {
             // RES-04/05: lock/screen-off must not overlay or burn remaining, even after open gate.
+            enforcementTrace.record(EnforcementTrace.EVALUATE, mapOf("pkg" to packageName))
             enforcementTrace.record(EnforcementTrace.EVALUATE_SKIP_PAUSED, mapOf("pkg" to packageName))
             freezeSessionHudForDevicePause()
             return
         }
         val fullEvaluation = RuleEngine.evaluateAll(evalContext)
+        lastDailyUsedMs = fullEvaluation.dailyUsedMs
+        lastDailyCapMs = fullEvaluation.dailyCapMs
+        lastDailyRemainingMs = fullEvaluation.remainingDailyMs
+        enforcementTrace.record(
+            EnforcementTrace.EVALUATE,
+            mapOf("pkg" to packageName) + EnforcementDailyTrace.fields(
+                fullEvaluation.dailyUsedMs,
+                fullEvaluation.dailyCapMs,
+                fullEvaluation.remainingDailyMs,
+            ),
+        )
         val result = when (val ruleResult = RuleEngine.mergeForPresentation(
             evaluation = fullEvaluation,
             config = config,
@@ -2592,6 +2634,9 @@ class EnforcementCoordinator @Inject constructor(
         evaluationEpochAtStart: Long = evaluationEpoch,
     ) {
         if (evaluationEpochAtStart != evaluationEpoch) return
+        if (skipDailyLimitOverlay(packageName, reason)) {
+            return
+        }
         // RES-02: hideTemporarily can leave frictionInProgress true while the view is gone; do not skip re-block.
         if (blockOverlay.isFrictionInProgress() && !blockOverlay.isVisible()) {
             blockOverlay.clearFrictionState()
@@ -2937,19 +2982,17 @@ class EnforcementCoordinator @Inject constructor(
         val dayStart = usageStatsCollector.dayStartEpochMs(now)
         val hourStart = usageStatsCollector.hourStartEpochMs(now)
         val weekStart = usageStatsCollector.weekStartEpochMs(now)
-        return if (sharedPool) {
-            LimitExtensionBonus(
-                dailyMs = usageRepository.sumExtensionMsForProfileSince(profileId, dayStart),
-                hourlyMs = usageRepository.sumExtensionMsForProfileSince(profileId, hourStart),
-                weeklyMs = usageRepository.sumExtensionMsForProfileSince(profileId, weekStart),
-            )
-        } else {
-            LimitExtensionBonus(
-                dailyMs = usageRepository.sumExtensionMsForPackageSince(profileId, packageName, dayStart),
-                hourlyMs = usageRepository.sumExtensionMsForPackageSince(profileId, packageName, hourStart),
-                weeklyMs = usageRepository.sumExtensionMsForPackageSince(profileId, packageName, weekStart),
-            )
-        }
+        val daily = usageRepository.dailyExtensionDisplay(profileId, packageName, dayStart, sharedPool)
+        val hourly = usageRepository.hourlyExtensionDisplay(profileId, packageName, hourStart, sharedPool)
+        val weekly = usageRepository.weeklyExtensionDisplay(profileId, packageName, weekStart, sharedPool)
+        return LimitExtensionBonus(
+            dailyMs = daily.bonusMs,
+            hourlyMs = hourly.bonusMs,
+            weeklyMs = weekly.bonusMs,
+            dailyAnchorMs = daily.anchorMs,
+            hourlyAnchorMs = hourly.anchorMs,
+            weeklyAnchorMs = weekly.anchorMs,
+        )
     }
 
     private suspend fun consecutiveExtensionsFor(profileId: Long, packageName: String): Int =

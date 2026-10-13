@@ -37,6 +37,14 @@ class BlockClearOnAllowedPolicyTest {
                 ),
             ),
         )
+        assertFalse(
+            BlockClearOnAllowedPolicy.evaluationStillRequiresBlock(
+                RuleEvaluation(
+                    period = RuleResult.Blocked(BlockReason.dailyLimit),
+                    remainingDailyMs = 75 * 60_000L,
+                ),
+            ),
+        )
     }
 
     @Test

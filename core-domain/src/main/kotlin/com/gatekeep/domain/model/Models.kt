@@ -114,6 +114,9 @@ data class LimitExtensionBonus(
     val dailyMs: Long = 0L,
     val hourlyMs: Long = 0L,
     val weeklyMs: Long = 0L,
+    val dailyAnchorMs: Long = 0L,
+    val hourlyAnchorMs: Long = 0L,
+    val weeklyAnchorMs: Long = 0L,
 )
 
 data class ProfileEnforcementConfig(
@@ -305,6 +308,9 @@ data class RuleEvaluation(
     val open: RuleResult? = null,
     val session: RuleResult? = null,
     val period: RuleResult? = null,
+    val dailyUsedMs: Long? = null,
+    val dailyCapMs: Long? = null,
+    val remainingDailyMs: Long? = null,
 )
 
 sealed class RuleResult {

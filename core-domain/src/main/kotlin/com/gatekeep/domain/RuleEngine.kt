@@ -94,6 +94,14 @@ object RuleEngine {
             nowEpochMs = context.nowEpochMs,
             noLimitTodayActive = context.periodLimitsDisabled,
         )
+        val sharedPool = context.profile.limitUsageScope == LimitUsageScope.sharedPool
+        val graceRemainingMs = graceRemainingMs(
+            pauses = context.pauses,
+            profileId = context.profile.id,
+            packageName = context.packageName,
+            nowEpochMs = context.nowEpochMs,
+            sharedPool = sharedPool,
+        )
         val periodAxis = evaluatePeriodAxis(
             config = config,
             limit = limit,
@@ -105,14 +113,31 @@ object RuleEngine {
             pauses = context.pauses,
             profileId = context.profile.id,
             packageName = context.packageName,
-            sharedPool = context.profile.limitUsageScope == LimitUsageScope.sharedPool,
+            sharedPool = sharedPool,
         )
         val openAxis = evaluateOpenAxis(config, context.profile)
+        val dailyCapMs = LimitEvaluator.dailyCapMs(
+            limit = limit,
+            usage = context.usage,
+            extensionBonus = context.limitExtensionBonus,
+            graceRemainingMs = graceRemainingMs,
+            periodLimitsDisabled = context.periodLimitsDisabled,
+        )
+        val remainingDailyMs = remainingDailyMs(periodAxis, dailyCapMs, context.usage.dailyMs)
+        val periodForPresentation = periodWithoutFalseDailyLimit(
+            period = periodAxis,
+            remainingDailyMs = remainingDailyMs,
+            remainingSessionMs = (sessionAxis as? SessionTracker.SessionCheckResult.Allowed)
+                ?.remainingSessionMs,
+        )
 
         return RuleEvaluation(
             open = openAxis,
             session = sessionAxis.toRuleResult(config),
-            period = periodAxis,
+            period = periodForPresentation,
+            dailyUsedMs = limit.dailyLimitMs?.let { context.usage.dailyMs },
+            dailyCapMs = dailyCapMs,
+            remainingDailyMs = remainingDailyMs,
         )
     }
 
@@ -121,10 +146,13 @@ object RuleEngine {
         config: ProfileEnforcementConfig,
         openAlreadyPassed: Boolean,
     ): RuleResult {
-        val usageWinner = pickUsageWinner(
-            session = evaluation.session,
-            period = evaluation.period,
-            config = config,
+        val usageWinner = rejectFalseDailyLimit(
+            pickUsageWinner(
+                session = evaluation.session,
+                period = evaluation.period,
+                config = config,
+            ),
+            evaluation,
         )
 
         if (usageWinner is RuleResult.Blocked && suppressesOpenGate(usageWinner, config)) {
@@ -155,6 +183,67 @@ object RuleEngine {
             )
             else -> usageWinner ?: RuleResult.Allowed(null, null, null, null)
         }
+    }
+
+    private fun rejectFalseDailyLimit(
+        winner: RuleResult?,
+        evaluation: RuleEvaluation,
+    ): RuleResult? {
+        val blocked = winner as? RuleResult.Blocked ?: return winner
+        if (blocked.reason != BlockReason.dailyLimit) return winner
+        val remaining = evaluation.remainingDailyMs ?: return winner
+        if (remaining <= 0L) return winner
+        val sessionAllowed = evaluation.session as? RuleResult.Allowed
+        return RuleResult.Allowed(
+            remainingDailyMs = remaining,
+            remainingSessionMs = sessionAllowed?.remainingSessionMs,
+            remainingHourlyMs = sessionAllowed?.remainingHourlyMs,
+            remainingWeeklyMs = sessionAllowed?.remainingWeeklyMs,
+            warningLevel = sessionAllowed?.warningLevel ?: WarningLevel.none,
+        )
+    }
+
+    private fun remainingDailyMs(
+        period: RuleResult?,
+        dailyCapMs: Long?,
+        dailyUsedMs: Long,
+    ): Long? {
+        val fromPeriod = (period as? RuleResult.Allowed)?.remainingDailyMs
+        if (fromPeriod != null) return fromPeriod
+        return dailyCapMs?.let { it - dailyUsedMs }
+    }
+
+    private fun periodWithoutFalseDailyLimit(
+        period: RuleResult?,
+        remainingDailyMs: Long?,
+        remainingSessionMs: Long?,
+    ): RuleResult? {
+        val blocked = period as? RuleResult.Blocked ?: return period
+        if (blocked.reason != BlockReason.dailyLimit) return period
+        if (remainingDailyMs == null || remainingDailyMs <= 0L) return period
+        return RuleResult.Allowed(
+            remainingDailyMs = remainingDailyMs,
+            remainingSessionMs = remainingSessionMs,
+            remainingHourlyMs = null,
+            remainingWeeklyMs = null,
+        )
+    }
+
+    private fun graceRemainingMs(
+        pauses: List<Pause>,
+        profileId: Long,
+        packageName: String,
+        nowEpochMs: Long,
+        sharedPool: Boolean,
+    ): Long? {
+        val graceUntil = ExtensionGrantEngine.activeGraceUntilEpochMs(
+            pauses = pauses,
+            profileId = profileId,
+            packageName = packageName,
+            nowEpochMs = nowEpochMs,
+            sharedPool = sharedPool,
+        )
+        return graceUntil?.let { (it - nowEpochMs).coerceAtLeast(0) }
     }
 
     private fun evaluateSessionAxis(
@@ -195,14 +284,13 @@ object RuleEngine {
             )
         }
 
-        val graceUntil = ExtensionGrantEngine.activeGraceUntilEpochMs(
+        val graceRemainingMs = graceRemainingMs(
             pauses = pauses,
             profileId = profileId,
             packageName = packageName,
             nowEpochMs = nowEpochMs,
             sharedPool = sharedPool,
         )
-        val graceRemainingMs = graceUntil?.let { (it - nowEpochMs).coerceAtLeast(0) }
         val limitResult = LimitEvaluator.evaluate(
             limit = limit,
             usage = usage,

@@ -1,5 +1,6 @@
 package com.gatekeep.app.enforcement
 
+import com.gatekeep.domain.model.BlockReason
 import com.gatekeep.domain.model.RuleEvaluation
 import com.gatekeep.domain.model.RuleResult
 
@@ -12,8 +13,15 @@ import com.gatekeep.domain.model.RuleResult
 object BlockClearOnAllowedPolicy {
 
     /** True when any usage axis still requires a block overlay. */
-    fun evaluationStillRequiresBlock(evaluation: RuleEvaluation): Boolean =
-        evaluation.session is RuleResult.Blocked || evaluation.period is RuleResult.Blocked
+    fun evaluationStillRequiresBlock(evaluation: RuleEvaluation): Boolean {
+        if (evaluation.session is RuleResult.Blocked) return true
+        val period = evaluation.period as? RuleResult.Blocked ?: return false
+        val remainingDailyMs = evaluation.remainingDailyMs
+        if (period.reason == BlockReason.dailyLimit && remainingDailyMs != null && remainingDailyMs > 0L) {
+            return false
+        }
+        return true
+    }
 
     /**
      * @return whether [clearBlockState] is safe for this allowed evaluation on [packageName].

@@ -862,6 +862,24 @@ class LimitEvaluatorTest {
     }
 
     @Test
+    fun `display cap remaining keeps daily allowed when base plus bonus is exhausted`() {
+        val limit = AppLimit(1, "com.test", dailyLimitMs = 6 * 60 * 60_000L, enabled = true)
+        val result = LimitEvaluator.evaluate(
+            limit,
+            UsageSnapshot(dailyMs = 6 * 60 * 60_000L + 20 * 60_000L),
+            LimitExtensionBonus(
+                dailyMs = 15 * 60_000L,
+                dailyAnchorMs = 6 * 60 * 60_000L + 15 * 60_000L,
+            ),
+        )
+        assertTrue(result is LimitEvaluator.LimitCheckResult.Allowed)
+        assertEquals(
+            10 * 60_000L,
+            (result as LimitEvaluator.LimitCheckResult.Allowed).remainingDailyMs,
+        )
+    }
+
+    @Test
     fun `usage at base cap is still allowed when extension bonus remains`() {
         val limit = AppLimit(1, "com.test", dailyLimitMs = 60 * 60_000L, enabled = true)
         val result = LimitEvaluator.evaluate(

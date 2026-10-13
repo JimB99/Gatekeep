@@ -26,22 +26,28 @@ object LimitEvaluator {
             limit.dailyLimitMs,
             usage.dailyMs,
             extensionBonus.dailyMs,
+            extensionBonus.dailyAnchorMs,
             graceRemainingMs,
             PeriodDuration.dayMs,
+            useDisplayCap = true,
         )
         val hourlyRemaining = remainingForPeriod(
             limit.hourlyLimitMs,
             usage.hourlyMs,
             extensionBonus.hourlyMs,
+            0L,
             graceRemainingMs,
             PeriodDuration.hourMs,
+            useDisplayCap = false,
         )
         val weeklyRemaining = remainingForPeriod(
             limit.weeklyLimitMs,
             usage.weeklyMs,
             extensionBonus.weeklyMs,
+            0L,
             graceRemainingMs,
             PeriodDuration.weekMs,
+            useDisplayCap = false,
         )
 
         if (dailyRemaining != null && dailyRemaining <= 0) {
@@ -59,22 +65,28 @@ object LimitEvaluator {
                 limit.dailyLimitMs,
                 usage.dailyMs,
                 extensionBonus.dailyMs,
+                extensionBonus.dailyAnchorMs,
                 graceRemainingMs,
                 PeriodDuration.dayMs,
+                useDisplayCap = true,
             ) ||
                 isNearLimit(
                     limit.hourlyLimitMs,
                     usage.hourlyMs,
                     extensionBonus.hourlyMs,
+                    0L,
                     graceRemainingMs,
                     PeriodDuration.hourMs,
+                    useDisplayCap = false,
                 ) ||
                 isNearLimit(
                     limit.weeklyLimitMs,
                     usage.weeklyMs,
                     extensionBonus.weeklyMs,
+                    0L,
                     graceRemainingMs,
                     PeriodDuration.weekMs,
+                    useDisplayCap = false,
                 ) ->
                 WarningLevel.eightyPercent
             else -> WarningLevel.none
@@ -88,14 +100,40 @@ object LimitEvaluator {
         )
     }
 
+    fun dailyCapMs(
+        limit: AppLimit?,
+        usage: UsageSnapshot,
+        extensionBonus: LimitExtensionBonus = LimitExtensionBonus(),
+        graceRemainingMs: Long? = null,
+        periodLimitsDisabled: Boolean = false,
+    ): Long? {
+        if (limit == null || !limit.enabled) return null
+        return capForPeriod(
+            limit.dailyLimitMs,
+            usage.dailyMs,
+            extensionBonus.dailyMs,
+            extensionBonus.dailyAnchorMs,
+            graceRemainingMs,
+            PeriodDuration.dayMs,
+            periodLimitsDisabled,
+            useDisplayCap = true,
+        )
+    }
+
     private fun remainingForPeriod(
         limitMs: Long?,
         usedMs: Long,
         bonusMs: Long,
+        anchorMs: Long,
         graceRemainingMs: Long?,
         periodMs: Long,
+        useDisplayCap: Boolean,
     ): Long? {
-        val effective = effectiveCap(limitMs, usedMs, bonusMs, graceRemainingMs, periodMs) ?: return null
+        val effective = capForPeriod(
+            limitMs, usedMs, bonusMs, anchorMs, graceRemainingMs, periodMs,
+            periodLimitsDisabled = false,
+            useDisplayCap = useDisplayCap,
+        ) ?: return null
         return effective - usedMs
     }
 
@@ -103,28 +141,63 @@ object LimitEvaluator {
         limitMs: Long?,
         usedMs: Long,
         bonusMs: Long,
+        anchorMs: Long,
         graceRemainingMs: Long?,
         periodMs: Long,
+        useDisplayCap: Boolean,
     ): Boolean {
-        val effectiveLimit = effectiveCap(limitMs, usedMs, bonusMs, graceRemainingMs, periodMs) ?: return false
+        val effectiveLimit = capForPeriod(
+            limitMs, usedMs, bonusMs, anchorMs, graceRemainingMs, periodMs,
+            periodLimitsDisabled = false,
+            useDisplayCap = useDisplayCap,
+        ) ?: return false
         if (effectiveLimit <= 0) return false
         return usedMs.toDouble() / effectiveLimit >= 0.8
     }
 
-    private fun effectiveCap(
+    /**
+     * Daily overlay remaining matches Current Usage (display cap = anchor + bonus) when there
+     * is no grace. Hourly/weekly keep base + bonus. Active grace is usage + remaining grace.
+     */
+    private fun capForPeriod(
         limitMs: Long?,
         usedMs: Long,
         bonusMs: Long,
+        anchorMs: Long,
         graceRemainingMs: Long?,
         periodMs: Long,
-    ): Long? = EffectiveLimitDisplay.effectiveLimitMs(
-        baseLimitMs = limitMs,
-        usageMs = usedMs,
-        extensionBonusMs = bonusMs,
-        graceRemainingMs = graceRemainingMs,
-        noLimitToday = false,
-        periodMs = periodMs,
-    )
+        periodLimitsDisabled: Boolean,
+        useDisplayCap: Boolean,
+    ): Long? {
+        if (periodLimitsDisabled) return null
+        if (graceRemainingMs != null && graceRemainingMs > 0L) {
+            return EffectiveLimitDisplay.effectiveLimitMs(
+                baseLimitMs = limitMs,
+                usageMs = usedMs,
+                extensionBonusMs = bonusMs,
+                graceRemainingMs = graceRemainingMs,
+                noLimitToday = false,
+                periodMs = periodMs,
+            )
+        }
+        if (useDisplayCap) {
+            return EffectiveLimitDisplay.displayLimitMs(
+                baseLimitMs = limitMs,
+                extensionBonusMs = bonusMs,
+                extensionAnchorMs = anchorMs,
+                noLimitToday = false,
+                periodMs = periodMs,
+            )
+        }
+        return EffectiveLimitDisplay.effectiveLimitMs(
+            baseLimitMs = limitMs,
+            usageMs = usedMs,
+            extensionBonusMs = bonusMs,
+            graceRemainingMs = null,
+            noLimitToday = false,
+            periodMs = periodMs,
+        )
+    }
 
     sealed class LimitCheckResult {
         data class Allowed(
