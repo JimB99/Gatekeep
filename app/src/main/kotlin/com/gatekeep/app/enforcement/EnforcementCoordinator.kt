@@ -1685,25 +1685,77 @@ class EnforcementCoordinator @Inject constructor(
             clearAbandonedWaitOverlay(packageName)
         }
 
+        val prefsPausedAt = screenStateMonitor.persistedPausedAtEpochMs()
+        val hasLeftAppRaw = sessionStateRaw?.lastForegroundEndEpochMs != null
+        val livePausedRaw = screenStateMonitor.deviceUsePhase(hasLeftApp = hasLeftAppRaw) ==
+            DeviceUsePhase.Paused
+        if (PauseBeforeSessionStartPolicy.shouldHoldSessionStart(livePausedRaw)) {
+            val stampAt = PauseBeforeSessionStartPolicy.pauseAtToStamp(
+                sessionPausedAtEpochMs = sessionStateRaw?.devicePausedAtEpochMs,
+                prefsPausedAtEpochMs = prefsPausedAt,
+                lastForegroundEndEpochMs = sessionStateRaw?.lastForegroundEndEpochMs,
+            )
+            if (sessionStateRaw != null && stampAt != null) {
+                val paused = SessionTracker.pauseDeviceUse(sessionStateRaw, stampAt)
+                usageRepository.saveSessionState(paused, primaryProfile.id)
+                if (sessionStateRaw.pendingWaitUntilEpochMs != null &&
+                    paused.pendingWaitUntilEpochMs == null
+                ) {
+                    clearAbandonedWaitOverlay(packageName)
+                }
+            } else {
+                persistDevicePauseOnCurrentSession()
+            }
+            freezeSessionHudForDevicePause()
+            enforcementTrace.record(
+                EnforcementTrace.EVALUATE,
+                mapOf("pkg" to packageName),
+            )
+            enforcementTrace.record(
+                EnforcementTrace.EVALUATE_SKIP_PAUSED,
+                mapOf("pkg" to packageName),
+            )
+            return
+        }
+        val stampAt = PauseBeforeSessionStartPolicy.pauseAtToStamp(
+            sessionPausedAtEpochMs = sessionStateRaw?.devicePausedAtEpochMs,
+            prefsPausedAtEpochMs = prefsPausedAt,
+            lastForegroundEndEpochMs = sessionStateRaw?.lastForegroundEndEpochMs,
+        )
+        if (sessionStateRaw != null && stampAt != null) {
+            sessionStateRaw = SessionTracker.pauseDeviceUse(sessionStateRaw, stampAt)
+            usageRepository.saveSessionState(sessionStateRaw, primaryProfile.id)
+        }
+
         var sessionState = ensureSessionStarted(
             packageName = packageName,
             profileId = primaryProfile.id,
             now = now,
             existingState = sessionStateRaw,
         )
-        val prefsPausedAt = screenStateMonitor.persistedPausedAtEpochMs()
         val hasLeftApp = sessionState.lastForegroundEndEpochMs != null
         val livePaused = screenStateMonitor.deviceUsePhase(hasLeftApp = hasLeftApp) ==
             DeviceUsePhase.Paused
-        val hasPauseMarker = sessionState.devicePausedAtEpochMs != null || prefsPausedAt != null
+        val hasPauseMarker = sessionState.devicePausedAtEpochMs != null ||
+            screenStateMonitor.persistedPausedAtEpochMs() != null
         val sessionBeforePause = sessionState
         sessionState = when {
             DeviceUsePolicy.shouldPauseSessionClock(livePaused, hasLeftApp) -> {
-                SessionTracker.pauseDeviceUse(sessionState, prefsPausedAt ?: now)
+                SessionTracker.pauseDeviceUse(
+                    sessionState,
+                    sessionState.devicePausedAtEpochMs
+                        ?: screenStateMonitor.persistedPausedAtEpochMs()
+                        ?: now,
+                )
             }
             DeviceUsePolicy.shouldResumeSessionClock(livePaused, hasLeftApp, hasPauseMarker) -> {
-                val paused = if (sessionState.devicePausedAtEpochMs == null && prefsPausedAt != null) {
-                    SessionTracker.pauseDeviceUse(sessionState, prefsPausedAt)
+                val paused = if (sessionState.devicePausedAtEpochMs == null) {
+                    val leftoverPrefs = screenStateMonitor.persistedPausedAtEpochMs()
+                    if (leftoverPrefs != null) {
+                        SessionTracker.pauseDeviceUse(sessionState, leftoverPrefs)
+                    } else {
+                        sessionState
+                    }
                 } else {
                     sessionState
                 }

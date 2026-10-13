@@ -17,6 +17,8 @@ abstract class EnforcementCrossAppTestBase : GatekeepInstrumentedTestBase() {
     fun tearDownEnforcement() {
         harness.onNavigatedAway = null
         harness.onTargetLaunched = null
+        runCatching { harness.restoreStayAwake() }
+        runCatching { harness.wakeDevice() }
         runCatching {
             runBlocking { enforcementCoordinator.resetInstrumentationState() }
         }
@@ -30,6 +32,7 @@ abstract class EnforcementCrossAppTestBase : GatekeepInstrumentedTestBase() {
         }
         enforcementCoordinator.resetInstrumentationState()
         harness.resetTestTargetUsageStats()
+        harness.wakeDevice()
         restoreForegroundInjection()
         prepareEnforcementEnvironment()
     }

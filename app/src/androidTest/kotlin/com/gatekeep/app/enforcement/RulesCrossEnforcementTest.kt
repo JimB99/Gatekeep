@@ -163,6 +163,7 @@ class RulesCrossEnforcementTest : EnforcementCrossAppTestBase() {
                 dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
             )
         }
+        harness.wakeDevice()
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())
     }

@@ -27,6 +27,7 @@ class EnforcementTestHarness(
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val uiDevice by lazy { UiDevice.getInstance(instrumentation) }
     private val packageName = context.packageName
+    private var stayOnWhilePluggedInBackup: String? = null
 
     companion object {
         private const val PERMISSION_SETTLE_MS = 100L
@@ -262,8 +263,19 @@ class EnforcementTestHarness(
 
     fun launchTargetA() {
         uiDevice.wakeUp()
-        shell("am start -n ${EnforcementTestPackages.TARGET_A_COMPONENT}")
-        uiDevice.wait(Until.hasObject(By.pkg(EnforcementTestPackages.TARGET_A)), TARGET_LAUNCH_SETTLE_MS)
+        dismissKeyguard()
+        run {
+            repeat(3) {
+                shell("am start -n ${EnforcementTestPackages.TARGET_A_COMPONENT}")
+                if (uiDevice.wait(
+                        Until.hasObject(By.pkg(EnforcementTestPackages.TARGET_A)),
+                        1_500,
+                    )
+                ) {
+                    return@run
+                }
+            }
+        }
         onTargetLaunched?.invoke(
             EnforcementTestPackages.TARGET_A,
             "com.gatekeep.app.testsupport.EnforcementTargetActivity",
@@ -468,22 +480,15 @@ class EnforcementTestHarness(
     }
 
     fun sleepDevice() {
-        uiDevice.sleep()
-        val deadline = System.currentTimeMillis() + 2_000
-        while (System.currentTimeMillis() < deadline && uiDevice.isScreenOn) {
-            Thread.sleep(POLL_INTERVAL_MS)
-        }
+        disableStayAwakeForSleep()
+        forceScreenOff()
     }
 
     /** Sleeps the device and returns the last readable overlay countdown, if any. */
     fun sleepDeviceCapturingCountdown(): Int? {
         var last = countdownSeconds()
-        uiDevice.sleep()
-        val deadline = System.currentTimeMillis() + 2_000
-        while (System.currentTimeMillis() < deadline && uiDevice.isScreenOn) {
-            countdownSeconds()?.let { last = it }
-            Thread.sleep(POLL_INTERVAL_MS)
-        }
+        disableStayAwakeForSleep()
+        forceScreenOff { countdownSeconds()?.let { last = it } }
         countdownSeconds()?.let { last = it }
         return last
     }
@@ -497,6 +502,7 @@ class EnforcementTestHarness(
     fun isScreenOn(): Boolean = uiDevice.isScreenOn
 
     fun wakeDevice() {
+        restoreStayAwake()
         runCatching { uiDevice.wakeUp() }
         dismissKeyguard()
         val deadline = System.currentTimeMillis() + 2_000
@@ -505,12 +511,44 @@ class EnforcementTestHarness(
         }
     }
 
+    fun restoreStayAwake() {
+        val backup = stayOnWhilePluggedInBackup ?: "7"
+        shell("settings put global stay_on_while_plugged_in $backup")
+        shell("svc power stayon usb")
+    }
+
     /** Wake the display without dismissing the keyguard (RES-05). */
     fun wakeToLockScreen() {
+        restoreStayAwake()
         runCatching { uiDevice.wakeUp() }
         val deadline = System.currentTimeMillis() + 2_000
         while (System.currentTimeMillis() < deadline && !uiDevice.isScreenOn) {
             Thread.sleep(POLL_INTERVAL_MS)
+        }
+    }
+
+    private fun disableStayAwakeForSleep() {
+        if (stayOnWhilePluggedInBackup == null) {
+            val current = shell("settings get global stay_on_while_plugged_in")
+            stayOnWhilePluggedInBackup = current.takeIf { it.isNotBlank() && it != "null" } ?: "7"
+        }
+        shell("settings put global stay_on_while_plugged_in 0")
+        shell("svc power stayon false")
+    }
+
+    private fun forceScreenOff(onStillOn: () -> Unit = {}) {
+        repeat(3) {
+            if (!uiDevice.isScreenOn) return
+            onStillOn()
+            runCatching { uiDevice.sleep() }
+            if (uiDevice.isScreenOn) {
+                shell("input keyevent 26")
+            }
+            val deadline = System.currentTimeMillis() + 1_500
+            while (System.currentTimeMillis() < deadline && uiDevice.isScreenOn) {
+                onStillOn()
+                Thread.sleep(POLL_INTERVAL_MS)
+            }
         }
     }
 

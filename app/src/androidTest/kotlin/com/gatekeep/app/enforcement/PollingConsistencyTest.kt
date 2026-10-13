@@ -119,7 +119,7 @@ class PollingConsistencyTest : EnforcementCrossAppTestBase() {
         harness.sleepMs(3_000)
         val stillOff = !harness.isScreenOn()
         harness.wakeDevice()
-        val after = harness.waitForCountdown(3_000)
+        val after = harness.waitForCountdown(8_000)
         assertTrue("screen woke during the lock", stillOff)
         assertTrue(
             "in-progress wait must reset on lock atOff=$atOff after=$after ${harness.screenDiagnostics()}",

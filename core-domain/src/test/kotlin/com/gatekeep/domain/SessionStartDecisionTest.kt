@@ -154,6 +154,15 @@ class SessionStartDecisionTest {
     }
 
     @Test
+    fun resumeBeforeDecide_losesLongPauseAndContinues() {
+        val paused = session().copy(
+            devicePausedAtEpochMs = now - SessionContinuityPolicy.RESUME_GRACE_MS,
+        )
+        val resumedFirst = SessionTracker.resumeDeviceUse(paused, now)
+        assertEquals(SessionStartDecision.Action.Continue, decide(resumedFirst, live = true))
+    }
+
+    @Test
     fun pendingWait_longPause_startsFresh() {
         val paused = session().copy(devicePausedAtEpochMs = now - 6 * 60_000L)
         assertEquals(
