@@ -50,6 +50,8 @@ class OverlayRestorePolicyTest {
         entered: Long = 0L,
         lastRestore: Long = 0L,
         reported: String? = null,
+        usageResumeAt: Long = 0L,
+        currentResumeAt: Long? = null,
     ) = OverlayRestorePolicy.Input(
         windows = windows,
         usageStatsForegroundPackage = usage,
@@ -65,6 +67,8 @@ class OverlayRestorePolicyTest {
         lastRestoreAtMs = lastRestore,
         reportedForegroundPackage = reported,
         ignoredPackages = setOf(systemUi),
+        usageStatsResumeAtMs = usageResumeAt,
+        currentPackageLastResumeAtMs = currentResumeAt,
     )
 
     @Test
@@ -90,7 +94,7 @@ class OverlayRestorePolicyTest {
     }
 
     @Test
-    fun hiddenRecentsTop_usageStatsBlocked_staysHidden() {
+    fun hiddenRecentsTop_usageStatsBlocked_hidesLeftoverNotRestore() {
         val route = OverlayRestorePolicy.decide(
             input(
                 windows = listOf(recents(focused = true), app()),
@@ -99,11 +103,12 @@ class OverlayRestorePolicyTest {
                 presentation = hidden,
             ),
         )
-        assertEquals(ForegroundRoutingPolicy.Route.Ignore, route)
+        assertTrue(route is ForegroundRoutingPolicy.Route.HideNow)
+        assertEquals(systemUi, (route as ForegroundRoutingPolicy.Route.HideNow).packageName)
     }
 
     @Test
-    fun hiddenRecentsTop_reportedForegroundBlocked_staysHidden() {
+    fun hiddenRecentsTop_reportedForegroundBlocked_hidesLeftoverNotRestore() {
         val route = OverlayRestorePolicy.decide(
             input(
                 windows = listOf(recents(focused = true)),
@@ -113,7 +118,8 @@ class OverlayRestorePolicyTest {
                 reported = blocked,
             ),
         )
-        assertEquals(ForegroundRoutingPolicy.Route.Ignore, route)
+        assertTrue(route is ForegroundRoutingPolicy.Route.HideNow)
+        assertEquals(systemUi, (route as ForegroundRoutingPolicy.Route.HideNow).packageName)
     }
 
     @Test
@@ -149,7 +155,7 @@ class OverlayRestorePolicyTest {
     }
 
     @Test
-    fun hiddenRecentsTop_usageStatsStillRecents_ignore() {
+    fun hiddenRecentsTop_alreadyCommitted_hidesLeftover() {
         val route = OverlayRestorePolicy.decide(
             input(
                 windows = listOf(recents(focused = true)),
@@ -158,7 +164,8 @@ class OverlayRestorePolicyTest {
                 presentation = hidden,
             ),
         )
-        assertEquals(ForegroundRoutingPolicy.Route.Ignore, route)
+        assertTrue(route is ForegroundRoutingPolicy.Route.HideNow)
+        assertEquals(systemUi, (route as ForegroundRoutingPolicy.Route.HideNow).packageName)
     }
 
     @Test
@@ -274,5 +281,239 @@ class OverlayRestorePolicyTest {
         )
         assertTrue(route is ForegroundRoutingPolicy.Route.Commit)
         assertEquals(systemUi, (route as ForegroundRoutingPolicy.Route.Commit).packageName)
+    }
+
+    @Test
+    fun hiddenHomeTop_blockedStillFocused_hidesInsteadOfRestore() {
+        val home = OverlayWindowSnapshot(
+            packageName = launcher,
+            className = "com.android.launcher3.Launcher",
+            isOverlay = false,
+            isFocused = true,
+            isActive = true,
+        )
+        val route = OverlayRestorePolicy.decide(
+            input(
+                windows = listOf(home, app(focused = true)),
+                usage = blocked,
+                current = blocked,
+                presentation = hidden,
+            ),
+        )
+        assertTrue(route is ForegroundRoutingPolicy.Route.HideNow)
+        assertEquals(launcher, (route as ForegroundRoutingPolicy.Route.HideNow).packageName)
+    }
+
+    @Test
+    fun hiddenLeftoverInactiveHome_activeBlocked_restoresOpen() {
+        val home = OverlayWindowSnapshot(
+            packageName = launcher,
+            className = "com.android.launcher3.Launcher",
+            isOverlay = false,
+            isFocused = false,
+            isActive = false,
+        )
+        val leftover = OverlayWindowSnapshot(
+            packageName = blocked,
+            className = "com.instagram.android.activity.MainTabActivity",
+            isOverlay = false,
+            isFocused = false,
+            isActive = true,
+        )
+        val route = OverlayRestorePolicy.decide(
+            input(
+                windows = listOf(home, leftover),
+                usage = blocked,
+                current = launcher,
+                presentation = hidden,
+            ),
+        )
+        assertTrue(route is ForegroundRoutingPolicy.Route.Restore)
+        assertEquals(blocked, (route as ForegroundRoutingPolicy.Route.Restore).packageName)
+    }
+
+    @Test
+    fun hiddenActiveHome_activeBlockedAndStaleUsage_doesNotRestore() {
+        val home = OverlayWindowSnapshot(
+            packageName = launcher,
+            className = "com.android.launcher3.Launcher",
+            isOverlay = false,
+            isFocused = false,
+            isActive = true,
+        )
+        val leftover = OverlayWindowSnapshot(
+            packageName = blocked,
+            className = "com.instagram.android.activity.MainTabActivity",
+            isOverlay = false,
+            isFocused = false,
+            isActive = true,
+        )
+        val route = OverlayRestorePolicy.decide(
+            input(
+                windows = listOf(home, leftover),
+                usage = blocked,
+                current = launcher,
+                presentation = hidden,
+            ),
+        )
+        assertTrue(route is ForegroundRoutingPolicy.Route.HideNow)
+        assertEquals(launcher, (route as ForegroundRoutingPolicy.Route.HideNow).packageName)
+    }
+
+    @Test
+    fun hiddenFocusedHome_newerBlockedUsage_restoresOpen() {
+        val home = OverlayWindowSnapshot(
+            packageName = launcher,
+            className = "com.android.launcher3.Launcher",
+            isOverlay = false,
+            isFocused = true,
+            isActive = true,
+        )
+        val route = OverlayRestorePolicy.decide(
+            input(
+                windows = listOf(home, app()),
+                usage = blocked,
+                current = launcher,
+                presentation = hidden,
+                usageResumeAt = 10_000L,
+                currentResumeAt = 8_000L,
+            ),
+        )
+        assertTrue(route is ForegroundRoutingPolicy.Route.Restore)
+        assertEquals(blocked, (route as ForegroundRoutingPolicy.Route.Restore).packageName)
+    }
+
+    @Test
+    fun hiddenFocusedHome_staleBlockedUsage_hidesNotRestore() {
+        val home = OverlayWindowSnapshot(
+            packageName = launcher,
+            className = "com.android.launcher3.Launcher",
+            isOverlay = false,
+            isFocused = true,
+            isActive = true,
+        )
+        val route = OverlayRestorePolicy.decide(
+            input(
+                windows = listOf(home, app()),
+                usage = blocked,
+                current = launcher,
+                presentation = hidden,
+                usageResumeAt = 8_000L,
+                currentResumeAt = 9_000L,
+            ),
+        )
+        assertTrue(route is ForegroundRoutingPolicy.Route.HideNow)
+        assertEquals(launcher, (route as ForegroundRoutingPolicy.Route.HideNow).packageName)
+    }
+
+    @Test
+    fun visibleFocusedHome_newerUsage_stillHides() {
+        val home = OverlayWindowSnapshot(
+            packageName = launcher,
+            className = "com.android.launcher3.Launcher",
+            isOverlay = false,
+            isFocused = true,
+            isActive = true,
+        )
+        val route = OverlayRestorePolicy.decide(
+            input(
+                windows = listOf(home, app()),
+                usage = blocked,
+                current = launcher,
+                presentation = visible,
+                usageResumeAt = 10_000L,
+                currentResumeAt = 8_000L,
+            ),
+        )
+        assertTrue(route is ForegroundRoutingPolicy.Route.HideNow)
+        assertEquals(launcher, (route as ForegroundRoutingPolicy.Route.HideNow).packageName)
+    }
+
+    @Test
+    fun notBlocking_focusedHome_newerUsageOpen_commitsApp() {
+        val home = OverlayWindowSnapshot(
+            packageName = launcher,
+            className = "com.android.launcher3.Launcher",
+            isOverlay = false,
+            isFocused = true,
+            isActive = true,
+        )
+        val route = OverlayRestorePolicy.decide(
+            input(
+                windows = listOf(home),
+                usage = blocked,
+                current = launcher,
+                blocking = false,
+                presentation = BlockPresentation.None,
+                lastMonitored = null,
+                usageResumeAt = 9_000L,
+                currentResumeAt = 5_000L,
+            ),
+        )
+        assertTrue(route is ForegroundRoutingPolicy.Route.Commit)
+        assertEquals(blocked, (route as ForegroundRoutingPolicy.Route.Commit).packageName)
+    }
+
+    @Test
+    fun hiddenFocusedHome_newerOtherAppUsage_hidesNotRestore() {
+        val home = OverlayWindowSnapshot(
+            packageName = launcher,
+            className = "com.android.launcher3.Launcher",
+            isOverlay = false,
+            isFocused = true,
+            isActive = true,
+        )
+        val route = OverlayRestorePolicy.decide(
+            input(
+                windows = listOf(home),
+                usage = chrome,
+                current = launcher,
+                presentation = hidden,
+                usageResumeAt = 10_000L,
+                currentResumeAt = 8_000L,
+            ),
+        )
+        assertTrue(route !is ForegroundRoutingPolicy.Route.Restore)
+        assertTrue(route is ForegroundRoutingPolicy.Route.HideNow)
+    }
+
+    @Test
+    fun hiddenEmptyWindows_staleUsageWhileCurrentStillBlocked_doesNotRestore() {
+        val route = OverlayRestorePolicy.decide(
+            input(
+                windows = emptyList(),
+                usage = blocked,
+                current = blocked,
+                presentation = hidden,
+            ),
+        )
+        assertEquals(ForegroundRoutingPolicy.Route.Ignore, route)
+    }
+
+    @Test
+    fun hiddenEmptyWindows_staleUsageWhileOnLauncher_doesNotRestore() {
+        val route = OverlayRestorePolicy.decide(
+            input(
+                windows = emptyList(),
+                usage = blocked,
+                current = launcher,
+                presentation = hidden,
+            ),
+        )
+        assertEquals(ForegroundRoutingPolicy.Route.Ignore, route)
+    }
+
+    @Test
+    fun hiddenRecentsTop_blockedStillFocused_hidesInsteadOfRestore() {
+        val route = OverlayRestorePolicy.decide(
+            input(
+                windows = listOf(recents(focused = true), app(focused = true)),
+                usage = blocked,
+                current = blocked,
+                presentation = hidden,
+            ),
+        )
+        assertTrue(route is ForegroundRoutingPolicy.Route.HideNow)
+        assertEquals(systemUi, (route as ForegroundRoutingPolicy.Route.HideNow).packageName)
     }
 }

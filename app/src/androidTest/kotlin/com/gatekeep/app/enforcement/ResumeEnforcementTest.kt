@@ -358,7 +358,7 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
 
     /**
      * RES-08: Home, then lock, then unlock on the launcher — must not flash open wait
-     * for the last monitored app.
+     * for the last monitored app, including a delayed restore (~15s on device).
      */
     @Test
     fun res08_unlockOnHome_doesNotFlashOpenWait() {
@@ -392,7 +392,7 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
         harness.wakeDevice()
         assertFalse(
             "unlock on home must not flash wait overlay ${harness.screenDiagnostics()}",
-            harness.overlayAppearedDuring(2_000),
+            harness.overlayAppearedDuring(20_000),
         )
         val afterUnlock = enforcementCoordinator.enforcementTraceSnapshot().filter { it.epochMs >= wakeAt }
         assertTrue(

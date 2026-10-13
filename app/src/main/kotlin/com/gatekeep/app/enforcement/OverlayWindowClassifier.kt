@@ -51,6 +51,8 @@ object OverlayWindowClassifier {
     /**
      * [windows] must be in descending z-order (top first).
      * Skips Gatekeep overlay windows and transient System UI so the app/recents underneath is used.
+     * Z-top Home/Recents wins only while that window is focused or active; an inactive leftover
+     * launcher does not hide an active blocked app underneath (open from Home).
      */
     fun pickTopRelevantWindow(
         windows: List<OverlayWindowSnapshot>,
@@ -82,6 +84,13 @@ object OverlayWindowClassifier {
         if (blockedPackage != null) {
             relevant.firstOrNull { it.packageName == blockedPackage && it.isFocused }
                 ?.let { return it }
+        }
+        val zTop = relevant.first()
+        val zKind = classify(zTop.packageName, zTop.className, blockedPackage)
+        if ((zKind == OverlayWindowKind.Launcher || zKind == OverlayWindowKind.Recents) &&
+            (zTop.isFocused || zTop.isActive)
+        ) {
+            return zTop
         }
         if (blockedPackage != null) {
             relevant.firstOrNull {

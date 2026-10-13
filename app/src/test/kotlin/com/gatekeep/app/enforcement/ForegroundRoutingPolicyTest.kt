@@ -179,10 +179,140 @@ class ForegroundRoutingPolicyTest {
             ForegroundRoutingPolicy.usageStatsPackageToCommit(
                 usageStatsPackage = blockedPkg,
                 currentForegroundPackage = launcher,
-                accessibilityFocusedOnBlockedApp = false,
-                blockedPackage = null,
+                accessibilityFocusedOnBlockedApp = true,
+                blockedPackage = blockedPkg,
                 blockingActive = false,
                 ignoredPackages = setOf(systemUi),
+            ),
+        )
+    }
+
+    @Test
+    fun usageStats_committedLauncher_doesNotAdoptStaleBlocked() {
+        assertEquals(
+            null,
+            ForegroundRoutingPolicy.usageStatsPackageToCommit(
+                usageStatsPackage = blockedPkg,
+                currentForegroundPackage = launcher,
+                accessibilityFocusedOnBlockedApp = false,
+                blockedPackage = blockedPkg,
+                blockingActive = true,
+                ignoredPackages = setOf(systemUi),
+            ),
+        )
+    }
+
+    @Test
+    fun usageStats_windowsConfirmBlocked_commitsOpenFromHome() {
+        assertEquals(
+            blockedPkg,
+            ForegroundRoutingPolicy.usageStatsPackageToCommit(
+                usageStatsPackage = blockedPkg,
+                currentForegroundPackage = launcher,
+                accessibilityFocusedOnBlockedApp = false,
+                blockedPackage = blockedPkg,
+                blockingActive = true,
+                ignoredPackages = setOf(systemUi),
+                topWindowKind = OverlayWindowKind.BlockedApp,
+            ),
+        )
+    }
+
+    @Test
+    fun usageStats_launcherWindows_doNotAdoptStaleBlocked() {
+        assertEquals(
+            null,
+            ForegroundRoutingPolicy.usageStatsPackageToCommit(
+                usageStatsPackage = blockedPkg,
+                currentForegroundPackage = launcher,
+                accessibilityFocusedOnBlockedApp = false,
+                blockedPackage = blockedPkg,
+                blockingActive = true,
+                ignoredPackages = setOf(systemUi),
+                topWindowKind = OverlayWindowKind.Launcher,
+            ),
+        )
+    }
+
+    @Test
+    fun usageStats_newerResumeFromHome_commitsEvenIfLauncherWindows() {
+        assertEquals(
+            blockedPkg,
+            ForegroundRoutingPolicy.usageStatsPackageToCommit(
+                usageStatsPackage = blockedPkg,
+                currentForegroundPackage = launcher,
+                accessibilityFocusedOnBlockedApp = false,
+                blockedPackage = blockedPkg,
+                blockingActive = true,
+                ignoredPackages = setOf(systemUi),
+                topWindowKind = OverlayWindowKind.Launcher,
+                usageResumeAtMs = 10_000L,
+                currentPackageLastResumeAtMs = 8_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun usageStats_staleResumeOnHome_doesNotAdoptLauncherWindows() {
+        assertEquals(
+            null,
+            ForegroundRoutingPolicy.usageStatsPackageToCommit(
+                usageStatsPackage = blockedPkg,
+                currentForegroundPackage = launcher,
+                accessibilityFocusedOnBlockedApp = false,
+                blockedPackage = blockedPkg,
+                blockingActive = true,
+                ignoredPackages = setOf(systemUi),
+                topWindowKind = OverlayWindowKind.Launcher,
+                usageResumeAtMs = 8_000L,
+                currentPackageLastResumeAtMs = 9_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun usageStats_windowsConfirmOtherApp_commitsOpenFromHome() {
+        assertEquals(
+            otherApp,
+            ForegroundRoutingPolicy.usageStatsPackageToCommit(
+                usageStatsPackage = otherApp,
+                currentForegroundPackage = launcher,
+                accessibilityFocusedOnBlockedApp = false,
+                blockedPackage = blockedPkg,
+                blockingActive = true,
+                ignoredPackages = setOf(systemUi),
+                topWindowKind = OverlayWindowKind.OtherApp,
+            ),
+        )
+    }
+
+    @Test
+    fun usageStats_committedRecents_emptyWindows_doNotAdoptStaleBlocked() {
+        assertEquals(
+            null,
+            ForegroundRoutingPolicy.usageStatsPackageToCommit(
+                usageStatsPackage = blockedPkg,
+                currentForegroundPackage = systemUi,
+                accessibilityFocusedOnBlockedApp = false,
+                blockedPackage = blockedPkg,
+                blockingActive = true,
+                ignoredPackages = emptySet(),
+            ),
+        )
+    }
+
+    @Test
+    fun usageStats_recentsWindows_doNotAdoptStaleBlocked() {
+        assertEquals(
+            null,
+            ForegroundRoutingPolicy.usageStatsPackageToCommit(
+                usageStatsPackage = blockedPkg,
+                currentForegroundPackage = systemUi,
+                accessibilityFocusedOnBlockedApp = false,
+                blockedPackage = blockedPkg,
+                blockingActive = true,
+                ignoredPackages = emptySet(),
+                topWindowKind = OverlayWindowKind.Recents,
             ),
         )
     }

@@ -2,7 +2,7 @@ package com.gatekeep.app.enforcement
 
 /**
  * Combines window z-order, focus, UsageStats, and presentation so Recents/home
- * hide immediately but cannot skip restore, and in-app surfaces do not look like a leave.
+ * hide immediately and never restore a block while they are the top surface.
  */
 object OverlayRestorePolicy {
 
@@ -21,6 +21,8 @@ object OverlayRestorePolicy {
         val lastRestoreAtMs: Long = 0L,
         val reportedForegroundPackage: String? = null,
         val ignoredPackages: Set<String> = emptySet(),
+        val usageStatsResumeAtMs: Long = 0L,
+        val currentPackageLastResumeAtMs: Long? = null,
     )
 
     fun decide(input: Input): ForegroundRoutingPolicy.Route {
@@ -30,13 +32,8 @@ object OverlayRestorePolicy {
             overlayOwnerPackage = input.overlayOwnerPackage,
         )
         if (top == null) {
-            val blocked = input.blockedPackage
-            if (input.presentation is BlockPresentation.HiddenForOtherApp &&
-                blocked != null &&
-                input.usageStatsForegroundPackage == blocked
-            ) {
-                return ForegroundRoutingPolicy.Route.Restore(blocked)
-            }
+            // Empty / unclassifiable windows are not a restore signal. After unlock_skip,
+            // current can still be the last monitored app while UsageStats lags on home.
             val reported = input.reportedForegroundPackage
             if (!input.blockingActive && reported != null && isAppPackage(reported, input)) {
                 return ForegroundRoutingPolicy.Route.Commit(
@@ -55,6 +52,28 @@ object OverlayRestorePolicy {
 
         val reported = input.reportedForegroundPackage
         if (kind == OverlayWindowKind.Recents || kind == OverlayWindowKind.Launcher) {
+            val openedFromLeave = ForegroundRoutingPolicy.usageOpenFromCommittedLeave(
+                usageStatsPackage = input.usageStatsForegroundPackage,
+                usageResumeAtMs = input.usageStatsResumeAtMs,
+                currentForegroundPackage = input.currentForegroundPackage,
+                currentPackageLastResumeAtMs = input.currentPackageLastResumeAtMs,
+                ignoredPackages = input.ignoredPackages,
+                topWindowKind = kind,
+            )
+            if (openedFromLeave != null) {
+                if (input.blockingActive &&
+                    input.presentation is BlockPresentation.HiddenForOtherApp &&
+                    openedFromLeave == input.blockedPackage
+                ) {
+                    return ForegroundRoutingPolicy.Route.Restore(openedFromLeave)
+                }
+                if (input.blockingActive && input.presentation is BlockPresentation.Visible) {
+                    return ForegroundRoutingPolicy.Route.HideNow(top.packageName)
+                }
+                if (!input.blockingActive) {
+                    return ForegroundRoutingPolicy.Route.Commit(openedFromLeave, 0L)
+                }
+            }
             if (input.blockingActive &&
                 input.presentation is BlockPresentation.Visible &&
                 input.lastRestoreAtMs > 0L &&
@@ -69,6 +88,9 @@ object OverlayRestorePolicy {
                 return ForegroundRoutingPolicy.Route.Ignore
             }
             if (input.blockingActive && input.presentation is BlockPresentation.Visible) {
+                return ForegroundRoutingPolicy.Route.HideNow(top.packageName)
+            }
+            if (input.blockingActive && input.presentation is BlockPresentation.HiddenForOtherApp) {
                 return ForegroundRoutingPolicy.Route.HideNow(top.packageName)
             }
             if (!input.blockingActive) {
@@ -120,42 +142,6 @@ object OverlayRestorePolicy {
             kind != OverlayWindowKind.IncomingCall
         ) {
             return ForegroundRoutingPolicy.Route.Ignore
-        }
-
-        val blocked = input.blockedPackage
-        if (input.presentation is BlockPresentation.HiddenForOtherApp && blocked != null) {
-            if (input.reportedForegroundPackage == blocked &&
-                (kind == OverlayWindowKind.Recents || kind == OverlayWindowKind.Launcher)
-            ) {
-                return ForegroundRoutingPolicy.Route.Ignore
-            }
-            if (kind == OverlayWindowKind.Recents || kind == OverlayWindowKind.Launcher) {
-                val blockedWindow = input.windows.firstOrNull {
-                    !it.isOverlay && it.packageName == blocked
-                }
-                if (blockedWindow != null && blockedWindow.isFocused) {
-                    return ForegroundRoutingPolicy.Route.Restore(blocked)
-                }
-                if (blockedWindow != null && blockedWindow.isActive && !top.isFocused) {
-                    return ForegroundRoutingPolicy.Route.Restore(blocked)
-                }
-                return ForegroundRoutingPolicy.Route.Ignore
-            }
-        }
-
-        if (input.blockingActive &&
-            input.presentation is BlockPresentation.Visible &&
-            blocked != null &&
-            (kind == OverlayWindowKind.Recents || kind == OverlayWindowKind.Launcher)
-        ) {
-            if (input.reportedForegroundPackage == blocked) {
-                return ForegroundRoutingPolicy.Route.Ignore
-            }
-            if (input.lastRestoreAtMs > 0L &&
-                input.nowMs - input.lastRestoreAtMs < ForegroundRoutingPolicy.BLOCK_STABILIZATION_MS
-            ) {
-                return ForegroundRoutingPolicy.Route.Ignore
-            }
         }
 
         return ForegroundRoutingPolicy.decide(

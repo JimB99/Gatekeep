@@ -133,17 +133,19 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
     @Test
     fun o18_leaveViaHomeOrRecents_noOverlayFlicker() {
         seedHardBlockProfile()
-        harness.useRealForegroundDetection()
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())
+        harness.useRealForegroundDetection()
         harness.pressHome()
         assertTrue(
             "overlay did not hide after home ${harness.screenDiagnostics()}",
             harness.waitForOverlayGone(1_500),
         )
         assertNoOverlayFlickerForMs(2_000)
+        restoreForegroundInjection()
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())
+        harness.useRealForegroundDetection()
         harness.pressRecents()
         assertTrue(
             "overlay did not hide after recents ${harness.screenDiagnostics()}",

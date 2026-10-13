@@ -205,6 +205,50 @@ class OverlayWindowClassifierTest {
     }
 
     @Test
+    fun pickTopRelevantWindow_leftoverInactiveLauncher_prefersActiveBlockedApp() {
+        val windows = listOf(
+            OverlayWindowSnapshot(
+                packageName = "com.sec.android.app.launcher",
+                className = "com.sec.android.app.launcher.Launcher",
+                isOverlay = false,
+                isFocused = false,
+                isActive = false,
+            ),
+            OverlayWindowSnapshot(
+                packageName = blocked,
+                className = "com.instagram.android.MainActivity",
+                isOverlay = false,
+                isFocused = false,
+                isActive = true,
+            ),
+        )
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, "com.gatekeep.app")
+        assertEquals(blocked, top?.packageName)
+    }
+
+    @Test
+    fun pickTopRelevantWindow_activeUnfocusedLauncherBeatsActiveUnfocusedBlockedApp() {
+        val windows = listOf(
+            OverlayWindowSnapshot(
+                packageName = "com.sec.android.app.launcher",
+                className = "com.sec.android.app.launcher.Launcher",
+                isOverlay = false,
+                isFocused = false,
+                isActive = true,
+            ),
+            OverlayWindowSnapshot(
+                packageName = blocked,
+                className = "com.instagram.android.MainActivity",
+                isOverlay = false,
+                isFocused = false,
+                isActive = true,
+            ),
+        )
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, "com.gatekeep.app")
+        assertEquals("com.sec.android.app.launcher", top?.packageName)
+    }
+
+    @Test
     fun pickTopRelevantWindow_focusedLauncherBeatsActiveBlockedApp() {
         val windows = listOf(
             OverlayWindowSnapshot(

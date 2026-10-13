@@ -100,6 +100,8 @@ object ForegroundRoutingPolicy {
     /**
      * Usage stats can see an app open while accessibility windows are still launcher or Recents.
      * A focused blocked app is not replaced by a different usage-stats package.
+     * A committed launcher/Recents leave is not replaced by stale usage of the last monitored app
+     * unless windows already confirm a real app as top (blocked, other app, or incoming call).
      */
     fun usageStatsPackageToCommit(
         usageStatsPackage: String?,
@@ -108,6 +110,9 @@ object ForegroundRoutingPolicy {
         blockedPackage: String?,
         blockingActive: Boolean,
         ignoredPackages: Set<String>,
+        topWindowKind: OverlayWindowKind? = null,
+        usageResumeAtMs: Long = 0L,
+        currentPackageLastResumeAtMs: Long? = null,
     ): String? {
         val usage = usageStatsPackage ?: return null
         if (usage == currentForegroundPackage) return null
@@ -118,6 +123,28 @@ object ForegroundRoutingPolicy {
             accessibilityFocusedOnBlockedApp &&
             blockedPackage != null &&
             usage != blockedPackage
+        ) {
+            return null
+        }
+        usageOpenFromCommittedLeave(
+            usageStatsPackage = usage,
+            usageResumeAtMs = usageResumeAtMs,
+            currentForegroundPackage = currentForegroundPackage,
+            currentPackageLastResumeAtMs = currentPackageLastResumeAtMs,
+            ignoredPackages = ignoredPackages,
+            topWindowKind = topWindowKind,
+        )?.let { return it }
+        if (topWindowKind == OverlayWindowKind.Launcher ||
+            topWindowKind == OverlayWindowKind.Recents
+        ) {
+            return null
+        }
+        if (currentForegroundPackage != null &&
+            isCommittedLeaveSurface(currentForegroundPackage) &&
+            !accessibilityFocusedOnBlockedApp &&
+            topWindowKind != OverlayWindowKind.BlockedApp &&
+            topWindowKind != OverlayWindowKind.OtherApp &&
+            topWindowKind != OverlayWindowKind.IncomingCall
         ) {
             return null
         }
@@ -144,4 +171,37 @@ object ForegroundRoutingPolicy {
         if (accessibilityFocusedOnBlockedApp) return null
         return latest
     }
+
+    /**
+     * A UsageStats resume newer than the committed Home/Recents leave is a real app open.
+     * Stale last-monitored usage (same or older resume) must not overlay Home.
+     */
+    fun usageOpenFromCommittedLeave(
+        usageStatsPackage: String?,
+        usageResumeAtMs: Long,
+        currentForegroundPackage: String?,
+        currentPackageLastResumeAtMs: Long?,
+        ignoredPackages: Set<String>,
+        topWindowKind: OverlayWindowKind? = null,
+    ): String? {
+        val usage = usageStatsPackage ?: return null
+        if (usage in ignoredPackages ||
+            ForegroundStabilizationPolicy.isTransientForegroundPackage(usage)
+        ) {
+            return null
+        }
+        if (usage == currentForegroundPackage) return null
+        val topIsLeave = topWindowKind == OverlayWindowKind.Launcher ||
+            topWindowKind == OverlayWindowKind.Recents
+        val currentIsLeave = currentForegroundPackage != null &&
+            isCommittedLeaveSurface(currentForegroundPackage)
+        if (!topIsLeave && !currentIsLeave) return null
+        val leaveAt = currentPackageLastResumeAtMs ?: return null
+        if (usageResumeAtMs <= leaveAt) return null
+        return usage
+    }
+
+    fun isCommittedLeaveSurface(packageName: String): Boolean =
+        ForegroundStabilizationPolicy.isTransientForegroundPackage(packageName) ||
+            OverlayWindowClassifier.isRecentsHost(packageName)
 }

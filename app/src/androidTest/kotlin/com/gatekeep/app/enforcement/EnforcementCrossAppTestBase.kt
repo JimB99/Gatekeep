@@ -30,6 +30,12 @@ abstract class EnforcementCrossAppTestBase : GatekeepInstrumentedTestBase() {
         }
         enforcementCoordinator.resetInstrumentationState()
         harness.resetTestTargetUsageStats()
+        restoreForegroundInjection()
+        prepareEnforcementEnvironment()
+    }
+
+    /** Same-package test target cannot be told from Gatekeep UI via UsageStats alone. */
+    protected fun restoreForegroundInjection() {
         harness.onTargetLaunched = { packageName, activityClassName ->
             enforcementCoordinator.onForegroundAppChanged(packageName, activityClassName)
             enforcementCoordinator.refresh()
@@ -38,7 +44,6 @@ abstract class EnforcementCrossAppTestBase : GatekeepInstrumentedTestBase() {
             enforcementCoordinator.pollForeground()
             enforcementCoordinator.refresh()
         }
-        prepareEnforcementEnvironment()
     }
 
     protected fun assertAllowedWithoutBlockingOverlay(

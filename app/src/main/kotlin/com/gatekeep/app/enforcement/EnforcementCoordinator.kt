@@ -254,13 +254,6 @@ class EnforcementCoordinator @Inject constructor(
                 )
                 return
             }
-            if (isBlockingActive &&
-                blockPresentationState.presentation is BlockPresentation.HiddenForOtherApp &&
-                packageName == blockedPackage
-            ) {
-                restoreOverlayForPackage(packageName)
-                return
-            }
             if (shouldReevaluateSamePackageCommit(packageName)) {
                 reevaluateSamePackage(packageName)
             }
@@ -307,6 +300,14 @@ class EnforcementCoordinator @Inject constructor(
         onTopWindowChanged(windows)
     }
 
+    private fun leaveOrAppResumeAtMs(): Long? {
+        val current = currentForegroundPackage
+        if (current != null && ForegroundRoutingPolicy.isCommittedLeaveSurface(current)) {
+            return lastLeftAtMs.takeIf { it > 0L }
+        }
+        return currentForegroundSinceMs.takeIf { it > 0L }
+    }
+
     private fun overlayRestoreInput(windows: List<OverlayWindowSnapshot>) = OverlayRestorePolicy.Input(
         windows = windows,
         usageStatsForegroundPackage = usageStatsCollector.getForegroundPackageFallback(),
@@ -321,6 +322,8 @@ class EnforcementCoordinator @Inject constructor(
         blockEnteredAtMs = blockEnteredAtMs,
         lastRestoreAtMs = lastOverlayRestoreAtMs,
         ignoredPackages = ignoredForegroundPackages,
+        usageStatsResumeAtMs = usageStatsCollector.latestForegroundResume()?.timestamp ?: 0L,
+        currentPackageLastResumeAtMs = leaveOrAppResumeAtMs(),
     )
 
     private fun applyForegroundRoute(route: ForegroundRoutingPolicy.Route) {
@@ -347,6 +350,13 @@ class EnforcementCoordinator @Inject constructor(
             is ForegroundRoutingPolicy.Route.HideNow -> {
                 if (paused) {
                     transitionToHiddenForOtherApp()
+                    return
+                }
+                if (currentForegroundPackage == route.packageName &&
+                    blockPresentationState.presentation is BlockPresentation.HiddenForOtherApp
+                ) {
+                    overlayShowInFlight = false
+                    blockOverlay.hideTemporarily()
                     return
                 }
                 val prev = currentForegroundPackage
@@ -592,11 +602,11 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private fun transitionToHiddenForOtherApp() {
+        overlayShowInFlight = false
         if (blockPresentationState.presentation is BlockPresentation.Visible) {
-            overlayShowInFlight = false
             blockPresentationState = BlockPresentationReducer.onHideForOtherApp(blockPresentationState)
-            blockOverlay.hideTemporarily()
         }
+        blockOverlay.hideTemporarily()
     }
 
     private fun restoreVisibleBlockIfNeeded(packageName: String) {
@@ -2339,6 +2349,9 @@ class EnforcementCoordinator @Inject constructor(
             blockedPackage = blocked,
             overlayOwnerPackage = context.packageName,
         )
+        val topKind = top?.let {
+            OverlayWindowClassifier.classify(it.packageName, it.className, blocked)
+        }
         if (pkg == lastLeftPackage && System.currentTimeMillis() - lastLeftAtMs < USAGE_LAG_GUARD_MS) {
             return
         }
@@ -2346,9 +2359,6 @@ class EnforcementCoordinator @Inject constructor(
             blocked != null &&
             pkg == blocked
         ) {
-            val topKind = top?.let {
-                OverlayWindowClassifier.classify(it.packageName, it.className, blocked)
-            }
             if (UnlockOverlayPolicy.shouldRestoreHiddenBlockFromPoll(
                     usagePackage = pkg,
                     blockedPackage = blocked,
@@ -2396,6 +2406,9 @@ class EnforcementCoordinator @Inject constructor(
             blockedPackage = blocked,
             blockingActive = isBlockingActive,
             ignoredPackages = ignoredForegroundPackages,
+            topWindowKind = topKind,
+            usageResumeAtMs = latestResume?.timestamp ?: 0L,
+            currentPackageLastResumeAtMs = leaveOrAppResumeAtMs(),
         ) ?: return
         if (adopt == context.packageName &&
             adopt !in monitoredPackagesCache &&
