@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- GatekeepTheme dark tokens (Theme.kt DarkColors + Material3 surface defaults). -->
+    <color name="gatekeep_primary">#FF8AB4F8</color>
+    <color name="gatekeep_on_primary">#FF062E6B</color>
+    <color name="gatekeep_secondary">#FF81C995</color>
+    <color name="gatekeep_on_secondary">#FF0D3B1E</color>
+    <color name="gatekeep_tertiary">#FFF28B82</color>
+    <color name="gatekeep_on_tertiary">#FF601410</color>
+    <color name="gatekeep_surface">#FF1C1B1F</color>
+    <color name="gatekeep_on_surface">#FFE6E1E5</color>
+    <color name="gatekeep_on_surface_variant">#FFCAC4D0</color>
+    <color name="gatekeep_outline">#FF938F99</color>
+    <color name="overlay_scrim">#CC000000</color>
+</resources>

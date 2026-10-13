@@ -102,7 +102,9 @@ class BlockOverlayManager @Inject constructor(
                 clearOverlayState()
                 removeOverlayOnly()
                 val view = LayoutInflater.from(localizedContext).inflate(R.layout.overlay_block, null)
+                applyChrome(view, BlockPresentationReason.openGate)
                 view.findViewById<TextView>(R.id.block_message).text = message
+                view.findViewById<LinearLayout>(R.id.friction_container).visibility = View.VISIBLE
                 view.findViewById<Button>(R.id.block_continue_btn).visibility = View.GONE
                 view.findViewById<Button>(R.id.block_back_btn).visibility = View.GONE
                 view.findViewById<LinearLayout>(R.id.extension_buttons).visibility = View.GONE
@@ -253,8 +255,7 @@ class BlockOverlayManager @Inject constructor(
         } else null
 
         view.findViewById<Button>(R.id.block_back_btn).apply {
-            setBackgroundColor(0xFF424242.toInt())
-            setTextColor(0xFFFFFFFF.toInt())
+            styleTextButton(this)
             setOnClickListener {
                 ForegroundMonitorAccessibilityService.instance?.performGlobalAction(
                     android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME,
@@ -285,10 +286,13 @@ class BlockOverlayManager @Inject constructor(
             val hMargin = (4 * density).toInt()
             val vPadding = (8 * density).toInt()
             extensionLayout.minuteOptions.forEach { minutes ->
-                val btn = Button(context).apply {
+                val btn = Button(localizedContext).apply {
                     text = localizedContext.getString(R.string.extension_minutes_format, minutes)
-                    setTextColor(0xFFFFFFFF.toInt())
-                    setBackgroundColor(0xFF1976D2.toInt())
+                    styleFilledButton(
+                        this,
+                        R.drawable.bg_overlay_button_filled,
+                        localizedContext.getColor(R.color.gatekeep_on_primary),
+                    )
                     setPadding((12 * density).toInt(), vPadding, (12 * density).toInt(), vPadding)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                     layoutParams = LinearLayout.LayoutParams(
@@ -307,10 +311,13 @@ class BlockOverlayManager @Inject constructor(
                 timeButtons.addView(btn)
             }
             if (extensionLayout.showNoLimitToday) {
-                val noLimitBtn = Button(context).apply {
+                val noLimitBtn = Button(localizedContext).apply {
                     text = localizedContext.getString(R.string.overlay_no_limit_today)
-                    setTextColor(0xFFFFFFFF.toInt())
-                    setBackgroundColor(0xFFEF6C00.toInt())
+                    styleFilledButton(
+                        this,
+                        R.drawable.bg_overlay_button_tertiary,
+                        localizedContext.getColor(R.color.gatekeep_on_tertiary),
+                    )
                     setPadding((16 * density).toInt(), vPadding, (16 * density).toInt(), vPadding)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                     layoutParams = LinearLayout.LayoutParams(
@@ -605,8 +612,9 @@ class BlockOverlayManager @Inject constructor(
     }
 
     private fun updateBlockView(view: View, message: String, reason: BlockPresentationReason, breakUntilMs: Long?) {
+        applyChrome(view, reason)
         view.findViewById<TextView>(R.id.block_message).text = message
-        view.findViewById<TextView>(R.id.block_reason).text = BlockMessageResolver.reasonLabel(localizedContext, reason)
+        view.findViewById<TextView>(R.id.block_reason).visibility = View.GONE
         val breakText = view.findViewById<TextView>(R.id.block_break_text)
         if (breakUntilMs != null) {
             breakText.visibility = View.VISIBLE
@@ -617,6 +625,48 @@ class BlockOverlayManager @Inject constructor(
         } else {
             breakText.visibility = View.GONE
         }
+    }
+
+    private fun applyChrome(view: View, reason: BlockPresentationReason) {
+        val chrome = OverlayChromePolicy.chrome(reason)
+        val accentColor = localizedContext.getColor(accentColorRes(chrome.accent))
+        view.findViewById<View>(R.id.overlay_accent).setBackgroundColor(accentColor)
+        val titleView = view.findViewById<TextView>(R.id.overlay_title)
+        val title = BlockMessageResolver.chromeTitle(localizedContext, reason)
+        titleView.text = title
+        titleView.setTextColor(
+            if (chrome.accent == OverlayAccentFamily.Default) {
+                localizedContext.getColor(R.color.gatekeep_on_surface)
+            } else {
+                accentColor
+            },
+        )
+    }
+
+    private fun accentColorRes(family: OverlayAccentFamily): Int = when (family) {
+        OverlayAccentFamily.OnOpen -> R.color.gatekeep_primary
+        OverlayAccentFamily.Session -> R.color.gatekeep_tertiary
+        OverlayAccentFamily.Period -> R.color.gatekeep_secondary
+        OverlayAccentFamily.Default -> R.color.gatekeep_outline
+    }
+
+    private fun styleFilledButton(button: Button, backgroundRes: Int, textColor: Int) {
+        button.setBackgroundResource(backgroundRes)
+        button.backgroundTintList = null
+        button.setTextColor(textColor)
+        button.isAllCaps = false
+        button.minHeight = localizedContext.resources.getDimensionPixelSize(R.dimen.overlay_button_min_height)
+        button.elevation = 0f
+        button.stateListAnimator = null
+    }
+
+    private fun styleTextButton(button: Button) {
+        button.setBackgroundResource(R.drawable.bg_overlay_button_text)
+        button.setTextColor(localizedContext.getColor(R.color.gatekeep_on_surface_variant))
+        button.isAllCaps = false
+        button.minHeight = localizedContext.resources.getDimensionPixelSize(R.dimen.overlay_button_min_height)
+        button.elevation = 0f
+        button.stateListAnimator = null
     }
 
     private fun addOverlay(view: View, focusable: Boolean) {

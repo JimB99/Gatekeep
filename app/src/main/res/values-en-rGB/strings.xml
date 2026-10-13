@@ -393,6 +393,11 @@
     <string name="overlay_enter_profile_pin">Enter profile PIN</string>
     <string name="overlay_break_ended">Break ended</string>
     <string name="overlay_break_ends_in">Break ends in %1$s</string>
+    <string name="overlay_chrome_on_open">On-open wait</string>
+    <string name="overlay_chrome_session">Session limit</string>
+    <string name="overlay_chrome_daily">Daily limit</string>
+    <string name="overlay_chrome_hourly">Hourly limit</string>
+    <string name="overlay_chrome_weekly">Weekly limit</string>
     <string name="extension_minutes_format">+%1$dm</string>
     <string name="countdown_seconds_format">%1$ds</string>
 

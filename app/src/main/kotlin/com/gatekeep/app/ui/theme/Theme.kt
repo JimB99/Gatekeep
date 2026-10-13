@@ -7,6 +7,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
+// Hex values match res/values/colors.xml and values-night/colors.xml (overlay chrome).
 private val LightColors = lightColorScheme(
     primary = Color(0xFF1A73E8),
     secondary = Color(0xFF34A853),

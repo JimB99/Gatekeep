@@ -379,6 +379,11 @@
     <string name="overlay_enter_profile_pin">Introduce el PIN del perfil</string>
     <string name="overlay_break_ended">Descanso terminado</string>
     <string name="overlay_break_ends_in">El descanso termina en %1$s</string>
+    <string name="overlay_chrome_on_open">Espera al abrir</string>
+    <string name="overlay_chrome_session">Límite de sesión</string>
+    <string name="overlay_chrome_daily">Límite diario</string>
+    <string name="overlay_chrome_hourly">Límite por hora</string>
+    <string name="overlay_chrome_weekly">Límite semanal</string>
     <string name="extension_minutes_format">+%1$dm</string>
     <string name="countdown_seconds_format">%1$ds</string>
 

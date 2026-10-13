@@ -2,6 +2,8 @@ package com.gatekeep.app.util
 
 import android.content.Context
 import com.gatekeep.app.R
+import com.gatekeep.app.enforcement.OverlayChromePolicy
+import com.gatekeep.app.enforcement.OverlayChromeTitle
 import com.gatekeep.domain.ExtensionDenialReason
 import com.gatekeep.domain.model.BlockPresentationReason
 import com.gatekeep.domain.model.BlockReason
@@ -56,6 +58,16 @@ object BlockMessageResolver {
                 context.getString(R.string.extension_denied_daily_limit)
             ExtensionDenialReason.tooManyConsecutive ->
                 context.getString(R.string.extension_denied_consecutive)
+        }
+
+    fun chromeTitle(context: Context, reason: BlockPresentationReason): String =
+        when (OverlayChromePolicy.chrome(reason).title) {
+            OverlayChromeTitle.OnOpenWait -> context.getString(R.string.overlay_chrome_on_open)
+            OverlayChromeTitle.SessionLimit -> context.getString(R.string.overlay_chrome_session)
+            OverlayChromeTitle.DailyLimit -> context.getString(R.string.overlay_chrome_daily)
+            OverlayChromeTitle.HourlyLimit -> context.getString(R.string.overlay_chrome_hourly)
+            OverlayChromeTitle.WeeklyLimit -> context.getString(R.string.overlay_chrome_weekly)
+            OverlayChromeTitle.ReasonLabel -> reasonLabel(context, reason)
         }
 
     fun reasonLabel(context: Context, reason: BlockPresentationReason): String = when (reason) {

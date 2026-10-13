@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material3: Card medium 12dp, Button extraSmall 4dp, Button min height 40dp. -->
+    <dimen name="overlay_card_corner">12dp</dimen>
+    <dimen name="overlay_button_corner">4dp</dimen>
+    <dimen name="overlay_accent_height">4dp</dimen>
+    <dimen name="overlay_card_margin">24dp</dimen>
+    <dimen name="overlay_card_padding">24dp</dimen>
+    <dimen name="overlay_button_min_height">40dp</dimen>
+    <dimen name="overlay_title_size">22sp</dimen>
+    <dimen name="overlay_body_size">16sp</dimen>
+    <dimen name="overlay_label_size">14sp</dimen>
+    <dimen name="overlay_caption_size">12sp</dimen>
+    <dimen name="overlay_countdown_size">24sp</dimen>
+</resources>
