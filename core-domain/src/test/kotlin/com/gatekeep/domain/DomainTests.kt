@@ -769,7 +769,7 @@ class SessionTrackerTest {
     }
 
     @Test
-    fun `screen off extends a pending wait`() {
+    fun `extendPendingWait adds extra time`() {
         val now = 1_000_000L
         val session = SessionTracker.setPendingWait(
             SessionTracker.startSession("com.test", now),
@@ -781,7 +781,7 @@ class SessionTrackerTest {
     }
 
     @Test
-    fun `device resume extends a pending wait by paused duration`() {
+    fun `device resume discards an in-progress wait`() {
         val now = 1_000_000L
         val waiting = SessionTracker.setPendingWait(
             SessionTracker.startSession("com.test", now),
@@ -789,8 +789,8 @@ class SessionTrackerTest {
         )
         val paused = SessionTracker.pauseDeviceUse(waiting, now + 10_000L)
         val resumed = SessionTracker.resumeDeviceUse(paused, now + 25_000L)
-        assertTrue(SessionTracker.hasPendingWait(resumed, now + 70_000L))
-        assertFalse(SessionTracker.hasPendingWait(resumed, now + 75_000L))
+        assertFalse(SessionTracker.hasPendingWait(resumed, now + 25_000L))
+        assertNull(resumed.pendingWaitUntilEpochMs)
     }
 
     @Test

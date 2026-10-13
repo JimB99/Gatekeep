@@ -8,7 +8,9 @@ enum class PendingWaitResumeSurface {
 }
 
 /**
- * While [SessionTracker.hasPendingWait], resume the correct overlay after unlock (RES-01/05).
+ * While [SessionTracker.hasPendingWait], resume the correct overlay after a hide that was
+ * not leave or lock (notification shade). Leave and lock abandon the pending wait instead
+ * of resuming leftover seconds.
  * Open-gate wait must not reuse the session-limit block UI.
  */
 object PendingWaitResumePolicy {

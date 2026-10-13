@@ -33,7 +33,10 @@ object SessionContinuityPolicy {
     }
 
     fun markForegroundEnded(session: SessionState, nowEpochMs: Long): SessionState =
-        session.copy(lastForegroundEndEpochMs = nowEpochMs)
+        SessionTracker.abandonInProgressWait(
+            session.copy(lastForegroundEndEpochMs = nowEpochMs),
+            nowEpochMs,
+        )
 
     fun resumeAfterGap(session: SessionState, nowEpochMs: Long): SessionState {
         val endedAt = session.lastForegroundEndEpochMs ?: return session.copy(

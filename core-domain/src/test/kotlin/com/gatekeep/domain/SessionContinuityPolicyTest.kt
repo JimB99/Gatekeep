@@ -126,4 +126,18 @@ class SessionContinuityPolicyTest {
         assertEquals(1_000L, ended.sessionStartEpochMs)
         assertEquals(2_000L, ended.openGatePassedEpochMs)
     }
+
+    @Test
+    fun markForegroundEnded_discardsInProgressWait() {
+        val session = SessionState(
+            packageName = "com.test",
+            sessionStartEpochMs = 1_000L,
+            frictionStartedAtEpochMs = 2_000L,
+            pendingWaitUntilEpochMs = 12_000L,
+        )
+        val ended = SessionContinuityPolicy.markForegroundEnded(session, 9_000L)
+        assertEquals(9_000L, ended.lastForegroundEndEpochMs)
+        assertNull(ended.pendingWaitUntilEpochMs)
+        assertNull(ended.frictionStartedAtEpochMs)
+    }
 }

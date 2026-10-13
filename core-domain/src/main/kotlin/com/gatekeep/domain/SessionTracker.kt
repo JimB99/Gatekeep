@@ -124,25 +124,40 @@ object SessionTracker {
     /**
      * Freeze the session clock at [nowEpochMs] while the device is locked / screen-off (RES-04).
      * Idempotent: a second pause keeps the original timestamp so pocket time cannot resume the clock.
+     * An in-progress wait overlay is discarded so lock does not count down or resume leftover seconds.
      */
     fun pauseDeviceUse(session: SessionState, nowEpochMs: Long): SessionState {
-        if (session.devicePausedAtEpochMs != null) return session
-        return session.copy(devicePausedAtEpochMs = nowEpochMs)
+        val paused = if (session.devicePausedAtEpochMs != null) {
+            session
+        } else {
+            session.copy(devicePausedAtEpochMs = nowEpochMs)
+        }
+        return abandonInProgressWait(paused, nowEpochMs)
     }
 
     /**
-     * Unpause: add locked time to [SessionState.excludedMs] and extend a pending wait (RES-04).
+     * Unpause: add locked time to [SessionState.excludedMs]. An in-progress wait is not extended;
+     * leftover seconds are discarded so the next overlay is a full wait.
      */
     fun resumeDeviceUse(session: SessionState, nowEpochMs: Long): SessionState {
         val pausedAt = session.devicePausedAtEpochMs ?: return session
         val pausedMs = (nowEpochMs - pausedAt).coerceAtLeast(0)
-        return extendPendingWait(
+        return abandonInProgressWait(
             session.copy(
                 excludedMs = session.excludedMs + pausedMs,
                 devicePausedAtEpochMs = null,
             ),
-            pausedMs,
+            nowEpochMs,
         )
+    }
+
+    /**
+     * Leave or lock while a wait overlay is in progress: drop the deadline and end friction.
+     * Remaining seconds must not be resumed; the next required wait is a full wait.
+     */
+    fun abandonInProgressWait(session: SessionState, nowEpochMs: Long): SessionState {
+        if (session.pendingWaitUntilEpochMs == null) return session
+        return clearPendingWait(endFriction(session, nowEpochMs))
     }
 
     fun hasPendingWait(session: SessionState?, nowEpochMs: Long): Boolean {

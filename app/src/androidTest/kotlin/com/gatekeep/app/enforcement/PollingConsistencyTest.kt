@@ -87,7 +87,7 @@ class PollingConsistencyTest : EnforcementCrossAppTestBase() {
     }
 
     @Test
-    fun pol06_screenOff_pausesWaitStopwatch() {
+    fun pol06_screenOff_resetsWaitStopwatch() {
         runSeed {
             GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
@@ -99,21 +99,31 @@ class PollingConsistencyTest : EnforcementCrossAppTestBase() {
                 ),
             )
         }
+        val fullWaitSeconds = 12
         harness.wakeDevice()
         harness.launchTargetA()
         assertTrue("countdown missing ${harness.screenDiagnostics()}", harness.waitForCountdown() != null)
-        val atOff = harness.sleepDeviceCapturingCountdown()
+        val dropDeadline = System.currentTimeMillis() + 4_000
+        var beforeLock: Int? = null
+        while (System.currentTimeMillis() < dropDeadline) {
+            beforeLock = harness.countdownSeconds()
+            if (beforeLock != null && beforeLock <= fullWaitSeconds - 2) break
+            harness.sleepMs(200)
+        }
+        assertTrue(
+            "countdown did not drop before lock before=$beforeLock ${harness.screenDiagnostics()}",
+            beforeLock != null && beforeLock <= fullWaitSeconds - 2,
+        )
+        val atOff = harness.sleepDeviceCapturingCountdown() ?: beforeLock
         assertTrue("screen did not turn off ${harness.screenDiagnostics()}", !harness.isScreenOn())
-        assertTrue("countdown unreadable at lock ${harness.screenDiagnostics()}", atOff != null && atOff >= 8)
         harness.sleepMs(3_000)
         val stillOff = !harness.isScreenOn()
         harness.wakeDevice()
-        harness.sleepMs(400)
-        val after = harness.countdownSeconds()
+        val after = harness.waitForCountdown(3_000)
         assertTrue("screen woke during the lock", stillOff)
         assertTrue(
-            "countdown ran through lock atOff=$atOff after=$after ${harness.screenDiagnostics()}",
-            after != null && atOff!! - after <= 1,
+            "in-progress wait must reset on lock atOff=$atOff after=$after ${harness.screenDiagnostics()}",
+            after != null && after >= fullWaitSeconds - 1,
         )
     }
 

@@ -225,7 +225,7 @@ Instrumented tests can assert the same buffer via `EnforcementCoordinator.enforc
 | POL-03 | Near limit blocks within 1s loop | `PollingConsistencyTest.pol03_nearLimit_blocksWithin1s` |
 | POL-04 | Far limit blocks before 30s poll | `PollingConsistencyTest.pol04_farLimit_blocksBefore30s` |
 | POL-05 | Overlay showing break timer accurate | `PollingConsistencyTest.pol05_overlayBreakTimer_accurate` |
-| POL-06 | Screen off pauses wait stopwatch | `PollingConsistencyTest.pol06_screenOff_pausesWaitStopwatch` |
+| POL-06 | Screen off resets in-progress wait | `PollingConsistencyTest.pol06_screenOff_resetsWaitStopwatch` |
 | POL-07 | Rapid app switching no duplicate sessions | `PollingConsistencyTest.pol07_rapidSwitch_noDuplicateSessions` |
 
 ---
@@ -240,8 +240,8 @@ These cases launch with `am start` and read `block_message` / `wait_countdown`. 
 | OBS-02 | Home hides the overlay within 1.5s | `ScreenObservationTest.obs02_home_overlayGoneWithin1500ms` |
 | OBS-03 | Blocked overlay stays up and the message does not flicker | `ScreenObservationTest.obs03_blockedOverlay_doesNotFlicker` |
 | OBS-08 | Open-gate wait with no injected foreground shows within 2s | `ScreenObservationTest.obs08_openWait_noInjection_overlayWithin2s` |
-| OBS-04 | Open-wait countdown pauses while the screen is off | `ScreenObservationTest.obs04_openWait_pausesWhileScreenOff` |
-| OBS-05 | Session-limit wait pauses while the screen is off | `ScreenObservationTest.obs05_sessionWait_pausesWhileScreenOff` |
+| OBS-04 | Open-wait countdown resets when the screen is off | `ScreenObservationTest.obs04_openWait_resetsOnScreenOff` |
+| OBS-05 | Session-limit wait resets when the screen is off | `ScreenObservationTest.obs05_sessionWait_resetsOnScreenOff` |
 | OBS-06 | Home for just over 60s starts a fresh session | `ScreenObservationTest.obs06_leaveOverOneMinute_freshSessionNotImmediateTimeout` |
 | OBS-07 | Home for about 5s keeps the session and excludes the gap | `ScreenObservationTest.obs07_leaveFiveSeconds_sameSessionGapExcluded` |
 | OBS-09 | Home without opening another app freezes the session clock within 1s | `ScreenObservationTest.obs09_home_freezesSessionWithoutOtherApp` |

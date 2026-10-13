@@ -581,12 +581,6 @@ class EnforcementCoordinator @Inject constructor(
             sessionStartedForPackage = null
         }
 
-        if (prevPackage != null && prevPackage != packageName) {
-            openGatePassedPackage = null
-        } else if (packageName != openGatePassedPackage) {
-            openGatePassedPackage = null
-        }
-
         if (isBlockingActive && blockedPackage != null && packageName != blockedPackage) {
             val leftBlockedApp = monitoredPackagesCache.isEmpty() || packageName !in monitoredPackagesCache
             if (leftBlockedApp) {
@@ -738,6 +732,15 @@ class EnforcementCoordinator @Inject constructor(
         stopCountdownTicker()
         blockOverlay.clearFrictionState()
         blockOverlay.removeOverlaySynchronously()
+    }
+
+    private fun clearAbandonedWaitOverlay(packageName: String) {
+        if (blockedPackage != null && blockedPackage != packageName) return
+        lastPostedOverlay = null
+        overlayShowInFlight = false
+        blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
+        blockOverlay.clearFrictionState()
+        mainHandler.post { blockOverlay.removeAfterResolution() }
     }
 
     fun onBreakExpired(packageName: String) {
@@ -1350,7 +1353,11 @@ class EnforcementCoordinator @Inject constructor(
         val state = usageRepository.getSessionState(profileId, pkg)
             ?: SessionTracker.startSession(pkg, now)
         if (state.lastForegroundEndEpochMs != null) return
-        usageRepository.saveSessionState(SessionTracker.pauseDeviceUse(state, pausedAt), profileId)
+        val paused = SessionTracker.pauseDeviceUse(state, pausedAt)
+        usageRepository.saveSessionState(paused, profileId)
+        if (state.pendingWaitUntilEpochMs != null && paused.pendingWaitUntilEpochMs == null) {
+            clearAbandonedWaitOverlay(pkg)
+        }
         enforcementTrace.record(
             EnforcementTrace.SESSION_PAUSE,
             mapOf("pkg" to pkg, "at" to pausedAt.toString()),
@@ -1501,6 +1508,11 @@ class EnforcementCoordinator @Inject constructor(
                 SessionContinuityPolicy.markForegroundEnded(oldState, now)
             }
             usageRepository.saveSessionState(updated, previousProfileId)
+            if (oldState.pendingWaitUntilEpochMs != null &&
+                updated.pendingWaitUntilEpochMs == null
+            ) {
+                clearAbandonedWaitOverlay(prev)
+            }
         }
         if (countdownPackageName == prev) {
             freezeSessionHudClock()
@@ -1628,8 +1640,20 @@ class EnforcementCoordinator @Inject constructor(
             sharedPool = primaryProfile.limitUsageScope == LimitUsageScope.sharedPool,
         )
 
-        val sessionStateRaw = usageRepository.getSessionState(primaryProfile.id, packageName)
+        var sessionStateRaw = usageRepository.getSessionState(primaryProfile.id, packageName)
         previousProfileId = primaryProfile.id
+        if (sessionStateRaw != null &&
+            SessionTracker.hasPendingWait(sessionStateRaw, now) &&
+            (
+                sessionStateRaw.lastForegroundEndEpochMs != null ||
+                    sessionStateRaw.devicePausedAtEpochMs != null ||
+                    lastLeftPackage == packageName
+            )
+        ) {
+            sessionStateRaw = SessionTracker.abandonInProgressWait(sessionStateRaw, now)
+            usageRepository.saveSessionState(sessionStateRaw, primaryProfile.id)
+            clearAbandonedWaitOverlay(packageName)
+        }
 
         var sessionState = ensureSessionStarted(
             packageName = packageName,
@@ -1666,7 +1690,7 @@ class EnforcementCoordinator @Inject constructor(
         if (sessionState != sessionBeforePause) {
             usageRepository.saveSessionState(sessionState, primaryProfile.id)
         }
-        val sessionForEval = resolveSessionAfterBreak(
+        var sessionForEval = resolveSessionAfterBreak(
             packageName = packageName,
             profileId = primaryProfile.id,
             sessionState = sessionState,
@@ -1677,51 +1701,60 @@ class EnforcementCoordinator @Inject constructor(
         ) == DeviceUsePhase.Paused
 
         if (SessionTracker.hasPendingWait(sessionForEval, now)) {
-            val openAlreadyPassedEarly = openGatePassedPackage == packageName ||
-                OpenGatePassPolicy.shouldSkipOpenGate(sessionForEval, now, OPEN_GATE_GRACE_MS)
-            if (!PendingWaitResumePolicy.shouldResume(
-                    hasPendingWait = true,
-                    openGateAlreadyPassed = openAlreadyPassedEarly,
-                    overlayHasActiveWait = blockOverlay.hasActiveWait(),
-                    devicePaused = devicePaused,
-                    screenOn = screenStateMonitor.isScreenOn(),
-                    overlayShowInFlight = overlayShowInFlight,
-                )
-            ) {
+            val leftOrLocked = sessionForEval.lastForegroundEndEpochMs != null ||
+                sessionForEval.devicePausedAtEpochMs != null ||
+                lastLeftPackage == packageName
+            if (leftOrLocked) {
+                sessionForEval = SessionTracker.abandonInProgressWait(sessionForEval, now)
+                usageRepository.saveSessionState(sessionForEval, primaryProfile.id)
+                clearAbandonedWaitOverlay(packageName)
+            } else {
+                val openAlreadyPassedEarly = openGatePassedPackage == packageName ||
+                    OpenGatePassPolicy.shouldSkipOpenGate(sessionForEval, now, OPEN_GATE_GRACE_MS)
+                if (!PendingWaitResumePolicy.shouldResume(
+                        hasPendingWait = true,
+                        openGateAlreadyPassed = openAlreadyPassedEarly,
+                        overlayHasActiveWait = blockOverlay.hasActiveWait(),
+                        devicePaused = devicePaused,
+                        screenOn = screenStateMonitor.isScreenOn(),
+                        overlayShowInFlight = overlayShowInFlight,
+                    )
+                ) {
+                    return
+                }
+                if (evaluationEpochAtStart != evaluationEpoch) return
+                val remainingSec = ((SessionTracker.pendingWaitRemainingMs(sessionForEval, now) + 999) / 1000)
+                    .toInt().coerceAtLeast(1)
+                when (PendingWaitResumePolicy.surfaceFor(primaryProfile.onOpenAction)) {
+                    PendingWaitResumeSurface.OPEN_GATE -> {
+                        enforcementTrace.record(
+                            EnforcementTrace.PENDING_WAIT_RESUME,
+                            mapOf("pkg" to packageName, "surface" to "open_gate", "sec" to remainingSec.toString()),
+                        )
+                        showPendingOpenGateWait(
+                            packageName = packageName,
+                            profile = primaryProfile,
+                            waitSeconds = remainingSec,
+                            evaluationEpochAtStart = evaluationEpochAtStart,
+                        )
+                    }
+                    PendingWaitResumeSurface.SESSION_LIMIT -> {
+                        enforcementTrace.record(
+                            EnforcementTrace.PENDING_WAIT_RESUME,
+                            mapOf("pkg" to packageName, "surface" to "session_limit", "sec" to remainingSec.toString()),
+                        )
+                        showPendingWait(
+                            packageName = packageName,
+                            appLabel = appLabel,
+                            profile = primaryProfile,
+                            waitSeconds = remainingSec,
+                            sessionState = sessionForEval,
+                            evaluationEpochAtStart = evaluationEpochAtStart,
+                        )
+                    }
+                }
                 return
             }
-            if (evaluationEpochAtStart != evaluationEpoch) return
-            val remainingSec = ((SessionTracker.pendingWaitRemainingMs(sessionForEval, now) + 999) / 1000)
-                .toInt().coerceAtLeast(1)
-            when (PendingWaitResumePolicy.surfaceFor(primaryProfile.onOpenAction)) {
-                PendingWaitResumeSurface.OPEN_GATE -> {
-                    enforcementTrace.record(
-                        EnforcementTrace.PENDING_WAIT_RESUME,
-                        mapOf("pkg" to packageName, "surface" to "open_gate", "sec" to remainingSec.toString()),
-                    )
-                    showPendingOpenGateWait(
-                        packageName = packageName,
-                        profile = primaryProfile,
-                        waitSeconds = remainingSec,
-                        evaluationEpochAtStart = evaluationEpochAtStart,
-                    )
-                }
-                PendingWaitResumeSurface.SESSION_LIMIT -> {
-                    enforcementTrace.record(
-                        EnforcementTrace.PENDING_WAIT_RESUME,
-                        mapOf("pkg" to packageName, "surface" to "session_limit", "sec" to remainingSec.toString()),
-                    )
-                    showPendingWait(
-                        packageName = packageName,
-                        appLabel = appLabel,
-                        profile = primaryProfile,
-                        waitSeconds = remainingSec,
-                        sessionState = sessionForEval,
-                        evaluationEpochAtStart = evaluationEpochAtStart,
-                    )
-                }
-            }
-            return
         }
 
         if (openGatePassedPackage == packageName) {
@@ -2328,10 +2361,11 @@ class EnforcementCoordinator @Inject constructor(
         val now = System.currentTimeMillis()
         val state = usageRepository.getSessionState(previousProfileId, packageName) ?: return
         if (state.lastForegroundEndEpochMs != null) return
-        usageRepository.saveSessionState(
-            SessionContinuityPolicy.markForegroundEnded(state, now),
-            previousProfileId,
-        )
+        val updated = SessionContinuityPolicy.markForegroundEnded(state, now)
+        usageRepository.saveSessionState(updated, previousProfileId)
+        if (state.pendingWaitUntilEpochMs != null && updated.pendingWaitUntilEpochMs == null) {
+            clearAbandonedWaitOverlay(packageName)
+        }
     }
 
     private fun pollForegroundIfChanged() {
@@ -2793,7 +2827,9 @@ class EnforcementCoordinator @Inject constructor(
         val state = when (action) {
             SessionStartDecision.Action.StartFresh -> {
                 screenStateMonitor.clearPersistedPause()
-                openGatePassedPackage = null
+                if (openGatePassedPackage == packageName) {
+                    openGatePassedPackage = null
+                }
                 if (lastLeftPackage == packageName) lastLeftPackage = null
                 if (isBlockingActive && blockedPackage == packageName) {
                     blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
@@ -2811,6 +2847,9 @@ class EnforcementCoordinator @Inject constructor(
                     existingState ?: SessionTracker.startSession(packageName, now),
                     now,
                 )
+        }
+        if (OpenGatePassPolicy.shouldSkipOpenGate(state, now, OPEN_GATE_GRACE_MS)) {
+            openGatePassedPackage = packageName
         }
         if (state != existingState || sessionStartedForPackage != packageName) {
             usageRepository.saveSessionState(state, profileId)

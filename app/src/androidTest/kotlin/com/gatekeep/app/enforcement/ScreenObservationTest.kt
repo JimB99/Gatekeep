@@ -130,7 +130,7 @@ class ScreenObservationTest : EnforcementCrossAppTestBase() {
     }
 
     @Test
-    fun obs04_openWait_pausesWhileScreenOff() {
+    fun obs04_openWait_resetsOnScreenOff() {
         runSeed {
             GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
@@ -142,11 +142,11 @@ class ScreenObservationTest : EnforcementCrossAppTestBase() {
                 ),
             )
         }
-        assertCountdownPausesAcrossScreenOff()
+        assertCountdownResetsAcrossScreenOff(fullWaitSeconds = 12)
     }
 
     @Test
-    fun obs05_sessionWait_pausesWhileScreenOff() {
+    fun obs05_sessionWait_resetsOnScreenOff() {
         runSeed {
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
                 profileRepository = profileRepository,
@@ -168,7 +168,7 @@ class ScreenObservationTest : EnforcementCrossAppTestBase() {
                 ),
             )
         }
-        assertCountdownPausesAcrossScreenOff()
+        assertCountdownResetsAcrossScreenOff(fullWaitSeconds = 12)
     }
 
     @Test
@@ -286,30 +286,36 @@ class ScreenObservationTest : EnforcementCrossAppTestBase() {
         )
     }
 
-    private fun assertCountdownPausesAcrossScreenOff(tapContinue: Boolean = false) {
+    private fun assertCountdownResetsAcrossScreenOff(fullWaitSeconds: Int) {
         harness.wakeDevice()
         harness.launchTargetA()
-        if (tapContinue) {
-            assertTrue(
-                "session wait overlay missing ${harness.screenDiagnostics()}",
-                harness.waitForOverlay(),
-            )
-            harness.clickOverlayContinue()
-        }
         assertTrue("countdown missing ${harness.screenDiagnostics()}", harness.waitForCountdown() != null)
-        val atOff = harness.sleepDeviceCapturingCountdown()
+        val dropDeadline = System.currentTimeMillis() + 4_000
+        var beforeLock: Int? = null
+        while (System.currentTimeMillis() < dropDeadline) {
+            beforeLock = harness.countdownSeconds()
+            if (beforeLock != null && beforeLock <= fullWaitSeconds - 2) break
+            harness.sleepMs(200)
+        }
+        assertTrue(
+            "countdown did not drop before lock before=$beforeLock ${harness.screenDiagnostics()}",
+            beforeLock != null && beforeLock <= fullWaitSeconds - 2,
+        )
+        val atOff = harness.sleepDeviceCapturingCountdown() ?: beforeLock
         assertTrue("screen did not turn off ${harness.screenDiagnostics()}", !harness.isScreenOn())
-        assertTrue("countdown unreadable at lock ${harness.screenDiagnostics()}", atOff != null && atOff >= 8)
+        assertTrue(
+            "countdown unreadable at lock atOff=$atOff ${harness.screenDiagnostics()}",
+            atOff != null && atOff <= fullWaitSeconds - 2,
+        )
         harness.sleepMs(3_000)
         val stillOff = !harness.isScreenOn()
         harness.wakeDevice()
-        harness.sleepMs(400)
-        val after = harness.countdownSeconds()
+        val after = harness.waitForCountdown(3_000)
         Log.i(TAG, "countdown atOff=$atOff after=$after stillOff=$stillOff ${harness.screenDiagnostics()}")
         assertTrue("screen woke during the lock", stillOff)
         assertTrue(
-            "countdown ran through lock atOff=$atOff after=$after ${harness.screenDiagnostics()}",
-            after != null && atOff!! - after <= 1,
+            "in-progress wait must reset on lock, not keep leftover atOff=$atOff after=$after ${harness.screenDiagnostics()}",
+            after != null && after >= fullWaitSeconds - 1,
         )
     }
 
