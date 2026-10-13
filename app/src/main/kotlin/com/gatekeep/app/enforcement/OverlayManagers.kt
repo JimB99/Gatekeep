@@ -271,10 +271,11 @@ class BlockOverlayManager @Inject constructor(
         val timeButtons = view.findViewById<LinearLayout>(R.id.extension_time_buttons)
         val noLimitContainer = view.findViewById<LinearLayout>(R.id.extension_no_limit_container)
 
+        val extensionLayout = OverlayExtensionPanelPolicy.layout(request)
         if (!request.bypassAllowed) {
             continueBtn.visibility = View.GONE
             extensionContainer.visibility = View.GONE
-        } else if (request.useExtensionButtons && request.extensionOptionMinutes.isNotEmpty()) {
+        } else if (extensionLayout.showPanel) {
             continueBtn.visibility = View.GONE
             extensionContainer.visibility = View.VISIBLE
             bindExtensionQuota(view, request)
@@ -283,7 +284,7 @@ class BlockOverlayManager @Inject constructor(
             val density = context.resources.displayMetrics.density
             val hMargin = (4 * density).toInt()
             val vPadding = (8 * density).toInt()
-            request.extensionOptionMinutes.forEach { minutes ->
+            extensionLayout.minuteOptions.forEach { minutes ->
                 val btn = Button(context).apply {
                     text = localizedContext.getString(R.string.extension_minutes_format, minutes)
                     setTextColor(0xFFFFFFFF.toInt())
@@ -305,7 +306,7 @@ class BlockOverlayManager @Inject constructor(
                 }
                 timeButtons.addView(btn)
             }
-            if (request.showNoLimitToday) {
+            if (extensionLayout.showNoLimitToday) {
                 val noLimitBtn = Button(context).apply {
                     text = localizedContext.getString(R.string.overlay_no_limit_today)
                     setTextColor(0xFFFFFFFF.toInt())

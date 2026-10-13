@@ -2707,6 +2707,16 @@ class EnforcementCoordinator @Inject constructor(
             profile.id, packageName, dayStart,
             sharedPool = profile.limitUsageScope == LimitUsageScope.sharedPool,
         )
+        val consecutiveUsed = consecutiveExtensionsFor(profile.id, packageName)
+        val overlayOptionMinutes = if (useOverlayExtensions) {
+            ExtensionPolicyEvaluator.overlayOptionMinutes(
+                policy = policy,
+                overridesToday = usedToday,
+                consecutiveInSession = consecutiveUsed,
+            )
+        } else {
+            emptyList()
+        }
         val maxConsecutive = ExtensionPolicyEvaluator.effectiveConsecutiveCap(policy)
         return BlockOverlayRequest(
             packageName = packageName,
@@ -2718,13 +2728,13 @@ class EnforcementCoordinator @Inject constructor(
             difficulty = profile.defaultFrictionDifficulty,
             waitDurationSeconds = waitSeconds,
             waitWallClock = waitWallClock,
-            extensionOptionMinutes = if (useOverlayExtensions) policy.optionMinutes else emptyList(),
+            extensionOptionMinutes = overlayOptionMinutes,
             showNoLimitToday = useOverlayExtensions && policy.showNoLimitToday,
             useExtensionButtons = useOverlayExtensions,
             profilePasswordHash = profile.passwordHash,
             extensionsUsedToday = usedToday,
             maxExtensionsPerDay = policy.maxExtensionsPerDay,
-            consecutiveExtensionsUsed = consecutiveExtensionsFor(profile.id, packageName),
+            consecutiveExtensionsUsed = consecutiveUsed,
             maxConsecutiveExtensions = maxConsecutive,
         )
     }

@@ -64,4 +64,17 @@ object ExtensionPolicyEvaluator {
 
         return ExtensionDecision.Allowed(requestedMinutes)
     }
+
+    fun overlayOptionMinutes(
+        policy: ExtensionPolicy,
+        overridesToday: Int,
+        consecutiveInSession: Int,
+    ): List<Int> = policy.optionMinutes.filter { minutes ->
+        evaluateExtension(
+            policy = policy,
+            requestedMinutes = minutes,
+            overridesToday = overridesToday,
+            consecutiveInSession = consecutiveInSession,
+        ) is ExtensionDecision.Allowed
+    }
 }
