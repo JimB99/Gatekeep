@@ -397,6 +397,11 @@ class BlockOverlayManager @Inject constructor(
                 val countdown = view.findViewById<TextView>(R.id.wait_countdown)
                 countdown.visibility = View.VISIBLE
                 val totalMs = request.waitDurationSeconds * 1000L
+                if (totalMs <= 0L) {
+                    coordinator.get().onWaitCompleted(request.packageName)
+                    onFrictionSuccess(request)
+                    return
+                }
                 coordinator.get().onWaitStarted(
                     request.packageName,
                     System.currentTimeMillis() + totalMs,
@@ -438,14 +443,20 @@ class BlockOverlayManager @Inject constructor(
     }
 
     private fun onFrictionSuccess(request: BlockOverlayRequest) {
-        coordinator.get().onFrictionCompleted(request.packageName)
-        if (request.isOpenGate) {
-            coordinator.get().onOpenGatePassed(request.packageName)
-        } else {
-            coordinator.get().grantExtensionMinutes(
-                request.packageName,
-                request.extensionOptionMinutes.firstOrNull() ?: 5,
-            )
+        when (OverlayFrictionGrantPolicy.grant(request)) {
+            OverlayFrictionGrantPolicy.Grant.OpenGate -> {
+                coordinator.get().onFrictionCompleted(request.packageName)
+                coordinator.get().onOpenGatePassed(request.packageName)
+            }
+            OverlayFrictionGrantPolicy.Grant.SessionRefill ->
+                coordinator.get().grantSessionRefill(request.packageName)
+            OverlayFrictionGrantPolicy.Grant.PeriodExtension -> {
+                coordinator.get().onFrictionCompleted(request.packageName)
+                coordinator.get().grantExtensionMinutes(
+                    request.packageName,
+                    request.extensionOptionMinutes.firstOrNull() ?: 5,
+                )
+            }
         }
     }
 

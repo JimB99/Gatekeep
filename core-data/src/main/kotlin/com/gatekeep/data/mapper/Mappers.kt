@@ -262,6 +262,7 @@ fun SessionStateEntity.toDomain() = SessionState(
     openGatePassedEpochMs = openGatePassedEpochMs,
     lastForegroundEndEpochMs = lastForegroundEndEpochMs,
     devicePausedAtEpochMs = devicePausedAtEpochMs,
+    limitFrictionPaidThisSitting = limitFrictionPaidThisSitting,
 )
 
 fun SessionState.toEntity(profileId: Long) = SessionStateEntity(
@@ -277,4 +278,5 @@ fun SessionState.toEntity(profileId: Long) = SessionStateEntity(
     openGatePassedEpochMs = openGatePassedEpochMs,
     lastForegroundEndEpochMs = lastForegroundEndEpochMs,
     devicePausedAtEpochMs = devicePausedAtEpochMs,
+    limitFrictionPaidThisSitting = limitFrictionPaidThisSitting,
 )

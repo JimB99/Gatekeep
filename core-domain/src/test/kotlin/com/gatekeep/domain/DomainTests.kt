@@ -869,6 +869,17 @@ class SessionTrackerTest {
         assertEquals(1, used.consecutiveExtensionCount)
         val nextSession = SessionTracker.startSession("com.test", now + 1)
         assertEquals(0, nextSession.consecutiveExtensionCount)
+        assertFalse(nextSession.limitFrictionPaidThisSitting)
+    }
+
+    @Test
+    fun `completeExpiredBreak marks friction paid on the new sitting`() {
+        val now = 1_000_000L
+        val expiredBreak = SessionTracker.startSession("com.test", now - 20 * 60_000L)
+            .copy(breakUntilEpochMs = now - 1_000L)
+        val completed = SessionTracker.completeExpiredBreak(expiredBreak, now)
+        assertTrue(completed.limitFrictionPaidThisSitting)
+        assertEquals(0, completed.consecutiveExtensionCount)
     }
 }
 

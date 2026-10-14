@@ -27,10 +27,12 @@ import com.gatekeep.domain.ExtensionGrantSource
 import com.gatekeep.domain.ExtensionDenialReason
 import com.gatekeep.domain.ExtensionPolicyEvaluator
 import com.gatekeep.domain.ExtensionRequestEvaluator
+import com.gatekeep.domain.LimitGrantDefaults
 import com.gatekeep.domain.PauseManager
 import com.gatekeep.domain.PeriodDuration
 import com.gatekeep.domain.ProfileMergeEngine
 import com.gatekeep.domain.RuleEngine
+import com.gatekeep.domain.SessionRefillPolicy
 import com.gatekeep.domain.SessionTracker
 import com.gatekeep.domain.UsageSnapshotResolver
 import com.gatekeep.domain.model.BlockPresentationReason
@@ -164,6 +166,8 @@ class EnforcementCoordinator @Inject constructor(
     private var activeExtensionPolicy: com.gatekeep.domain.model.ExtensionPolicy? = null
     private var lastBlockReason: BlockReason? = null
     private var lastBlockProfileId: Long? = null
+    private var lastSessionLimitMs: Long? = null
+    private var lastSessionRefillOverrideMs: Long? = null
     private var lastDailyUsedMs: Long? = null
     private var lastDailyCapMs: Long? = null
     private var lastDailyRemainingMs: Long? = null
@@ -821,6 +825,46 @@ class EnforcementCoordinator @Inject constructor(
         }
     }
 
+    fun grantSessionRefill(packageName: String) {
+        scope.launch {
+            try {
+                val profileId = lastBlockProfileId
+                    ?: profileRepository.observeActiveProfiles().first().firstOrNull()?.id
+                if (profileId == null) return@launch
+                val profile = profileRepository.observeProfiles().first().find { it.id == profileId }
+                    ?: return@launch
+                val now = System.currentTimeMillis()
+                val perAppLimit = profileRepository.getLimit(profile.id, packageName)
+                val mergedLimit = ProfileMergeEngine.mergeProfileAndAppLimit(
+                    profile,
+                    packageName,
+                    perAppLimit,
+                )
+                val sessionLimitMs = (lastSessionLimitMs ?: mergedLimit.sessionLimitMs)
+                    ?.takeIf { it > 0L } ?: return@launch
+                val refillMs = LimitGrantDefaults.sessionRefillMs(
+                    sessionLimitMs,
+                    lastSessionRefillOverrideMs ?: profile.sessionRefillOverrideMs,
+                )
+                val session = usageRepository.getSessionState(profile.id, packageName)
+                    ?: SessionTracker.startSession(packageName, now)
+                val updated = SessionTracker.applyAppUseRefill(
+                    session = session,
+                    sessionLimitMs = sessionLimitMs,
+                    refillMs = refillMs,
+                    nowEpochMs = now,
+                )
+                usageRepository.saveSessionState(updated, profile.id)
+                blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
+                blockOverlay.clearFrictionState()
+                blockOverlay.removeAfterResolution()
+                evaluate(packageName)
+            } catch (e: Exception) {
+                enforcementLog.logError("Grant session refill failed", e)
+            }
+        }
+    }
+
     fun grantExtensionMinutes(packageName: String, minutes: Int) {
         scope.launch {
             val profileId = lastBlockProfileId
@@ -1233,6 +1277,8 @@ class EnforcementCoordinator @Inject constructor(
         warnedDayStartMs = 0L
         lastBlockReason = null
         lastBlockProfileId = null
+        lastSessionLimitMs = null
+        lastSessionRefillOverrideMs = null
         activeExtensionPolicy = null
         monitoredPackagesCache = emptySet()
         blockOverlay.clearFrictionState()
@@ -1656,6 +1702,8 @@ class EnforcementCoordinator @Inject constructor(
             ?: ProfileMergeEngine.mergedLimitForApp(limitsForMerge, packageName)
 
         val config = effectiveConfig
+        lastSessionLimitMs = mergedLimit?.sessionLimitMs
+        lastSessionRefillOverrideMs = config.sessionRefillOverrideMs
 
         val usage = resolveUsageForEvaluation(
             profile = primaryProfile,
@@ -1778,6 +1826,20 @@ class EnforcementCoordinator @Inject constructor(
             sessionState = sessionState,
             now = now,
         )
+        val silentRefill = SessionRefillPolicy.applySilentRefillIfNeeded(
+            session = sessionForEval,
+            limit = mergedLimit,
+            config = config,
+            nowEpochMs = now,
+        )
+        if (silentRefill != null) {
+            val hadPendingWait = sessionForEval.pendingWaitUntilEpochMs != null
+            sessionForEval = silentRefill
+            usageRepository.saveSessionState(silentRefill, primaryProfile.id)
+            if (hadPendingWait) {
+                clearAbandonedWaitOverlay(packageName)
+            }
+        }
         val devicePaused = screenStateMonitor.deviceUsePhase(
             hasLeftApp = sessionForEval.lastForegroundEndEpochMs != null,
         ) == DeviceUsePhase.Paused

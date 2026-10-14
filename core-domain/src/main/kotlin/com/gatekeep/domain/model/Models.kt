@@ -318,6 +318,8 @@ data class SessionState(
     val openGatePassedEpochMs: Long? = null,
     val lastForegroundEndEpochMs: Long? = null,
     val devicePausedAtEpochMs: Long? = null,
+    /** Wait/math/break paid in this sitting. Issue 04 uses this to skip on-open. */
+    val limitFrictionPaidThisSitting: Boolean = false,
 )
 
 data class RuleEvaluationContext(

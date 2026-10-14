@@ -26,6 +26,18 @@ class LimitPolicyMigrationSqlTest {
         assertFalse(migration.contains("sessionRefillOverrideMs INTEGER NOT NULL DEFAULT 300000"))
     }
 
+    @Test
+    fun `v19 migration only adds friction-paid flag and does not write a 5-minute grant`() {
+        val source = migrationsSourceFile().readText()
+        val start = source.indexOf("val MIGRATION_18_19")
+        val end = source.indexOf("val MIGRATION_", start + 1).takeIf { it >= 0 } ?: source.length
+        val migration = source.substring(start, end)
+
+        assertTrue(migration.contains("limitFrictionPaidThisSitting INTEGER NOT NULL DEFAULT 0"))
+        assertFalse(migration.contains("300000"))
+        assertFalse(migration.contains("DEFAULT 300000"))
+    }
+
     private fun migrationsSourceFile(): File {
         val workingDir = System.getProperty("user.dir") ?: "."
         var dir: File? = File(workingDir)

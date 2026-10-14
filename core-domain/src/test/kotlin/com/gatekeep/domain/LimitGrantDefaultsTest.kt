@@ -111,6 +111,16 @@ class LimitGrantDefaultsTest {
     }
 
     @Test
+    fun `session refill inherits the session cap and is never a hidden 5 minutes`() {
+        val cap = 15 * 60_000L
+        assertEquals(cap, LimitGrantDefaults.sessionRefillMs(cap, null))
+        assertEquals(cap, LimitGrantDefaults.sessionRefillMs(cap, 0L))
+        assertEquals(10 * 60_000L, LimitGrantDefaults.sessionRefillMs(cap, 10 * 60_000L))
+        assertNotEquals(5 * 60_000L, LimitGrantDefaults.sessionRefillMs(cap, null))
+        assertEquals(0L, LimitGrantDefaults.sessionRefillMs(null, null))
+    }
+
+    @Test
     fun `continue picker is only for period wait math and break`() {
         assertTrue(LimitGrantDefaults.showsPeriodContinue(OnLimitAction.deterrentWait))
         assertTrue(LimitGrantDefaults.showsPeriodContinue(OnLimitAction.deterrentMath))

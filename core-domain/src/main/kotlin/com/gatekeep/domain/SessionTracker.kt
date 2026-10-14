@@ -97,13 +97,39 @@ object SessionTracker {
         session.copy(breakUntilEpochMs = null)
 
     /**
-     * When a mandatory break has ended, start a fresh session so the user can continue
-     * without leaving the app. Returns [session] unchanged if still on break or no break set.
+     * When a mandatory break has ended, start a fresh sitting with a full session cap
+     * (not a wait-refill override). Marks limit friction paid for this sitting.
+     * Returns [session] unchanged if still on break or no break set.
      */
     fun completeExpiredBreak(session: SessionState, nowEpochMs: Long): SessionState {
         val breakUntil = session.breakUntilEpochMs ?: return session
         if (nowEpochMs < breakUntil) return session
-        return startSession(session.packageName, nowEpochMs)
+        return markLimitFrictionPaid(startSession(session.packageName, nowEpochMs))
+    }
+
+    fun markLimitFrictionPaid(session: SessionState): SessionState =
+        session.copy(limitFrictionPaidThisSitting = true)
+
+    /**
+     * Grant [refillMs] of remaining sitting app-use. Lock/leave already freeze the session
+     * clock, so the extra excluded time is not burned while away. Does not increment
+     * extension quota. Overshoot past the cap is absorbed so remaining equals the refill.
+     */
+    fun applyAppUseRefill(
+        session: SessionState,
+        sessionLimitMs: Long,
+        refillMs: Long,
+        nowEpochMs: Long,
+    ): SessionState {
+        val ended = endFriction(clearPendingWait(session), nowEpochMs)
+        if (sessionLimitMs <= 0L || refillMs <= 0L) {
+            return markLimitFrictionPaid(ended)
+        }
+        val clockMs = sessionClockMs(ended, nowEpochMs)
+        val elapsed = (clockMs - ended.sessionStartEpochMs).coerceAtLeast(0)
+        val netConsumedMs = (elapsed - ended.excludedMs).coerceAtLeast(0)
+        val delta = (refillMs + netConsumedMs - sessionLimitMs).coerceAtLeast(0)
+        return markLimitFrictionPaid(addExcludedTime(ended, delta))
     }
 
     fun startFriction(session: SessionState, nowEpochMs: Long): SessionState =

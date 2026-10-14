@@ -192,4 +192,5 @@ data class SessionStateEntity(
     val openGatePassedEpochMs: Long? = null,
     val lastForegroundEndEpochMs: Long? = null,
     val devicePausedAtEpochMs: Long? = null,
+    val limitFrictionPaidThisSitting: Boolean = false,
 )

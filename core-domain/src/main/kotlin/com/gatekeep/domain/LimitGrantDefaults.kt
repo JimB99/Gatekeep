@@ -6,7 +6,7 @@ import com.gatekeep.domain.model.OnSessionLimitAction
 
 /**
  * Defaults for session refill and period continue.
- * Enforcement may ignore these fields until later tickets; storage and rules UI use them now.
+ * Session refill is granted as sitting app-use; it is not an extension.
  */
 object LimitGrantDefaults {
     const val DEFAULT_PERIOD_CONTINUE_MS = 15L * 60_000L
@@ -41,6 +41,10 @@ object LimitGrantDefaults {
         OnLimitAction.hardBlock,
         -> false
     }
+
+    /** Session wait/math grant. Null/non-positive override inherits the session cap. Never 5 minutes. */
+    fun sessionRefillMs(sessionLimitMs: Long?, overrideMs: Long?): Long =
+        overrideMs?.takeIf { it > 0 } ?: sessionLimitMs?.takeIf { it > 0 } ?: 0L
 
     fun showsSessionRefill(action: OnSessionLimitAction): Boolean = when (action) {
         OnSessionLimitAction.deterrentWait,

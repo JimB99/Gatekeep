@@ -56,6 +56,26 @@ class OverlayOptionMinutesTest {
     }
 
     @Test
+    fun `after leave consecutive resets but max-per-day still hides minute buttons`() {
+        val policy = ExtensionPolicy(
+            optionMinutes = listOf(1, 5, 10),
+            maxExtensionsPerDay = 2,
+            maxConsecutiveExtensions = 2,
+        )
+        val afterLeaveConsecutive = SessionTracker.startSession("com.test", 1_000L)
+            .consecutiveExtensionCount
+        assertEquals(0, afterLeaveConsecutive)
+
+        val minutes = ExtensionPolicyEvaluator.overlayOptionMinutes(
+            policy = policy,
+            overridesToday = 2,
+            consecutiveInSession = afterLeaveConsecutive,
+        )
+
+        assertEquals(emptyList<Int>(), minutes)
+    }
+
+    @Test
     fun `hides overlay minute options when daily cap is used as consecutive cap`() {
         val policy = ExtensionPolicy(
             optionMinutes = listOf(5, 15),

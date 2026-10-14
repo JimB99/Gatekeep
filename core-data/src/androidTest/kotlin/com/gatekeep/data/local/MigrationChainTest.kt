@@ -217,6 +217,28 @@ class MigrationChainTest {
     }
 
     @Test
+    fun migrate18To19_addsLimitFrictionPaidColumn() {
+        LegacySchemaFixtures.createVersion12(context, TEST_DB)
+
+        val db = helper.runMigrationsAndValidate(
+            TEST_DB,
+            19,
+            true,
+            *GatekeepMigrations.ALL,
+        )
+
+        db.query("PRAGMA table_info(session_state)").use { cursor ->
+            val columns = buildList {
+                while (cursor.moveToNext()) {
+                    add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+                }
+            }
+            assertTrue("limitFrictionPaidThisSitting" in columns)
+        }
+        db.close()
+    }
+
+    @Test
     fun migrate16To17_addsDevicePausedAtColumn() {
         LegacySchemaFixtures.createVersion12(context, TEST_DB)
 

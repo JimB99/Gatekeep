@@ -17,8 +17,8 @@ One stretch of monitored use, ended by leave or device pause of the session cont
 _Avoid_: Session (the session *limit* is the cap inside a sitting)
 
 **Session continuity grace**:
-One minute of leave or device pause after which a new sitting starts (session cap is full again; on-open may show again).
-_Avoid_: Cooldown, timeout, pause
+The device-wide duration of leave or device pause after which a new sitting starts (session cap is full again; on-open may show again). Default one minute; settings help may say “session” and “leave” in everyday English (device pause still counts).
+_Avoid_: Cooldown, timeout, pause, session grace
 
 **Period limit**:
 A daily, hourly, or weekly cap. Usage survives leave.

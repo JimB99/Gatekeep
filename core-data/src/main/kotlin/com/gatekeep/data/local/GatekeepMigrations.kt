@@ -24,6 +24,7 @@ object GatekeepMigrations {
             MIGRATION_15_16,
             MIGRATION_16_17,
             MIGRATION_17_18,
+            MIGRATION_18_19,
         )
 
     val MIGRATION_5_6 = object : Migration(5, 6) {
@@ -306,6 +307,14 @@ object GatekeepMigrations {
             )
             db.execSQL(
                 "UPDATE profiles SET periodContinueInheritSessionCap = 1",
+            )
+        }
+    }
+
+    val MIGRATION_18_19 = object : Migration(18, 19) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE session_state ADD COLUMN limitFrictionPaidThisSitting INTEGER NOT NULL DEFAULT 0",
             )
         }
     }
