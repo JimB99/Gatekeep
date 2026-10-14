@@ -23,6 +23,7 @@ object GatekeepMigrations {
             MIGRATION_14_15,
             MIGRATION_15_16,
             MIGRATION_16_17,
+            MIGRATION_17_18,
         )
 
     val MIGRATION_5_6 = object : Migration(5, 6) {
@@ -271,6 +272,40 @@ object GatekeepMigrations {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL(
                 "ALTER TABLE session_state ADD COLUMN devicePausedAtEpochMs INTEGER DEFAULT NULL",
+            )
+        }
+    }
+
+    val MIGRATION_17_18 = object : Migration(17, 18) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE profiles ADD COLUMN sessionRefillOverrideMs INTEGER DEFAULT NULL",
+            )
+            db.execSQL(
+                "ALTER TABLE profiles ADD COLUMN periodContinueInheritSessionCap INTEGER NOT NULL DEFAULT 1",
+            )
+            db.execSQL(
+                "ALTER TABLE profiles ADD COLUMN periodContinueDurationMs INTEGER NOT NULL DEFAULT 900000",
+            )
+            db.execSQL(
+                "ALTER TABLE profiles ADD COLUMN openFrictionDifficulty TEXT NOT NULL DEFAULT 'medium'",
+            )
+            db.execSQL(
+                "ALTER TABLE profiles ADD COLUMN periodFrictionDifficulty TEXT NOT NULL DEFAULT 'medium'",
+            )
+            db.execSQL(
+                "ALTER TABLE profiles ADD COLUMN sessionFrictionDifficulty TEXT NOT NULL DEFAULT 'medium'",
+            )
+            db.execSQL(
+                """
+                UPDATE profiles SET
+                    openFrictionDifficulty = defaultFrictionDifficulty,
+                    periodFrictionDifficulty = defaultFrictionDifficulty,
+                    sessionFrictionDifficulty = defaultFrictionDifficulty
+                """.trimIndent(),
+            )
+            db.execSQL(
+                "UPDATE profiles SET periodContinueInheritSessionCap = 1",
             )
         }
     }

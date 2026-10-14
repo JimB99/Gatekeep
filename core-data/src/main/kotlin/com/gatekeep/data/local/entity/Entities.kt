@@ -3,6 +3,7 @@ package com.gatekeep.data.local.entity
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.gatekeep.domain.LimitGrantDefaults
 
 @Entity(tableName = "profiles")
 data class ProfileEntity(
@@ -43,6 +44,12 @@ data class ProfileEntity(
     val noScheduleMatchOnLimitAction: String? = null,
     val noScheduleMatchOnSessionLimitAction: String? = null,
     val limitUsageScope: String = "perApp",
+    val sessionRefillOverrideMs: Long? = null,
+    val periodContinueInheritSessionCap: Boolean = true,
+    val periodContinueDurationMs: Long = LimitGrantDefaults.DEFAULT_PERIOD_CONTINUE_MS,
+    val openFrictionDifficulty: String = "medium",
+    val periodFrictionDifficulty: String = "medium",
+    val sessionFrictionDifficulty: String = "medium",
 )
 
 @Entity(

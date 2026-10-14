@@ -190,6 +190,10 @@
     <string name="when_limit_reached_subtitle">(wöchentlich, täglich, stündlich)</string>
     <string name="when_session_limit_reached">Wenn das Sitzungslimit erreicht ist</string>
     <string name="math_difficulty">Mathe-Schwierigkeit</string>
+    <string name="session_refill_inherit">Auffüllen = Sitzungslimit</string>
+    <string name="session_refill_duration">Auffüllen</string>
+    <string name="period_continue_inherit">Wie Sitzungslimit</string>
+    <string name="period_continue_duration">Fortsetzen</string>
     <string name="wait_before_opening_label">Warten vor dem Öffnen</string>
     <string name="wait_during_use">Warten während der Nutzung (Sitzung/Limit)</string>
     <string name="extension_options">Verlängerungsoptionen</string>

@@ -49,7 +49,13 @@ enum class PolicySource {
     noScheduleMatch,
 }
 
-/** Nullable fields inherit from the profile Default tab when merged. */
+/**
+ * Nullable fields inherit from the profile Default tab when merged.
+ *
+ * Session refill, period continue, wait/break lengths, and math difficulty are
+ * default-tab-only: customize / no-schedule-match cannot express them yet
+ * (same as wait and break durations).
+ */
 data class SchedulePolicyOverrides(
     val dailyLimitMs: Long? = null,
     val hourlyLimitMs: Long? = null,
@@ -123,12 +129,17 @@ data class ProfileEnforcementConfig(
     val onOpenAction: OnOpenAction = OnOpenAction.none,
     val onLimitAction: OnLimitAction = OnLimitAction.limitWithExtensions,
     val onSessionLimitAction: OnSessionLimitAction = OnSessionLimitAction.limitWithExtensions,
-    val deterrentDifficulty: FrictionDifficulty = FrictionDifficulty.medium,
+    val openFrictionDifficulty: FrictionDifficulty = FrictionDifficulty.medium,
+    val periodFrictionDifficulty: FrictionDifficulty = FrictionDifficulty.medium,
+    val sessionFrictionDifficulty: FrictionDifficulty = FrictionDifficulty.medium,
     val openWaitDurationSeconds: Int = 60,
     val sessionWaitDurationSeconds: Int = 60,
     val limitWaitDurationSeconds: Int = 60,
     val sessionBreakDurationMs: Long? = null,
     val limitBreakDurationMs: Long? = null,
+    val sessionRefillOverrideMs: Long? = null,
+    val periodContinueInheritSessionCap: Boolean = true,
+    val periodContinueDurationMs: Long = 15L * 60_000L,
     val limitExtensionPolicy: ExtensionPolicy = ExtensionPolicy(),
     val sessionExtensionPolicy: ExtensionPolicy = ExtensionPolicy(),
 )
@@ -194,17 +205,28 @@ data class Profile(
     val noScheduleMatchMode: SchedulePolicyMode = SchedulePolicyMode.default,
     val noScheduleMatchOverrides: SchedulePolicyOverrides = SchedulePolicyOverrides(),
     val limitUsageScope: LimitUsageScope = LimitUsageScope.perApp,
+    val sessionRefillOverrideMs: Long? = null,
+    val periodContinueInheritSessionCap: Boolean = true,
+    val periodContinueDurationMs: Long = 15L * 60_000L,
+    val openFrictionDifficulty: FrictionDifficulty = FrictionDifficulty.medium,
+    val periodFrictionDifficulty: FrictionDifficulty = FrictionDifficulty.medium,
+    val sessionFrictionDifficulty: FrictionDifficulty = FrictionDifficulty.medium,
 ) {
     fun enforcementConfig(): ProfileEnforcementConfig = ProfileEnforcementConfig(
         onOpenAction = onOpenAction,
         onLimitAction = onLimitAction,
         onSessionLimitAction = onSessionLimitAction,
-        deterrentDifficulty = defaultFrictionDifficulty,
+        openFrictionDifficulty = openFrictionDifficulty,
+        periodFrictionDifficulty = periodFrictionDifficulty,
+        sessionFrictionDifficulty = sessionFrictionDifficulty,
         openWaitDurationSeconds = openWaitDurationSeconds,
         sessionWaitDurationSeconds = sessionWaitDurationSeconds,
         limitWaitDurationSeconds = limitWaitDurationSeconds,
         sessionBreakDurationMs = breakDurationMs,
         limitBreakDurationMs = limitBreakDurationMs,
+        sessionRefillOverrideMs = sessionRefillOverrideMs,
+        periodContinueInheritSessionCap = periodContinueInheritSessionCap,
+        periodContinueDurationMs = periodContinueDurationMs,
         limitExtensionPolicy = limitExtensionPolicy,
         sessionExtensionPolicy = sessionExtensionPolicy,
     )
@@ -221,6 +243,20 @@ data class Profile(
         frictionMethod = defaultFrictionMethod,
         frictionDifficulty = defaultFrictionDifficulty,
     )
+
+    fun overlayFrictionDifficulty(reason: BlockPresentationReason): FrictionDifficulty = when (reason) {
+        BlockPresentationReason.openGate,
+        BlockPresentationReason.profilePin,
+        -> openFrictionDifficulty
+        BlockPresentationReason.sessionLimit,
+        BlockPresentationReason.onBreak,
+        -> sessionFrictionDifficulty
+        BlockPresentationReason.hourlyLimit,
+        BlockPresentationReason.dailyLimit,
+        BlockPresentationReason.weeklyLimit,
+        -> periodFrictionDifficulty
+        else -> defaultFrictionDifficulty
+    }
 }
 
 data class MonitoredApp(

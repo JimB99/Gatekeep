@@ -190,6 +190,10 @@
     <string name="when_limit_reached_subtitle">(semanal, diario, por hora)</string>
     <string name="when_session_limit_reached">Cuando se alcanza el límite de sesión</string>
     <string name="math_difficulty">Dificultad de matemáticas</string>
+    <string name="session_refill_inherit">Recarga = límite de sesión</string>
+    <string name="session_refill_duration">Recarga</string>
+    <string name="period_continue_inherit">Igual que el límite de sesión</string>
+    <string name="period_continue_duration">Continuar</string>
     <string name="wait_before_opening_label">Esperar antes de abrir</string>
     <string name="wait_during_use">Esperar durante el uso (sesión/límite)</string>
     <string name="extension_options">Opciones de extensión</string>

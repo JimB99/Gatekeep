@@ -34,7 +34,7 @@ fun ProfileEntity.toDomain() = Profile(
     sortOrder = sortOrder,
     autoScheduleEnabled = autoScheduleEnabled,
     defaultFrictionMethod = FrictionMethod.valueOf(defaultFrictionMethod),
-    defaultFrictionDifficulty = FrictionDifficulty.valueOf(defaultFrictionDifficulty),
+    defaultFrictionDifficulty = parseFrictionDifficulty(defaultFrictionDifficulty),
     delayOpenSeconds = delayOpenSeconds,
     gradualTighteningEnabled = gradualTighteningEnabled,
     gradualTighteningTargetDailyMs = gradualTighteningTargetDailyMs,
@@ -77,7 +77,22 @@ fun ProfileEntity.toDomain() = Profile(
     ),
     limitUsageScope = runCatching { LimitUsageScope.valueOf(limitUsageScope) }
         .getOrDefault(LimitUsageScope.perApp),
+    sessionRefillOverrideMs = sessionRefillOverrideMs,
+    periodContinueInheritSessionCap = periodContinueInheritSessionCap,
+    periodContinueDurationMs = periodContinueDurationMs,
+    openFrictionDifficulty = parseFrictionDifficulty(openFrictionDifficulty, defaultFrictionDifficulty),
+    periodFrictionDifficulty = parseFrictionDifficulty(periodFrictionDifficulty, defaultFrictionDifficulty),
+    sessionFrictionDifficulty = parseFrictionDifficulty(sessionFrictionDifficulty, defaultFrictionDifficulty),
 )
+
+private fun parseFrictionDifficulty(
+    raw: String,
+    fallbackRaw: String? = null,
+): FrictionDifficulty {
+    runCatching { FrictionDifficulty.valueOf(raw) }.getOrNull()?.let { return it }
+    fallbackRaw?.let { runCatching { FrictionDifficulty.valueOf(it) }.getOrNull() }?.let { return it }
+    return FrictionDifficulty.medium
+}
 
 private fun ProfileEntity.resolveOnOpenAction(): OnOpenAction {
     val parsed = runCatching { OnOpenAction.valueOf(onOpenAction) }.getOrNull()
@@ -125,6 +140,12 @@ fun Profile.toEntity() = ProfileEntity(
     noScheduleMatchOnLimitAction = noScheduleMatchOverrides.onLimitAction?.name,
     noScheduleMatchOnSessionLimitAction = noScheduleMatchOverrides.onSessionLimitAction?.name,
     limitUsageScope = limitUsageScope.name,
+    sessionRefillOverrideMs = sessionRefillOverrideMs,
+    periodContinueInheritSessionCap = periodContinueInheritSessionCap,
+    periodContinueDurationMs = periodContinueDurationMs,
+    openFrictionDifficulty = openFrictionDifficulty.name,
+    periodFrictionDifficulty = periodFrictionDifficulty.name,
+    sessionFrictionDifficulty = sessionFrictionDifficulty.name,
 )
 
 fun MonitoredAppEntity.toDomain() = MonitoredApp(

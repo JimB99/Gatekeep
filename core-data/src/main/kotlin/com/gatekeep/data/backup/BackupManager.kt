@@ -5,6 +5,7 @@ import com.gatekeep.data.local.entity.MonitoredAppEntity
 import com.gatekeep.data.local.entity.ProfileEntity
 import com.gatekeep.data.local.entity.ScheduleSegmentEntity
 import com.gatekeep.data.local.entity.ScheduleWindowEntity
+import com.gatekeep.domain.LimitGrantDefaults
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -53,7 +54,22 @@ data class ProfileBackupData(
     val sessionWaitDurationSeconds: Int = 60,
     val limitWaitDurationSeconds: Int = 60,
     val limitUsageScope: String = "perApp",
-)
+    val sessionRefillOverrideMs: Long? = null,
+    val periodContinueInheritSessionCap: Boolean? = null,
+    val periodContinueDurationMs: Long = LimitGrantDefaults.DEFAULT_PERIOD_CONTINUE_MS,
+    val openFrictionDifficulty: String? = null,
+    val periodFrictionDifficulty: String? = null,
+    val sessionFrictionDifficulty: String? = null,
+) {
+    fun resolvedOpenFrictionDifficulty(): String =
+        openFrictionDifficulty ?: defaultFrictionDifficulty
+
+    fun resolvedPeriodFrictionDifficulty(): String =
+        periodFrictionDifficulty ?: defaultFrictionDifficulty
+
+    fun resolvedSessionFrictionDifficulty(): String =
+        sessionFrictionDifficulty ?: defaultFrictionDifficulty
+}
 
 @Serializable
 data class MonitoredAppBackup(
@@ -159,6 +175,12 @@ object BackupManager {
             sessionWaitDurationSeconds = profile.sessionWaitDurationSeconds,
             limitWaitDurationSeconds = profile.limitWaitDurationSeconds,
             limitUsageScope = profile.limitUsageScope,
+            sessionRefillOverrideMs = profile.sessionRefillOverrideMs,
+            periodContinueInheritSessionCap = profile.periodContinueInheritSessionCap,
+            periodContinueDurationMs = profile.periodContinueDurationMs,
+            openFrictionDifficulty = profile.openFrictionDifficulty,
+            periodFrictionDifficulty = profile.periodFrictionDifficulty,
+            sessionFrictionDifficulty = profile.sessionFrictionDifficulty,
         ),
         monitoredApps = apps.map {
             MonitoredAppBackup(it.packageName, it.label, it.category, it.isWhitelistedEssential)
@@ -196,5 +218,56 @@ object BackupManager {
                 isProfileAutoSwitch = it.isProfileAutoSwitch,
             )
         },
+    )
+
+    fun backupToProfile(
+        data: ProfileBackupData,
+        id: Long = 0,
+        isActive: Boolean = false,
+        sortOrder: Int = 0,
+    ) = ProfileEntity(
+        id = id,
+        name = data.name,
+        isActive = isActive,
+        lockEnabled = data.lockEnabled,
+        sortOrder = sortOrder,
+        autoScheduleEnabled = data.autoScheduleEnabled,
+        defaultFrictionMethod = data.defaultFrictionMethod,
+        defaultFrictionDifficulty = data.defaultFrictionDifficulty,
+        delayOpenSeconds = data.delayOpenSeconds,
+        gradualTighteningEnabled = data.gradualTighteningEnabled,
+        gradualTighteningTargetDailyMs = data.gradualTighteningTargetDailyMs,
+        gradualTighteningPercentPerWeek = data.gradualTighteningPercentPerWeek,
+        dailyLimitMs = data.dailyLimitMs,
+        hourlyLimitMs = data.hourlyLimitMs,
+        weeklyLimitMs = data.weeklyLimitMs,
+        sessionLimitMs = data.sessionLimitMs,
+        breakDurationMs = data.breakDurationMs,
+        openWaitDurationSeconds = data.openWaitDurationSeconds,
+        sessionWaitDurationSeconds = data.sessionWaitDurationSeconds,
+        limitWaitDurationSeconds = data.limitWaitDurationSeconds,
+        limitBreakDurationMs = data.limitBreakDurationMs,
+        onOpenAction = data.onOpenAction,
+        onLimitAction = data.onLimitAction,
+        onSessionLimitAction = data.onSessionLimitAction,
+        extensionPolicyJson = data.limitExtensionPolicyJson ?: data.extensionPolicyJson,
+        limitExtensionPolicyJson = data.limitExtensionPolicyJson ?: data.extensionPolicyJson,
+        sessionExtensionPolicyJson = data.sessionExtensionPolicyJson ?: data.extensionPolicyJson,
+        noScheduleMatchMode = data.noScheduleMatchMode,
+        noScheduleMatchDailyLimitMs = data.noScheduleMatchDailyLimitMs,
+        noScheduleMatchHourlyLimitMs = data.noScheduleMatchHourlyLimitMs,
+        noScheduleMatchWeeklyLimitMs = data.noScheduleMatchWeeklyLimitMs,
+        noScheduleMatchSessionLimitMs = data.noScheduleMatchSessionLimitMs,
+        noScheduleMatchOnOpenAction = data.noScheduleMatchOnOpenAction,
+        noScheduleMatchOnLimitAction = data.noScheduleMatchOnLimitAction,
+        noScheduleMatchOnSessionLimitAction = data.noScheduleMatchOnSessionLimitAction,
+        limitUsageScope = data.limitUsageScope,
+        sessionRefillOverrideMs = data.sessionRefillOverrideMs,
+        periodContinueInheritSessionCap = data.periodContinueInheritSessionCap
+            ?: LimitGrantDefaults.defaultContinueInherit(),
+        periodContinueDurationMs = data.periodContinueDurationMs,
+        openFrictionDifficulty = data.resolvedOpenFrictionDifficulty(),
+        periodFrictionDifficulty = data.resolvedPeriodFrictionDifficulty(),
+        sessionFrictionDifficulty = data.resolvedSessionFrictionDifficulty(),
     )
 }

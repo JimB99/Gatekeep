@@ -115,12 +115,23 @@ object ProfileMergeEngine {
             onOpenAction = configs.map { it.onOpenAction }.minBy { onOpenStrictness(it) },
             onLimitAction = configs.map { it.onLimitAction }.maxBy { onLimitStrictness(it) },
             onSessionLimitAction = configs.map { it.onSessionLimitAction }.maxBy { onSessionStrictness(it) },
-            deterrentDifficulty = configs.maxBy { it.deterrentDifficulty.ordinal }.deterrentDifficulty,
+            openFrictionDifficulty = configs.maxBy { it.openFrictionDifficulty.ordinal }.openFrictionDifficulty,
+            periodFrictionDifficulty = configs.maxBy { it.periodFrictionDifficulty.ordinal }.periodFrictionDifficulty,
+            sessionFrictionDifficulty = configs.maxBy { it.sessionFrictionDifficulty.ordinal }.sessionFrictionDifficulty,
             openWaitDurationSeconds = configs.maxOf { it.openWaitDurationSeconds },
             sessionWaitDurationSeconds = configs.maxOf { it.sessionWaitDurationSeconds },
             limitWaitDurationSeconds = configs.maxOf { it.limitWaitDurationSeconds },
             sessionBreakDurationMs = configs.mapNotNull { it.sessionBreakDurationMs }.maxOrNull(),
             limitBreakDurationMs = configs.mapNotNull { it.limitBreakDurationMs }.maxOrNull(),
+            sessionRefillOverrideMs = configs
+                .maxBy { onSessionStrictness(it.onSessionLimitAction) }
+                .sessionRefillOverrideMs,
+            periodContinueInheritSessionCap = configs
+                .maxBy { onLimitStrictness(it.onLimitAction) }
+                .periodContinueInheritSessionCap,
+            periodContinueDurationMs = configs
+                .maxBy { onLimitStrictness(it.onLimitAction) }
+                .periodContinueDurationMs,
             limitExtensionPolicy = mergeExtensionPolicies(configs.map { it.limitExtensionPolicy }),
             sessionExtensionPolicy = mergeExtensionPolicies(configs.map { it.sessionExtensionPolicy }),
         )

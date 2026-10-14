@@ -6,6 +6,7 @@ import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.LimitExtensionBonus
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
+import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.Pause
 import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.ProfileEnforcementConfig
@@ -84,6 +85,41 @@ class ProfileMergeEngineTest {
         val merged = ProfileMergeEngine.mergeProfileAndAppLimit(profile, "com.test", perApp)
         assertEquals(1_800_000, merged.dailyLimitMs)
         assertEquals(600_000, merged.sessionLimitMs)
+    }
+
+    @Test
+    fun `period continue and session refill follow the winning action not min of stored grants`() {
+        val inheritingWait = Profile(
+            id = 1,
+            name = "Wait",
+            isActive = true,
+            onLimitAction = OnLimitAction.deterrentWait,
+            onSessionLimitAction = OnSessionLimitAction.notifyOnly,
+            periodContinueInheritSessionCap = true,
+            periodContinueDurationMs = 15 * 60_000L,
+            sessionRefillOverrideMs = null,
+        )
+        val customNotify = Profile(
+            id = 2,
+            name = "Notify",
+            isActive = true,
+            onLimitAction = OnLimitAction.notifyOnly,
+            onSessionLimitAction = OnSessionLimitAction.deterrentMath,
+            periodContinueInheritSessionCap = false,
+            periodContinueDurationMs = 30 * 60_000L,
+            sessionRefillOverrideMs = 3 * 60_000L,
+        )
+        val merged = ProfileMergeEngine.mergedSchedulePolicy(
+            profiles = listOf(inheritingWait, customNotify),
+            segments = emptyList(),
+            windows = emptyList(),
+            packageName = "com.test",
+            nowEpochMs = 1_000_000L,
+        )
+        val config = merged.enforcementConfig
+        assertEquals(true, config?.periodContinueInheritSessionCap)
+        assertEquals(15 * 60_000L, config?.periodContinueDurationMs)
+        assertEquals(3 * 60_000L, config?.sessionRefillOverrideMs)
     }
 
     @Test

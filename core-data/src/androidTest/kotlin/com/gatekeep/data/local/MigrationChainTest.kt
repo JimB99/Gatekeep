@@ -182,6 +182,41 @@ class MigrationChainTest {
     }
 
     @Test
+    fun migrate17To18_copiesDifficultyAndAddsGrantColumns() {
+        LegacySchemaFixtures.createVersion12(context, TEST_DB)
+        LegacySchemaFixtures.insertProfileV8(context, TEST_DB, name = "Work")
+
+        val db = helper.runMigrationsAndValidate(
+            TEST_DB,
+            18,
+            true,
+            *GatekeepMigrations.ALL,
+        )
+
+        db.query(
+            """
+            SELECT sessionRefillOverrideMs, periodContinueInheritSessionCap,
+                   periodContinueDurationMs, openFrictionDifficulty,
+                   periodFrictionDifficulty, sessionFrictionDifficulty,
+                   defaultFrictionDifficulty, name
+            FROM profiles
+            """.trimIndent(),
+        ).use { cursor ->
+            assertEquals(1, cursor.count)
+            cursor.moveToFirst()
+            assertTrue(cursor.isNull(0))
+            assertEquals(1, cursor.getInt(1))
+            assertEquals(900_000L, cursor.getLong(2))
+            assertEquals("medium", cursor.getString(3))
+            assertEquals("medium", cursor.getString(4))
+            assertEquals("medium", cursor.getString(5))
+            assertEquals("medium", cursor.getString(6))
+            assertEquals("Work", cursor.getString(7))
+        }
+        db.close()
+    }
+
+    @Test
     fun migrate16To17_addsDevicePausedAtColumn() {
         LegacySchemaFixtures.createVersion12(context, TEST_DB)
 

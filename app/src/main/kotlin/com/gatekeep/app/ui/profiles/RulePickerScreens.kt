@@ -49,6 +49,7 @@ import com.gatekeep.app.ui.components.rememberUnsavedChangesGuard
 import com.gatekeep.app.ui.policy.PolicyOverrideScope
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
 import com.gatekeep.app.util.PasswordHasher
+import com.gatekeep.domain.LimitGrantDefaults
 import com.gatekeep.domain.model.ExtensionPolicy
 import com.gatekeep.domain.model.FrictionDifficulty
 import com.gatekeep.domain.model.OnLimitAction
@@ -155,7 +156,7 @@ fun RuleOpenActionScreen(
     var savedOnOpen by remember(profile?.id, overrideScope) { mutableStateOf(overrideOnOpen) }
     var onOpen by remember(profile?.id, overrideScope) { mutableStateOf(savedOnOpen) }
     var savedDifficulty by remember(profile?.id) {
-        mutableStateOf(profile?.defaultFrictionDifficulty ?: FrictionDifficulty.medium)
+        mutableStateOf(profile?.openFrictionDifficulty ?: FrictionDifficulty.medium)
     }
     var difficulty by remember(profile?.id) { mutableStateOf(savedDifficulty) }
     var savedOpenWaitSeconds by remember(profile?.id) {
@@ -169,7 +170,7 @@ fun RuleOpenActionScreen(
         if (profile == null) return@LaunchedEffect
         savedOnOpen = resolveOverrideOnOpen(profile, segments, overrideScope)
         onOpen = savedOnOpen
-        savedDifficulty = profile.defaultFrictionDifficulty
+        savedDifficulty = profile.openFrictionDifficulty
         difficulty = savedDifficulty
         savedOpenWaitSeconds = profile.openWaitDurationSeconds
         openWaitSeconds = savedOpenWaitSeconds
@@ -186,7 +187,7 @@ fun RuleOpenActionScreen(
     }
 
     val isDirty = onOpen != savedOnOpen ||
-        difficulty != savedDifficulty ||
+        (overrideScope == null && difficulty != savedDifficulty) ||
         openWaitSeconds != savedOpenWaitSeconds ||
         profilePin != savedPin
 
@@ -213,7 +214,7 @@ fun RuleOpenActionScreen(
                 is PolicyOverrideScope.Segment -> p
                 null -> p.copy(
                     onOpenAction = onOpen,
-                    defaultFrictionDifficulty = difficulty,
+                    openFrictionDifficulty = difficulty,
                     openWaitDurationSeconds = openWaitSeconds.coerceIn(1, 3600),
                     passwordHash = passwordHash,
                     lockEnabled = onOpen == OnOpenAction.pinGate && !passwordHash.isNullOrBlank(),
@@ -262,6 +263,7 @@ fun RuleOpenActionScreen(
             savedPin = savedPin,
             profile = profile,
             viewModel = viewModel,
+            showDifficultyPicker = overrideScope == null,
             onOpenChange = { onOpen = it },
             onDifficultyChange = { difficulty = it },
             onOpenWaitChange = { openWaitSeconds = it.coerceIn(1, 3600) },
@@ -293,7 +295,7 @@ fun RuleLimitActionScreen(
     var savedOnLimit by remember(profile?.id, overrideScope) { mutableStateOf(initialOnLimit) }
     var onLimit by remember(profile?.id, overrideScope) { mutableStateOf(savedOnLimit) }
     var savedDifficulty by remember(profile?.id) {
-        mutableStateOf(profile?.defaultFrictionDifficulty ?: FrictionDifficulty.medium)
+        mutableStateOf(profile?.periodFrictionDifficulty ?: FrictionDifficulty.medium)
     }
     var difficulty by remember(profile?.id) { mutableStateOf(savedDifficulty) }
     var savedLimitWaitSeconds by remember(profile?.id) {
@@ -304,6 +306,14 @@ fun RuleLimitActionScreen(
         mutableLongStateOf(profile?.limitBreakDurationMs ?: 0L)
     }
     var limitBreakMs by remember(profile?.id) { mutableLongStateOf(savedLimitBreakMs) }
+    var savedContinueInherit by remember(profile?.id) {
+        mutableStateOf(profile?.periodContinueInheritSessionCap ?: LimitGrantDefaults.defaultContinueInherit())
+    }
+    var continueInherit by remember(profile?.id) { mutableStateOf(savedContinueInherit) }
+    var savedContinueMs by remember(profile?.id) {
+        mutableLongStateOf(profile?.periodContinueDurationMs ?: LimitGrantDefaults.DEFAULT_PERIOD_CONTINUE_MS)
+    }
+    var continueMs by remember(profile?.id) { mutableLongStateOf(savedContinueMs) }
     var savedExtensionDraft by remember(profile?.id) {
         mutableStateOf(ExtensionPolicyDraft.fromPolicy(profile?.limitExtensionPolicy ?: ExtensionPolicy()))
     }
@@ -313,21 +323,27 @@ fun RuleLimitActionScreen(
         val current = profiles.find { it.id == profileId } ?: return@LaunchedEffect
         savedOnLimit = resolveOverrideOnLimit(current, segments, overrideScope)
         onLimit = savedOnLimit
-        savedDifficulty = current.defaultFrictionDifficulty
+        savedDifficulty = current.periodFrictionDifficulty
         difficulty = savedDifficulty
         savedLimitWaitSeconds = current.limitWaitDurationSeconds
         limitWaitSeconds = savedLimitWaitSeconds
         savedLimitBreakMs = current.limitBreakDurationMs ?: 0L
         limitBreakMs = savedLimitBreakMs
+        savedContinueInherit = current.periodContinueInheritSessionCap
+        continueInherit = savedContinueInherit
+        savedContinueMs = current.periodContinueDurationMs
+        continueMs = savedContinueMs
         val loadedExtension = ExtensionPolicyDraft.fromPolicy(current.limitExtensionPolicy)
         savedExtensionDraft = loadedExtension
         extensionDraft = loadedExtension
     }
 
     val isDirty = onLimit != savedOnLimit ||
-        difficulty != savedDifficulty ||
+        (overrideScope == null && difficulty != savedDifficulty) ||
         limitWaitSeconds != savedLimitWaitSeconds ||
         limitBreakMs != savedLimitBreakMs ||
+        continueInherit != savedContinueInherit ||
+        continueMs != savedContinueMs ||
         (overrideScope == null && extensionDraft != savedExtensionDraft)
 
     suspend fun saveRules() {
@@ -350,25 +366,31 @@ fun RuleLimitActionScreen(
                     it.copy(onLimitAction = onLimit)
                 }
             }
-            null -> viewModel.saveProfileAwait(
-                p.copy(
-                    onLimitAction = onLimit,
-                    defaultFrictionDifficulty = difficulty,
-                    limitWaitDurationSeconds = limitWaitSeconds.coerceIn(1, 3600),
-                    limitBreakDurationMs = limitBreak,
-                    limitExtensionPolicy = if (onLimit == OnLimitAction.limitWithExtensions) {
-                        extensionDraft.toPolicy()
-                    } else {
-                        p.limitExtensionPolicy
-                    },
-                ),
-            )
+            null -> {
+                viewModel.saveProfileAwait(
+                    p.copy(
+                        onLimitAction = onLimit,
+                        periodFrictionDifficulty = difficulty,
+                        limitWaitDurationSeconds = limitWaitSeconds.coerceIn(1, 3600),
+                        limitBreakDurationMs = limitBreak,
+                        periodContinueInheritSessionCap = LimitGrantDefaults.continueInheritToPersist(continueInherit),
+                        periodContinueDurationMs = continueMs,
+                        limitExtensionPolicy = if (onLimit == OnLimitAction.limitWithExtensions) {
+                            extensionDraft.toPolicy()
+                        } else {
+                            p.limitExtensionPolicy
+                        },
+                    ),
+                )
+            }
         }
         savedOnLimit = onLimit
         if (overrideScope == null) {
             savedDifficulty = difficulty
             savedLimitWaitSeconds = limitWaitSeconds
             savedLimitBreakMs = limitBreakMs
+            savedContinueInherit = continueInherit
+            savedContinueMs = continueMs
             savedExtensionDraft = extensionDraft
         }
     }
@@ -378,6 +400,8 @@ fun RuleLimitActionScreen(
         difficulty = savedDifficulty
         limitWaitSeconds = savedLimitWaitSeconds
         limitBreakMs = savedLimitBreakMs
+        continueInherit = savedContinueInherit
+        continueMs = savedContinueMs
         extensionDraft = savedExtensionDraft
     }
 
@@ -400,10 +424,17 @@ fun RuleLimitActionScreen(
             difficulty = difficulty,
             limitWaitSeconds = limitWaitSeconds,
             limitBreakMs = limitBreakMs,
+            sessionLimitMs = profile?.sessionLimitMs,
+            continueInherit = continueInherit,
+            continueMs = continueMs,
+            showContinuePicker = overrideScope == null,
+            showDifficultyPicker = overrideScope == null,
             onLimitChange = { onLimit = it },
             onDifficultyChange = { difficulty = it },
             onLimitWaitChange = { limitWaitSeconds = it.coerceIn(1, 3600) },
             onLimitBreakChange = { limitBreakMs = it },
+            onContinueInheritChange = { continueInherit = it },
+            onContinueMsChange = { continueMs = it },
         )
         if (onLimit == OnLimitAction.limitWithExtensions && overrideScope !is PolicyOverrideScope.Segment) {
             Text(stringResource(R.string.extension_options), fontWeight = FontWeight.SemiBold)
@@ -437,7 +468,7 @@ fun RuleSessionActionScreen(
     var savedOnSession by remember(profile?.id, overrideScope) { mutableStateOf(initialOnSession) }
     var onSession by remember(profile?.id, overrideScope) { mutableStateOf(savedOnSession) }
     var savedDifficulty by remember(profile?.id) {
-        mutableStateOf(profile?.defaultFrictionDifficulty ?: FrictionDifficulty.medium)
+        mutableStateOf(profile?.sessionFrictionDifficulty ?: FrictionDifficulty.medium)
     }
     var difficulty by remember(profile?.id) { mutableStateOf(savedDifficulty) }
     var savedSessionWaitSeconds by remember(profile?.id) {
@@ -448,6 +479,11 @@ fun RuleSessionActionScreen(
         mutableLongStateOf(profile?.breakDurationMs ?: 0L)
     }
     var sessionBreakMs by remember(profile?.id) { mutableLongStateOf(savedSessionBreakMs) }
+    var savedRefillOverrideMs by remember(profile?.id) {
+        mutableStateOf(profile?.sessionRefillOverrideMs)
+    }
+    var refillOverrideMs by remember(profile?.id) { mutableStateOf(savedRefillOverrideMs) }
+    var refillExpanded by remember(profile?.id) { mutableStateOf(profile?.sessionRefillOverrideMs != null) }
     var savedExtensionDraft by remember(profile?.id) {
         mutableStateOf(ExtensionPolicyDraft.fromPolicy(profile?.sessionExtensionPolicy ?: ExtensionPolicy()))
     }
@@ -457,21 +493,25 @@ fun RuleSessionActionScreen(
         val current = profiles.find { it.id == profileId } ?: return@LaunchedEffect
         savedOnSession = resolveOverrideOnSession(current, segments, overrideScope)
         onSession = savedOnSession
-        savedDifficulty = current.defaultFrictionDifficulty
+        savedDifficulty = current.sessionFrictionDifficulty
         difficulty = savedDifficulty
         savedSessionWaitSeconds = current.sessionWaitDurationSeconds
         sessionWaitSeconds = savedSessionWaitSeconds
         savedSessionBreakMs = current.breakDurationMs ?: 0L
         sessionBreakMs = savedSessionBreakMs
+        savedRefillOverrideMs = current.sessionRefillOverrideMs
+        refillOverrideMs = savedRefillOverrideMs
+        refillExpanded = current.sessionRefillOverrideMs != null
         val loadedExtension = ExtensionPolicyDraft.fromPolicy(current.sessionExtensionPolicy)
         savedExtensionDraft = loadedExtension
         extensionDraft = loadedExtension
     }
 
     val isDirty = onSession != savedOnSession ||
-        difficulty != savedDifficulty ||
+        (overrideScope == null && difficulty != savedDifficulty) ||
         sessionWaitSeconds != savedSessionWaitSeconds ||
         sessionBreakMs != savedSessionBreakMs ||
+        refillOverrideMs != savedRefillOverrideMs ||
         (overrideScope == null && extensionDraft != savedExtensionDraft)
 
     suspend fun saveRules() {
@@ -501,9 +541,10 @@ fun RuleSessionActionScreen(
             null -> viewModel.saveProfileAwait(
                 p.copy(
                     onSessionLimitAction = onSession,
-                    defaultFrictionDifficulty = difficulty,
+                    sessionFrictionDifficulty = difficulty,
                     sessionWaitDurationSeconds = sessionWaitSeconds.coerceIn(1, 3600),
                     breakDurationMs = sessionBreak,
+                    sessionRefillOverrideMs = refillOverrideMs,
                     sessionExtensionPolicy = if (onSession == OnSessionLimitAction.limitWithExtensions) {
                         extensionDraft.toPolicy()
                     } else {
@@ -517,6 +558,7 @@ fun RuleSessionActionScreen(
             savedDifficulty = difficulty
             savedSessionWaitSeconds = sessionWaitSeconds
             savedSessionBreakMs = sessionBreakMs
+            savedRefillOverrideMs = refillOverrideMs
             savedExtensionDraft = extensionDraft
         }
     }
@@ -526,6 +568,8 @@ fun RuleSessionActionScreen(
         difficulty = savedDifficulty
         sessionWaitSeconds = savedSessionWaitSeconds
         sessionBreakMs = savedSessionBreakMs
+        refillOverrideMs = savedRefillOverrideMs
+        refillExpanded = savedRefillOverrideMs != null
         extensionDraft = savedExtensionDraft
     }
 
@@ -548,10 +592,17 @@ fun RuleSessionActionScreen(
             difficulty = difficulty,
             sessionWaitSeconds = sessionWaitSeconds,
             sessionBreakMs = sessionBreakMs,
+            sessionLimitMs = profile?.sessionLimitMs,
+            refillOverrideMs = refillOverrideMs,
+            refillExpanded = refillExpanded,
+            showRefillPicker = overrideScope == null,
+            showDifficultyPicker = overrideScope == null,
             onSessionChange = { onSession = it },
             onDifficultyChange = { difficulty = it },
             onSessionWaitChange = { sessionWaitSeconds = it.coerceIn(1, 3600) },
             onSessionBreakChange = { sessionBreakMs = it },
+            onRefillOverrideChange = { refillOverrideMs = it },
+            onRefillExpandedChange = { refillExpanded = it },
         )
         if (onSession == OnSessionLimitAction.limitWithExtensions && overrideScope !is PolicyOverrideScope.Segment) {
             Text(stringResource(R.string.extension_options), fontWeight = FontWeight.SemiBold)
@@ -609,6 +660,7 @@ internal fun OpenActionRuleEditor(
     savedPin: String,
     profile: Profile?,
     viewModel: ProfileViewModel,
+    showDifficultyPicker: Boolean = true,
     onOpenChange: (OnOpenAction) -> Unit,
     onDifficultyChange: (FrictionDifficulty) -> Unit,
     onOpenWaitChange: (Int) -> Unit,
@@ -660,21 +712,8 @@ internal fun OpenActionRuleEditor(
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
-        if (onOpen == OnOpenAction.deterrentMath) {
-            Text(
-                stringResource(R.string.math_difficulty),
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FrictionDifficulty.entries.forEach { d ->
-                    GatekeepFilterChip(
-                        selected = difficulty == d,
-                        onClick = { onDifficultyChange(d) },
-                        label = { GatekeepFilterChipLabel(frictionDifficultyLabel(d)) },
-                    )
-                }
-            }
+        if (showDifficultyPicker && onOpen == OnOpenAction.deterrentMath) {
+            MathDifficultyPicker(difficulty = difficulty, onDifficultyChange = onDifficultyChange)
         }
         if (onOpen == OnOpenAction.deterrentWait) {
             DurationPickerWithSeconds(
@@ -693,10 +732,17 @@ internal fun LimitActionRuleEditor(
     difficulty: FrictionDifficulty,
     limitWaitSeconds: Int,
     limitBreakMs: Long,
+    sessionLimitMs: Long? = null,
+    continueInherit: Boolean = true,
+    continueMs: Long = LimitGrantDefaults.DEFAULT_PERIOD_CONTINUE_MS,
+    showContinuePicker: Boolean = false,
+    showDifficultyPicker: Boolean = true,
     onLimitChange: (OnLimitAction) -> Unit,
     onDifficultyChange: (FrictionDifficulty) -> Unit,
     onLimitWaitChange: (Int) -> Unit,
     onLimitBreakChange: (Long) -> Unit,
+    onContinueInheritChange: (Boolean) -> Unit = {},
+    onContinueMsChange: (Long) -> Unit = {},
 ) {
     RuleSection(title = stringResource(R.string.when_limit_reached)) {
         RuleChipRow {
@@ -743,21 +789,8 @@ internal fun LimitActionRuleEditor(
                 label = { GatekeepFilterChipLabel(limitActionLabel(OnLimitAction.hardBlock)) },
             )
         }
-        if (onLimit == OnLimitAction.deterrentMath) {
-            Text(
-                stringResource(R.string.math_difficulty),
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FrictionDifficulty.entries.forEach { d ->
-                    GatekeepFilterChip(
-                        selected = difficulty == d,
-                        onClick = { onDifficultyChange(d) },
-                        label = { GatekeepFilterChipLabel(frictionDifficultyLabel(d)) },
-                    )
-                }
-            }
+        if (showDifficultyPicker && onLimit == OnLimitAction.deterrentMath) {
+            MathDifficultyPicker(difficulty = difficulty, onDifficultyChange = onDifficultyChange)
         }
         if (onLimit == OnLimitAction.deterrentWait) {
             DurationPickerWithSeconds(
@@ -777,6 +810,15 @@ internal fun LimitActionRuleEditor(
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
+        if (showContinuePicker && LimitGrantDefaults.showsPeriodContinue(onLimit)) {
+            PeriodContinueEditor(
+                inherit = continueInherit,
+                customMs = continueMs,
+                sessionLimitMs = sessionLimitMs,
+                onInheritChange = onContinueInheritChange,
+                onCustomMsChange = onContinueMsChange,
+            )
+        }
     }
 }
 
@@ -786,10 +828,17 @@ internal fun SessionActionRuleEditor(
     difficulty: FrictionDifficulty,
     sessionWaitSeconds: Int,
     sessionBreakMs: Long,
+    sessionLimitMs: Long? = null,
+    refillOverrideMs: Long? = null,
+    refillExpanded: Boolean = false,
+    showRefillPicker: Boolean = false,
+    showDifficultyPicker: Boolean = true,
     onSessionChange: (OnSessionLimitAction) -> Unit,
     onDifficultyChange: (FrictionDifficulty) -> Unit,
     onSessionWaitChange: (Int) -> Unit,
     onSessionBreakChange: (Long) -> Unit,
+    onRefillOverrideChange: (Long?) -> Unit = {},
+    onRefillExpandedChange: (Boolean) -> Unit = {},
 ) {
     RuleSection(title = stringResource(R.string.when_session_limit_reached)) {
         RuleChipRow {
@@ -836,21 +885,8 @@ internal fun SessionActionRuleEditor(
                 label = { GatekeepFilterChipLabel(sessionActionLabel(OnSessionLimitAction.hardBlock)) },
             )
         }
-        if (onSession == OnSessionLimitAction.deterrentMath) {
-            Text(
-                stringResource(R.string.math_difficulty),
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FrictionDifficulty.entries.forEach { d ->
-                    GatekeepFilterChip(
-                        selected = difficulty == d,
-                        onClick = { onDifficultyChange(d) },
-                        label = { GatekeepFilterChipLabel(frictionDifficultyLabel(d)) },
-                    )
-                }
-            }
+        if (showDifficultyPicker && onSession == OnSessionLimitAction.deterrentMath) {
+            MathDifficultyPicker(difficulty = difficulty, onDifficultyChange = onDifficultyChange)
         }
         if (onSession == OnSessionLimitAction.deterrentWait) {
             DurationPickerWithSeconds(
@@ -870,7 +906,124 @@ internal fun SessionActionRuleEditor(
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
+        if (showRefillPicker && LimitGrantDefaults.showsSessionRefill(onSession)) {
+            SessionRefillEditor(
+                overrideMs = refillOverrideMs,
+                sessionLimitMs = sessionLimitMs,
+                expanded = refillExpanded,
+                onExpandedChange = onRefillExpandedChange,
+                onOverrideChange = onRefillOverrideChange,
+            )
+        }
     }
+}
+
+@Composable
+private fun MathDifficultyPicker(
+    difficulty: FrictionDifficulty,
+    onDifficultyChange: (FrictionDifficulty) -> Unit,
+) {
+    Text(
+        stringResource(R.string.math_difficulty),
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FrictionDifficulty.entries.forEach { d ->
+            GatekeepFilterChip(
+                selected = difficulty == d,
+                onClick = { onDifficultyChange(d) },
+                label = { GatekeepFilterChipLabel(frictionDifficultyLabel(d)) },
+            )
+        }
+    }
+}
+
+@Composable
+internal fun PeriodContinueEditor(
+    inherit: Boolean,
+    customMs: Long,
+    sessionLimitMs: Long?,
+    onInheritChange: (Boolean) -> Unit,
+    onCustomMsChange: (Long) -> Unit,
+) {
+    val hasCap = LimitGrantDefaults.hasSessionCap(sessionLimitMs)
+    val chipOn = LimitGrantDefaults.inheritChipSelected(inherit, sessionLimitMs)
+    Text(
+        stringResource(R.string.period_continue_duration),
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+    GatekeepFilterChip(
+        selected = chipOn,
+        enabled = hasCap,
+        onClick = {
+            if (chipOn) {
+                onInheritChange(false)
+                onCustomMsChange(LimitGrantDefaults.seedCustomContinueMs(sessionLimitMs))
+            } else {
+                onInheritChange(true)
+            }
+        },
+        label = { GatekeepFilterChipLabel(stringResource(R.string.period_continue_inherit)) },
+    )
+    if (!chipOn) {
+        DurationPicker(
+            label = stringResource(R.string.period_continue_duration),
+            totalMs = customMs,
+            coarseStepMinutes = 15,
+            fineStepMinutes = 5,
+            onDurationChange = {
+                onInheritChange(false)
+                onCustomMsChange(it)
+            },
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
+@Composable
+internal fun SessionRefillEditor(
+    overrideMs: Long?,
+    sessionLimitMs: Long?,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onOverrideChange: (Long?) -> Unit,
+) {
+    val inherit = overrideMs == null
+    if (!expanded && inherit) {
+        GatekeepFilterChip(
+            selected = true,
+            onClick = { onExpandedChange(true) },
+            label = { GatekeepFilterChipLabel(stringResource(R.string.session_refill_inherit)) },
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        return
+    }
+    Text(
+        stringResource(R.string.session_refill_duration),
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+    GatekeepFilterChip(
+        selected = inherit,
+        onClick = {
+            onOverrideChange(null)
+            onExpandedChange(false)
+        },
+        label = { GatekeepFilterChipLabel(stringResource(R.string.session_refill_inherit)) },
+    )
+    DurationPicker(
+        label = stringResource(R.string.session_refill_duration),
+        totalMs = overrideMs ?: LimitGrantDefaults.seedCustomContinueMs(sessionLimitMs),
+        coarseStepMinutes = 15,
+        fineStepMinutes = 5,
+        onDurationChange = {
+            onOverrideChange(it)
+            onExpandedChange(true)
+        },
+        modifier = Modifier.padding(top = 8.dp),
+    )
 }
 
 private fun resolveOverrideOnOpen(
