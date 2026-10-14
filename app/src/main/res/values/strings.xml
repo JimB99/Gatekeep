@@ -102,6 +102,8 @@
     <string name="enforcement_hub_subtitle_off">Off — blocking and timers disabled</string>
     <string name="day_starts_at">Day starts at</string>
     <string name="day_starts_at_help">Daily and weekly limits, streaks, and statistics reset at this time instead of midnight.</string>
+    <string name="session_continuity_grace">Session continuity grace</string>
+    <string name="session_continuity_grace_help">How long you have to leave before a new session starts</string>
     <string name="day_reset_hub_subtitle">On · resets at %1$s</string>
     <string name="turn_on_enforcement">Turn on enforcement</string>
     <string name="last_error_format">Last error: %1$s</string>
@@ -262,7 +264,7 @@
     <string name="limit_action_extend">Limit + extend</string>
     <string name="limit_action_hard_block">Hard block</string>
     <string name="session_action_hard_block">Hard block (this sitting)</string>
-    <string name="session_hard_block_hint">This sitting stays blocked until you leave for at least 1 minute.</string>
+    <string name="session_hard_block_hint">This sitting stays blocked until you leave for at least %1$s.</string>
     <string name="limit_hard_block_hint">Blocked until this hour, day, or week resets.</string>
     <string name="difficulty_easy">Easy</string>
     <string name="difficulty_medium">Medium</string>
@@ -451,7 +453,7 @@
     <string name="block_daily_limit">Daily limit reached</string>
     <string name="block_hourly_limit">Hourly limit reached</string>
     <string name="block_weekly_limit">Weekly limit reached</string>
-    <string name="block_session_hard_block">This sitting is blocked. Leave for at least 1 minute to start a new sitting.</string>
+    <string name="block_session_hard_block">This sitting is blocked. Leave for at least %1$s to start a new sitting.</string>
     <string name="block_hourly_hard_block">Blocked until this hour resets.</string>
     <string name="block_daily_hard_block">Blocked until this day resets.</string>
     <string name="block_weekly_hard_block">Blocked until this week resets.</string>

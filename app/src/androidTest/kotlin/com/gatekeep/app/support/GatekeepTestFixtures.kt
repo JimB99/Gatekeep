@@ -7,6 +7,7 @@ import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
 import com.gatekeep.domain.DayReset
+import com.gatekeep.domain.SessionContinuityGrace
 import com.gatekeep.domain.TimeBoundaries
 import com.gatekeep.domain.UsageSessionRecord
 import com.gatekeep.domain.model.AppCategory
@@ -165,6 +166,7 @@ object GatekeepTestFixtures {
                 showSessionTimerNotification = true,
                 warningAlertsEnabled = true,
                 dayResetMinuteOfDay = DayReset.DEFAULT_MINUTE_OF_DAY,
+                sessionContinuityGraceMs = SessionContinuityGrace.DEFAULT_MS,
             )
         }
     }

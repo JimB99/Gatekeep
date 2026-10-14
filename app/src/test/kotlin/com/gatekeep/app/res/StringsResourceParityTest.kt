@@ -20,6 +20,36 @@ class StringsResourceParityTest {
     }
 
     @Test
+    fun sessionContinuityGraceCopyIsTranslatedAndFormats() {
+        val base = readStrings(File(locateResDir(), "values/strings.xml"))
+        val sampleDuration = "15s"
+        LOCALE_DIRS.forEach { localeDir ->
+            val localeStrings = readStrings(File(locateResDir(), "$localeDir/strings.xml"))
+            GRACE_FORMAT_KEYS.forEach { key ->
+                val formatted = String.format(localeStrings.getValue(key), sampleDuration)
+                assertTrue(
+                    "$key in $localeDir did not insert the duration: $formatted",
+                    formatted.contains(sampleDuration),
+                )
+                assertTrue(
+                    "$key in $localeDir still has a placeholder: $formatted",
+                    !formatted.contains("%"),
+                )
+            }
+        }
+        assertTrue(
+            "de-AT still uses the English settings label",
+            readStrings(File(locateResDir(), "values-de-rAT/strings.xml"))
+                .getValue("session_continuity_grace") != base.getValue("session_continuity_grace"),
+        )
+        assertTrue(
+            "es-ES still uses the English settings label",
+            readStrings(File(locateResDir(), "values-es-rES/strings.xml"))
+                .getValue("session_continuity_grace") != base.getValue("session_continuity_grace"),
+        )
+    }
+
+    @Test
     fun `localized strings use the same format placeholders as the base locale`() {
         val baseStrings = readStrings(File(locateResDir(), "values/strings.xml"))
         LOCALE_DIRS.forEach { localeDir ->
@@ -63,5 +93,6 @@ class StringsResourceParityTest {
     private companion object {
         val LOCALE_DIRS = listOf("values-en-rGB", "values-de-rAT", "values-es-rES")
         val PLACEHOLDER_REGEX = Regex("""%\d+\$[sdfx]|%[sdfx]""")
+        val GRACE_FORMAT_KEYS = listOf("session_hard_block_hint", "block_session_hard_block")
     }
 }

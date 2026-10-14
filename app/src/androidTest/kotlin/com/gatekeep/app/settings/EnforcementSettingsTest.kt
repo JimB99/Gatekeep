@@ -18,6 +18,7 @@ import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -126,5 +127,34 @@ class EnforcementSettingsTest {
         openEnforcementSettings()
         composeRule.onNodeWithTag(GatekeepTestTags.SETTINGS_DAY_RESET).assertIsDisplayed()
         composeRule.onNodeWithText("Day starts at", substring = true, ignoreCase = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionContinuityGrace_defaultsToOneMinuteAndIsVisible() {
+        val grace = runBlocking { settingsRepository.settings.first().sessionContinuityGraceMs }
+        assertEquals(60_000L, grace)
+        openEnforcementSettings()
+        composeRule.onNodeWithTag(GatekeepTestTags.SETTINGS_SESSION_CONTINUITY_GRACE)
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Session continuity grace", substring = true, ignoreCase = true)
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "How long you have to leave before a new session starts",
+            substring = true,
+            ignoreCase = true,
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionContinuityGrace_customValue_persistsAndIsShown() {
+        runBlocking {
+            settingsRepository.updateSettings { it.copy(sessionContinuityGraceMs = 15_000L) }
+        }
+        composeRule.activityRule.scenario.recreate()
+        composeRule.waitForIdle()
+        val grace = runBlocking { settingsRepository.settings.first().sessionContinuityGraceMs }
+        assertEquals(15_000L, grace)
+        openEnforcementSettings()
+        composeRule.onNodeWithText("15s", substring = true, ignoreCase = true).assertIsDisplayed()
     }
 }

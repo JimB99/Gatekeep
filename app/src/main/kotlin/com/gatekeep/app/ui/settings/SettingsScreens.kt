@@ -616,6 +616,30 @@ fun EnforcementSettingsScreen(
             modifier = Modifier.testTag(com.gatekeep.app.ui.GatekeepTestTags.SETTINGS_DAY_RESET),
         )
 
+        Text(
+            stringResource(R.string.session_continuity_grace_help),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        com.gatekeep.app.ui.components.DurationPickerWithSeconds(
+            label = stringResource(R.string.session_continuity_grace),
+            totalSeconds = (settings.sessionContinuityGraceMs / 1000L).toInt(),
+            onDurationChange = { seconds ->
+                viewModel.update { s ->
+                    s.copy(
+                        sessionContinuityGraceMs = com.gatekeep.domain.SessionContinuityGrace.coerce(
+                            seconds * 1000L,
+                        ),
+                    )
+                }
+            },
+            maxTotalSeconds = (com.gatekeep.domain.SessionContinuityGrace.MAX_MS / 1000L).toInt(),
+            modifier = Modifier.testTag(
+                com.gatekeep.app.ui.GatekeepTestTags.SETTINGS_SESSION_CONTINUITY_GRACE,
+            ),
+        )
+
     }
 
 }

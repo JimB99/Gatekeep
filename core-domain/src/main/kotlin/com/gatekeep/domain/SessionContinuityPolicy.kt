@@ -4,7 +4,7 @@ import com.gatekeep.domain.model.SessionState
 
 object SessionContinuityPolicy {
 
-    const val RESUME_GRACE_MS = 60_000L
+    const val RESUME_GRACE_MS = SessionContinuityGrace.DEFAULT_MS
 
     fun lastInactiveAtEpochMs(session: SessionState?): Long? =
         listOfNotNull(

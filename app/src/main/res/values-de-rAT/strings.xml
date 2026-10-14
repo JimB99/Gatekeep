@@ -96,6 +96,8 @@
     <string name="enforcement_hub_subtitle_off">Aus — Blockierung und Timer deaktiviert</string>
     <string name="day_starts_at">Tag beginnt um</string>
     <string name="day_starts_at_help">Tägliche und wöchentliche Limits, Serien und Statistiken werden zu dieser Uhrzeit zurückgesetzt statt um Mitternacht.</string>
+    <string name="session_continuity_grace">Sitzungsfortsetzung</string>
+    <string name="session_continuity_grace_help">Wie lange du weg sein musst, bevor eine neue Sitzung beginnt.</string>
     <string name="day_reset_hub_subtitle">An · Reset um %1$s</string>
     <string name="turn_on_enforcement">Durchsetzung einschalten</string>
     <string name="last_error_format">Letzter Fehler: %1$s</string>
@@ -230,7 +232,7 @@
     <string name="limit_action_extend">Limit + verlängern</string>
     <string name="limit_action_hard_block">Harte Blockierung</string>
     <string name="session_action_hard_block">Harte Blockierung (diese Sitzung)</string>
-    <string name="session_hard_block_hint">Diese Sitzung bleibt gesperrt, bis du mindestens 1 Minute weggehst.</string>
+    <string name="session_hard_block_hint">Diese Sitzung bleibt gesperrt, bis du mindestens %1$s weggehst.</string>
     <string name="limit_hard_block_hint">Gesperrt, bis diese Stunde, dieser Tag oder diese Woche zurückgesetzt wird.</string>
     <string name="difficulty_easy">Leicht</string>
     <string name="difficulty_medium">Mittel</string>
@@ -402,7 +404,7 @@
     <string name="block_daily_limit">Tageslimit erreicht</string>
     <string name="block_hourly_limit">Stundenlimit erreicht</string>
     <string name="block_weekly_limit">Wochenlimit erreicht</string>
-    <string name="block_session_hard_block">Diese Sitzung ist gesperrt. Mindestens 1 Minute weggehen, um eine neue Sitzung zu starten.</string>
+    <string name="block_session_hard_block">Diese Sitzung ist gesperrt. Mindestens %1$s weggehen, um eine neue Sitzung zu starten.</string>
     <string name="block_hourly_hard_block">Gesperrt, bis diese Stunde zurückgesetzt wird.</string>
     <string name="block_daily_hard_block">Gesperrt, bis dieser Tag zurückgesetzt wird.</string>
     <string name="block_weekly_hard_block">Gesperrt, bis diese Woche zurückgesetzt wird.</string>

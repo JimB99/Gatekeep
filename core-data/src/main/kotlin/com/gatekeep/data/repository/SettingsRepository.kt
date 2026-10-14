@@ -13,6 +13,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.gatekeep.data.locale.LocalePreferences
 import com.gatekeep.domain.DayReset
+import com.gatekeep.domain.SessionContinuityGrace
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -42,6 +43,8 @@ data class AppSettings(
     val accessibilityOptedIn: Boolean = false,
     /** Minute of day when daily/weekly limits and stats reset. Default 04:00. */
     val dayResetMinuteOfDay: Int = DayReset.DEFAULT_MINUTE_OF_DAY,
+    /** Leave/lock duration after which a new sitting starts. Default one minute. */
+    val sessionContinuityGraceMs: Long = SessionContinuityGrace.DEFAULT_MS,
 ) {
     fun hasAppPin(): Boolean = !appPasswordHash.isNullOrBlank()
 }
@@ -69,12 +72,18 @@ class SettingsRepository(private val context: Context) {
         val LANGUAGE = stringPreferencesKey("language_tag")
         val ACCESSIBILITY_OPTED_IN = booleanPreferencesKey("accessibility_opted_in")
         val DAY_RESET = intPreferencesKey("day_reset_minute_of_day")
+        val SESSION_CONTINUITY_GRACE = longPreferencesKey("session_continuity_grace_ms")
     }
 
     @Volatile
     private var cachedDayResetMinuteOfDay: Int = DayReset.DEFAULT_MINUTE_OF_DAY
 
+    @Volatile
+    private var cachedSessionContinuityGraceMs: Long = SessionContinuityGrace.DEFAULT_MS
+
     fun dayResetMinuteOfDay(): Int = cachedDayResetMinuteOfDay
+
+    fun sessionContinuityGraceMs(): Long = cachedSessionContinuityGraceMs
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs -> readSettings(prefs) }
 
@@ -130,7 +139,13 @@ class SettingsRepository(private val context: Context) {
         dayResetMinuteOfDay = DayReset.coerce(
             prefs[Keys.DAY_RESET] ?: DayReset.DEFAULT_MINUTE_OF_DAY,
         ),
-    ).also { cachedDayResetMinuteOfDay = it.dayResetMinuteOfDay }
+        sessionContinuityGraceMs = SessionContinuityGrace.coerce(
+            prefs[Keys.SESSION_CONTINUITY_GRACE] ?: SessionContinuityGrace.DEFAULT_MS,
+        ),
+    ).also {
+        cachedDayResetMinuteOfDay = it.dayResetMinuteOfDay
+        cachedSessionContinuityGraceMs = it.sessionContinuityGraceMs
+    }
 
     private fun writeSettings(prefs: MutablePreferences, updated: AppSettings) {
         prefs[Keys.ONBOARDING] = updated.onboardingComplete
@@ -161,5 +176,8 @@ class SettingsRepository(private val context: Context) {
         val dayReset = DayReset.coerce(updated.dayResetMinuteOfDay)
         prefs[Keys.DAY_RESET] = dayReset
         cachedDayResetMinuteOfDay = dayReset
+        val grace = SessionContinuityGrace.coerce(updated.sessionContinuityGraceMs)
+        prefs[Keys.SESSION_CONTINUITY_GRACE] = grace
+        cachedSessionContinuityGraceMs = grace
     }
 }

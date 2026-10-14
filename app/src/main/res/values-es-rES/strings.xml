@@ -96,6 +96,8 @@
     <string name="enforcement_hub_subtitle_off">Desactivado — bloqueo y temporizadores deshabilitados</string>
     <string name="day_starts_at">El día empieza a las</string>
     <string name="day_starts_at_help">Los límites diarios y semanales, las rachas y las estadísticas se reinician a esta hora en lugar de a medianoche.</string>
+    <string name="session_continuity_grace">Continuidad de sesión</string>
+    <string name="session_continuity_grace_help">Cuánto tiempo tienes que ausentarte para que empiece una nueva sesión.</string>
     <string name="day_reset_hub_subtitle">Activado · reinicio a las %1$s</string>
     <string name="turn_on_enforcement">Activar aplicación</string>
     <string name="last_error_format">Último error: %1$s</string>
@@ -230,7 +232,7 @@
     <string name="limit_action_extend">Límite + extender</string>
     <string name="limit_action_hard_block">Bloqueo total</string>
     <string name="session_action_hard_block">Bloqueo total (esta sesión)</string>
-    <string name="session_hard_block_hint">Esta sesión permanece bloqueada hasta que salgas al menos 1 minuto.</string>
+    <string name="session_hard_block_hint">Esta sesión permanece bloqueada hasta que salgas al menos %1$s.</string>
     <string name="limit_hard_block_hint">Bloqueado hasta que se reinicie esta hora, este día o esta semana.</string>
     <string name="difficulty_easy">Fácil</string>
     <string name="difficulty_medium">Medio</string>
@@ -402,7 +404,7 @@
     <string name="block_daily_limit">Límite diario alcanzado</string>
     <string name="block_hourly_limit">Límite por hora alcanzado</string>
     <string name="block_weekly_limit">Límite semanal alcanzado</string>
-    <string name="block_session_hard_block">Esta sesión está bloqueada. Sal al menos 1 minuto para empezar una nueva sesión.</string>
+    <string name="block_session_hard_block">Esta sesión está bloqueada. Sal al menos %1$s para empezar una nueva sesión.</string>
     <string name="block_hourly_hard_block">Bloqueado hasta que se reinicie esta hora.</string>
     <string name="block_daily_hard_block">Bloqueado hasta que se reinicie este día.</string>
     <string name="block_weekly_hard_block">Bloqueado hasta que se reinicie esta semana.</string>

@@ -6,6 +6,7 @@ import com.gatekeep.app.enforcement.OverlayChromePolicy
 import com.gatekeep.app.enforcement.OverlayChromeTitle
 import com.gatekeep.domain.ExtensionDenialReason
 import com.gatekeep.domain.HardBlockCopyPolicy
+import com.gatekeep.domain.SessionContinuityGrace
 import com.gatekeep.domain.model.BlockPresentationReason
 import com.gatekeep.domain.model.BlockReason
 import com.gatekeep.domain.model.FrictionMethod
@@ -30,7 +31,15 @@ object BlockMessageResolver {
         appLabel: String? = null,
         bypassAllowed: Boolean = true,
         breakUntilEpochMs: Long? = null,
-    ): String = context.getString(blockMessageRes(reason, bypassAllowed, breakUntilEpochMs))
+        sessionContinuityGraceMs: Long = SessionContinuityGrace.DEFAULT_MS,
+    ): String {
+        val res = blockMessageRes(reason, bypassAllowed, breakUntilEpochMs)
+        return if (res == R.string.block_session_hard_block) {
+            context.getString(res, formatDurationMs(context, sessionContinuityGraceMs))
+        } else {
+            context.getString(res)
+        }
+    }
 
     private fun genericBlockMessageRes(reason: BlockReason): Int = when (reason) {
         BlockReason.focusMode -> R.string.block_focus_mode

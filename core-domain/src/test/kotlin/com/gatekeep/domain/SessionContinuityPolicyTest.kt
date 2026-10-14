@@ -104,6 +104,30 @@ class SessionContinuityPolicyTest {
     }
 
     @Test
+    fun shouldContinue_whenGapUnderCustomGrace() {
+        val leftAt = 10_000L
+        assertTrue(
+            SessionContinuityPolicy.shouldContinueSession(
+                lastForegroundEndEpochMs = leftAt,
+                nowEpochMs = leftAt + 90_000L,
+                graceMs = 3 * 60_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun shouldNotContinue_whenGapAtLeastCustomGrace() {
+        val leftAt = 10_000L
+        assertFalse(
+            SessionContinuityPolicy.shouldContinueSession(
+                lastForegroundEndEpochMs = leftAt,
+                nowEpochMs = leftAt + 30_000L,
+                graceMs = 30_000L,
+            ),
+        )
+    }
+
+    @Test
     fun lastInactiveAt_prefersEarlierPauseOrLeave() {
         val session = SessionState(
             packageName = "com.test",

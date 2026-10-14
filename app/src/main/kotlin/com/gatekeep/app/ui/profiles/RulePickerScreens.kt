@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,7 +51,9 @@ import com.gatekeep.app.ui.components.rememberUnsavedChangesGuard
 import com.gatekeep.app.ui.policy.PolicyOverrideScope
 import com.gatekeep.app.ui.viewmodel.ProfileViewModel
 import com.gatekeep.app.util.PasswordHasher
+import com.gatekeep.app.util.formatDurationMs
 import com.gatekeep.domain.LimitGrantDefaults
+import com.gatekeep.domain.SessionContinuityGrace
 import com.gatekeep.domain.model.ExtensionPolicy
 import com.gatekeep.domain.model.FrictionDifficulty
 import com.gatekeep.domain.model.OnLimitAction
@@ -582,6 +585,7 @@ fun RuleSessionActionScreen(
     )
 
     val saveScope = rememberCoroutineScope()
+    val appSettings by viewModel.appSettings.collectAsState()
     RuleDetailScaffold(
         title = stringResource(R.string.when_session_limit_reached),
         onBack = backGuard::navigateBack,
@@ -589,6 +593,7 @@ fun RuleSessionActionScreen(
         onSave = { saveScope.launch { saveRules() } },
     ) {
         SessionActionRuleEditor(
+            sessionContinuityGraceMs = appSettings.sessionContinuityGraceMs,
             onSession = onSession,
             difficulty = difficulty,
             sessionWaitSeconds = sessionWaitSeconds,
@@ -832,6 +837,7 @@ internal fun LimitActionRuleEditor(
 
 @Composable
 internal fun SessionActionRuleEditor(
+    sessionContinuityGraceMs: Long = SessionContinuityGrace.DEFAULT_MS,
     onSession: OnSessionLimitAction,
     difficulty: FrictionDifficulty,
     sessionWaitSeconds: Int,
@@ -895,7 +901,10 @@ internal fun SessionActionRuleEditor(
         }
         if (onSession == OnSessionLimitAction.hardBlock) {
             Text(
-                stringResource(R.string.session_hard_block_hint),
+                stringResource(
+                    R.string.session_hard_block_hint,
+                    formatDurationMs(LocalContext.current, sessionContinuityGraceMs),
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

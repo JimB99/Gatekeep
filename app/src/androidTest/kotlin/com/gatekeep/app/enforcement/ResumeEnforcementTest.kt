@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
+import com.gatekeep.domain.SessionContinuityGrace
 import com.gatekeep.domain.model.ExtensionPolicy
 import com.gatekeep.domain.model.ExtensionSurfaceMode
 import com.gatekeep.domain.model.OnOpenAction
@@ -353,6 +354,43 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
         assertTrue(
             "must not show a session-limit overlay after a short lock ${harness.screenDiagnostics()}",
             harness.overlayMessageText() == null,
+        )
+    }
+
+    @Test
+    fun customGrace_lockPastFifteenSeconds_startsFresh() {
+        val sessionLimitMs = 20_000L
+        runSeed {
+            settingsRepository.updateSettings {
+                it.copy(sessionContinuityGraceMs = SessionContinuityGrace.MIN_MS)
+            }
+            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.none,
+                    sessionLimitMs = sessionLimitMs,
+                    dailyLimitMs = null,
+                ),
+            )
+        }
+        harness.wakeDevice()
+        harness.launchTargetA()
+        val before = harness.waitForSessionRemainingSeconds(timeoutMs = 8_000)
+        assertTrue(
+            "session HUD should start ${harness.screenDiagnostics()}",
+            before != null && before >= 10,
+        )
+        harness.sleepDevice()
+        harness.sleepMs(16_000)
+        harness.wakeDevice()
+        harness.sleepMs(800)
+        val traces = enforcementCoordinator.enforcementTraceSnapshot()
+        val startFresh = traces.any {
+            it.event == EnforcementTrace.SESSION_START && it.fields["action"] == "StartFresh"
+        }
+        assertTrue(
+            "lock past custom 15s grace must StartFresh traces=$traces ${harness.screenDiagnostics()}",
+            startFresh,
         )
     }
 

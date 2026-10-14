@@ -2137,6 +2137,7 @@ class EnforcementCoordinator @Inject constructor(
                             appLabel,
                             bypassAllowed = blockedAxis.bypassAllowed,
                             breakUntilEpochMs = blockedAxis.breakUntilEpochMs,
+                            sessionContinuityGraceMs = settingsRepository.sessionContinuityGraceMs(),
                         )
                         showBlocked(
                             packageName, blockMessage,
@@ -2256,7 +2257,12 @@ class EnforcementCoordinator @Inject constructor(
                         notificationHelper.showLimitReachedWarning(
                             profileId = profileId,
                             title = localizedContext.getString(com.gatekeep.app.R.string.limit_reached_title),
-                            text = BlockMessageResolver.blockMessage(localizedContext, notifyReason, appLabel),
+                            text = BlockMessageResolver.blockMessage(
+                                localizedContext,
+                                notifyReason,
+                                appLabel,
+                                sessionContinuityGraceMs = settingsRepository.sessionContinuityGraceMs(),
+                            ),
                         )
                     }
                 }
@@ -2340,6 +2346,7 @@ class EnforcementCoordinator @Inject constructor(
                     appLabel,
                     bypassAllowed = result.bypassAllowed,
                     breakUntilEpochMs = result.breakUntilEpochMs,
+                    sessionContinuityGraceMs = settingsRepository.sessionContinuityGraceMs(),
                 )
                 showBlocked(
                     packageName, blockMessage, BlockPresentationReason.fromBlockReason(result.reason),
@@ -3079,7 +3086,10 @@ class EnforcementCoordinator @Inject constructor(
         val request = buildBlockRequest(
             packageName = packageName,
             message = BlockMessageResolver.blockMessage(
-                localizedContext, BlockReason.sessionLimit, appLabel,
+                localizedContext,
+                BlockReason.sessionLimit,
+                appLabel,
+                sessionContinuityGraceMs = settingsRepository.sessionContinuityGraceMs(),
             ),
             reason = BlockPresentationReason.fromBlockReason(BlockReason.sessionLimit),
             profile = profile,
@@ -3173,6 +3183,7 @@ class EnforcementCoordinator @Inject constructor(
             liveInMemorySession = sessionStartedForPackage == packageName,
             pendingWait = pendingWait,
             onBreak = onBreak,
+            graceMs = settingsRepository.sessionContinuityGraceMs(),
         )
         enforcementTrace.record(
             EnforcementTrace.SESSION_START,

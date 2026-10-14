@@ -28,6 +28,7 @@ class SessionStartDecisionTest {
         onBreak: Boolean = false,
         nowEpochMs: Long = now,
         dayStartEpochMs: Long = dayStart,
+        graceMs: Long = SessionContinuityPolicy.RESUME_GRACE_MS,
     ) = SessionStartDecision.decide(
         existingState = existing,
         nowEpochMs = nowEpochMs,
@@ -35,6 +36,7 @@ class SessionStartDecisionTest {
         liveInMemorySession = live,
         pendingWait = pendingWait,
         onBreak = onBreak,
+        graceMs = graceMs,
     )
 
     @Test
@@ -177,6 +179,42 @@ class SessionStartDecisionTest {
         assertEquals(
             SessionStartDecision.Action.Continue,
             decide(paused, live = true, onBreak = true),
+        )
+    }
+
+    @Test
+    fun notLive_gapUnderCustomGrace_resumes() {
+        val leftAt = now - 90_000L
+        assertEquals(
+            SessionStartDecision.Action.ResumeAfterGap,
+            decide(session(lastEnd = leftAt), live = false, graceMs = 3 * 60_000L),
+        )
+    }
+
+    @Test
+    fun notLive_gapAtLeastCustomGrace_startsFresh() {
+        val leftAt = now - 90_000L
+        assertEquals(
+            SessionStartDecision.Action.StartFresh,
+            decide(session(lastEnd = leftAt), live = false, graceMs = 30_000L),
+        )
+    }
+
+    @Test
+    fun liveInMemory_pauseUnderCustomGrace_continues() {
+        val paused = session().copy(devicePausedAtEpochMs = now - 14_000L)
+        assertEquals(
+            SessionStartDecision.Action.Continue,
+            decide(paused, live = true, graceMs = 15_000L),
+        )
+    }
+
+    @Test
+    fun liveInMemory_pauseAtLeastCustomGrace_startsFresh() {
+        val paused = session().copy(devicePausedAtEpochMs = now - 15_000L)
+        assertEquals(
+            SessionStartDecision.Action.StartFresh,
+            decide(paused, live = true, graceMs = 15_000L),
         )
     }
 }
