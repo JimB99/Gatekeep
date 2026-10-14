@@ -110,7 +110,10 @@ object SessionTracker {
     }
 
     fun markLimitFrictionPaid(session: SessionState): SessionState =
-        session.copy(limitFrictionPaidThisSitting = true)
+        session.copy(
+            limitFrictionPaidThisSitting = true,
+            openGatePassedEpochMs = session.openGatePassedEpochMs ?: session.sessionStartEpochMs,
+        )
 
     /**
      * Grant [refillMs] of remaining sitting app-use. Lock/leave already freeze the session
@@ -122,16 +125,19 @@ object SessionTracker {
         sessionLimitMs: Long,
         refillMs: Long,
         nowEpochMs: Long,
+        markFrictionPaid: Boolean = true,
     ): SessionState {
         val ended = endFriction(clearPendingWait(session), nowEpochMs)
-        if (sessionLimitMs <= 0L || refillMs <= 0L) {
-            return markLimitFrictionPaid(ended)
+        val granted = if (sessionLimitMs <= 0L || refillMs <= 0L) {
+            ended
+        } else {
+            val clockMs = sessionClockMs(ended, nowEpochMs)
+            val elapsed = (clockMs - ended.sessionStartEpochMs).coerceAtLeast(0)
+            val netConsumedMs = (elapsed - ended.excludedMs).coerceAtLeast(0)
+            val delta = (refillMs + netConsumedMs - sessionLimitMs).coerceAtLeast(0)
+            addExcludedTime(ended, delta)
         }
-        val clockMs = sessionClockMs(ended, nowEpochMs)
-        val elapsed = (clockMs - ended.sessionStartEpochMs).coerceAtLeast(0)
-        val netConsumedMs = (elapsed - ended.excludedMs).coerceAtLeast(0)
-        val delta = (refillMs + netConsumedMs - sessionLimitMs).coerceAtLeast(0)
-        return markLimitFrictionPaid(addExcludedTime(ended, delta))
+        return if (markFrictionPaid) markLimitFrictionPaid(granted) else granted
     }
 
     fun startFriction(session: SessionState, nowEpochMs: Long): SessionState =

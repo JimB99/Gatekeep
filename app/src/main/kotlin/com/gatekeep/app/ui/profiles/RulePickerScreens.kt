@@ -18,6 +18,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -789,6 +790,13 @@ internal fun LimitActionRuleEditor(
                 label = { GatekeepFilterChipLabel(limitActionLabel(OnLimitAction.hardBlock)) },
             )
         }
+        if (onLimit == OnLimitAction.hardBlock) {
+            Text(
+                stringResource(R.string.limit_hard_block_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         if (showDifficultyPicker && onLimit == OnLimitAction.deterrentMath) {
             MathDifficultyPicker(difficulty = difficulty, onDifficultyChange = onDifficultyChange)
         }
@@ -883,6 +891,13 @@ internal fun SessionActionRuleEditor(
                 selected = onSession == OnSessionLimitAction.hardBlock,
                 onClick = { onSessionChange(OnSessionLimitAction.hardBlock) },
                 label = { GatekeepFilterChipLabel(sessionActionLabel(OnSessionLimitAction.hardBlock)) },
+            )
+        }
+        if (onSession == OnSessionLimitAction.hardBlock) {
+            Text(
+                stringResource(R.string.session_hard_block_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         if (showDifficultyPicker && onSession == OnSessionLimitAction.deterrentMath) {

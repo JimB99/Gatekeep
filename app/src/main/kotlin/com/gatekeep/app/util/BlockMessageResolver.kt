@@ -5,27 +5,47 @@ import com.gatekeep.app.R
 import com.gatekeep.app.enforcement.OverlayChromePolicy
 import com.gatekeep.app.enforcement.OverlayChromeTitle
 import com.gatekeep.domain.ExtensionDenialReason
+import com.gatekeep.domain.HardBlockCopyPolicy
 import com.gatekeep.domain.model.BlockPresentationReason
 import com.gatekeep.domain.model.BlockReason
 import com.gatekeep.domain.model.FrictionMethod
 
 object BlockMessageResolver {
 
-    fun blockMessage(context: Context, reason: BlockReason, appLabel: String? = null): String =
-        when (reason) {
-            BlockReason.focusMode -> context.getString(R.string.block_focus_mode)
-            BlockReason.outsideSchedule -> context.getString(R.string.block_outside_schedule)
-            BlockReason.scheduleBlock -> context.getString(R.string.block_schedule_block)
-            BlockReason.onBreak -> context.getString(R.string.block_take_break)
-            BlockReason.sessionLimit -> context.getString(R.string.block_session_limit)
-            BlockReason.dailyLimit -> context.getString(R.string.block_daily_limit)
-            BlockReason.hourlyLimit -> context.getString(R.string.block_hourly_limit)
-            BlockReason.weeklyLimit -> context.getString(R.string.block_weekly_limit)
-            BlockReason.notMonitored,
-            BlockReason.profilePaused,
-            BlockReason.appPaused,
-            -> context.getString(R.string.block_generic)
-        }
+    fun blockMessageRes(
+        reason: BlockReason,
+        bypassAllowed: Boolean = true,
+        breakUntilEpochMs: Long? = null,
+    ): Int = when (HardBlockCopyPolicy.overlayCopy(reason, bypassAllowed, breakUntilEpochMs)) {
+        HardBlockCopyPolicy.OverlayCopy.SessionUntilLeave -> R.string.block_session_hard_block
+        HardBlockCopyPolicy.OverlayCopy.HourUntilReset -> R.string.block_hourly_hard_block
+        HardBlockCopyPolicy.OverlayCopy.DayUntilReset -> R.string.block_daily_hard_block
+        HardBlockCopyPolicy.OverlayCopy.WeekUntilReset -> R.string.block_weekly_hard_block
+        HardBlockCopyPolicy.OverlayCopy.Generic -> genericBlockMessageRes(reason)
+    }
+
+    fun blockMessage(
+        context: Context,
+        reason: BlockReason,
+        appLabel: String? = null,
+        bypassAllowed: Boolean = true,
+        breakUntilEpochMs: Long? = null,
+    ): String = context.getString(blockMessageRes(reason, bypassAllowed, breakUntilEpochMs))
+
+    private fun genericBlockMessageRes(reason: BlockReason): Int = when (reason) {
+        BlockReason.focusMode -> R.string.block_focus_mode
+        BlockReason.outsideSchedule -> R.string.block_outside_schedule
+        BlockReason.scheduleBlock -> R.string.block_schedule_block
+        BlockReason.onBreak -> R.string.block_take_break
+        BlockReason.sessionLimit -> R.string.block_session_limit
+        BlockReason.dailyLimit -> R.string.block_daily_limit
+        BlockReason.hourlyLimit -> R.string.block_hourly_limit
+        BlockReason.weeklyLimit -> R.string.block_weekly_limit
+        BlockReason.notMonitored,
+        BlockReason.profilePaused,
+        BlockReason.appPaused,
+        -> R.string.block_generic
+    }
 
     fun limitReachedForApp(context: Context, appLabel: String): String =
         context.getString(R.string.usage_limit_reached_for_app, appLabel)

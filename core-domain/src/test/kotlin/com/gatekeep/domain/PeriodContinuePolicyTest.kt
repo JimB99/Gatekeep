@@ -274,7 +274,7 @@ class PeriodContinuePolicyTest {
         assertNotNull(applied)
         val allowed = RuleEngine.evaluate(context(p, overCap(), applied), openAlreadyPassed = true)
         assertEquals(sessionCap, remainingDaily(allowed))
-        assertTrue(applied!!.limitFrictionPaidThisSitting)
+        assertFalse(applied!!.limitFrictionPaidThisSitting)
     }
 
     @Test

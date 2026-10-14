@@ -16,25 +16,29 @@ fun openActionLabel(action: OnOpenAction): String = when (action) {
     OnOpenAction.deterrentWait -> stringResource(R.string.open_action_wait)
 }
 
-@Composable
-fun limitActionLabel(action: OnLimitAction): String = when (action) {
-    OnLimitAction.notifyOnly -> stringResource(R.string.limit_action_notify)
-    OnLimitAction.limitWithExtensions -> stringResource(R.string.limit_action_extend)
-    OnLimitAction.deterrentMath -> stringResource(R.string.open_action_math)
-    OnLimitAction.deterrentWait -> stringResource(R.string.open_action_wait)
-    OnLimitAction.mandatoryBreak -> stringResource(R.string.limit_action_break)
-    OnLimitAction.hardBlock -> stringResource(R.string.limit_action_hard_block)
+fun limitActionLabelRes(action: OnLimitAction): Int = when (action) {
+    OnLimitAction.notifyOnly -> R.string.limit_action_notify
+    OnLimitAction.limitWithExtensions -> R.string.limit_action_extend
+    OnLimitAction.deterrentMath -> R.string.open_action_math
+    OnLimitAction.deterrentWait -> R.string.open_action_wait
+    OnLimitAction.mandatoryBreak -> R.string.limit_action_break
+    OnLimitAction.hardBlock -> R.string.limit_action_hard_block
 }
 
 @Composable
-fun sessionActionLabel(action: OnSessionLimitAction): String = when (action) {
-    OnSessionLimitAction.notifyOnly -> stringResource(R.string.limit_action_notify)
-    OnSessionLimitAction.deterrentMath -> stringResource(R.string.open_action_math)
-    OnSessionLimitAction.deterrentWait -> stringResource(R.string.open_action_wait)
-    OnSessionLimitAction.limitWithExtensions -> stringResource(R.string.limit_action_extend)
-    OnSessionLimitAction.mandatoryBreak -> stringResource(R.string.limit_action_break)
-    OnSessionLimitAction.hardBlock -> stringResource(R.string.limit_action_hard_block)
+fun limitActionLabel(action: OnLimitAction): String = stringResource(limitActionLabelRes(action))
+
+fun sessionActionLabelRes(action: OnSessionLimitAction): Int = when (action) {
+    OnSessionLimitAction.notifyOnly -> R.string.limit_action_notify
+    OnSessionLimitAction.deterrentMath -> R.string.open_action_math
+    OnSessionLimitAction.deterrentWait -> R.string.open_action_wait
+    OnSessionLimitAction.limitWithExtensions -> R.string.limit_action_extend
+    OnSessionLimitAction.mandatoryBreak -> R.string.limit_action_break
+    OnSessionLimitAction.hardBlock -> R.string.session_action_hard_block
 }
+
+@Composable
+fun sessionActionLabel(action: OnSessionLimitAction): String = stringResource(sessionActionLabelRes(action))
 
 @Composable
 fun frictionDifficultyLabel(difficulty: FrictionDifficulty): String = when (difficulty) {

@@ -20,10 +20,12 @@ object RuleEngine {
 
     fun evaluate(context: RuleEvaluationContext, openAlreadyPassed: Boolean = false): RuleResult {
         val evaluation = evaluateAll(context)
+        val skipOpen = openAlreadyPassed ||
+            OpenGatePassPolicy.shouldSkipOpenGate(context.sessionState, context.nowEpochMs)
         return mergeForPresentation(
             evaluation = evaluation,
             config = context.enforcementConfig,
-            openAlreadyPassed = openAlreadyPassed,
+            openAlreadyPassed = skipOpen,
         )
     }
 
@@ -164,15 +166,7 @@ object RuleEngine {
         if (!openAlreadyPassed) {
             val openResult = evaluation.open
             if (openResult is RuleResult.OpenDeterrent || openResult is RuleResult.DelayOpen) {
-                val openStrictness = openResultStrictness(openResult)
-                val usageStrictness = when (usageWinner) {
-                    is RuleResult.Blocked -> blockedActionStrictness(usageWinner, config)
-                    is RuleResult.Allowed -> if (usageWinner.notifyLimitReached) 0 else -1
-                    else -> -1
-                }
-                if (usageWinner !is RuleResult.Blocked || openStrictness >= usageStrictness) {
-                    return openResult
-                }
+                return openResult
             }
         }
 
@@ -381,16 +375,6 @@ object RuleEngine {
     ): Boolean {
         val strictness = blockedActionStrictness(blocked, config)
         return strictness >= limitActionStrictness(OnLimitAction.mandatoryBreak)
-    }
-
-    private fun openResultStrictness(result: RuleResult): Int = when (result) {
-        is RuleResult.DelayOpen -> 1
-        is RuleResult.OpenDeterrent -> when (result.method) {
-            FrictionMethod.waitOneMin -> 1
-            FrictionMethod.math, FrictionMethod.password -> 2
-            else -> 2
-        }
-        else -> -1
     }
 
     private fun mergeAllowedResults(

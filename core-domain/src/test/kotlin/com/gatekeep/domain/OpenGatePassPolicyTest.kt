@@ -65,4 +65,23 @@ class OpenGatePassPolicyTest {
         val updated = OpenGatePassPolicy.markOpenGatePassed(session, 9_999L)
         assertEquals(9_999L, updated.openGatePassedEpochMs)
     }
+
+    @Test
+    fun skipsWhenLimitFrictionPaidThisSitting() {
+        val session = SessionState(
+            packageName = "com.test",
+            sessionStartEpochMs = 1_000L,
+            limitFrictionPaidThisSitting = true,
+        )
+        assertTrue(OpenGatePassPolicy.shouldSkipOpenGate(session, nowEpochMs = 2_000L))
+    }
+
+    @Test
+    fun markLimitFrictionPaid_alsoMarksOpenGatePassed() {
+        val session = SessionState(packageName = "com.test", sessionStartEpochMs = 1_000L)
+        val updated = SessionTracker.markLimitFrictionPaid(session)
+        assertTrue(updated.limitFrictionPaidThisSitting)
+        assertEquals(1_000L, updated.openGatePassedEpochMs)
+        assertTrue(OpenGatePassPolicy.shouldSkipOpenGate(updated, nowEpochMs = 2_000L))
+    }
 }

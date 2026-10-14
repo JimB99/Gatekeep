@@ -54,6 +54,7 @@ object PeriodContinuePolicy {
         continueMs: Long,
         periodStarts: PeriodStarts,
         stack: Boolean = false,
+        markFrictionPaid: Boolean = true,
     ): SessionState {
         val granted = session.periodAppUse.grant(
             usage = usage,
@@ -61,9 +62,8 @@ object PeriodContinuePolicy {
             starts = periodStarts,
             stack = stack,
         )
-        return SessionTracker.markLimitFrictionPaid(
-            SessionTracker.clearBreak(session.withPeriodAppUse(granted)),
-        )
+        val cleared = SessionTracker.clearBreak(session.withPeriodAppUse(granted))
+        return if (markFrictionPaid) SessionTracker.markLimitFrictionPaid(cleared) else cleared
     }
 
     fun applyExtendExtras(
@@ -114,7 +114,13 @@ object PeriodContinuePolicy {
         if (session.periodAppUse.remainingMs(usage, periodStarts, limit) > 0L) return null
         return when (LimitEvaluator.evaluate(limit, usage)) {
             is LimitEvaluator.LimitCheckResult.Blocked ->
-                applyContinue(session, usage, continueMs, periodStarts)
+                applyContinue(
+                    session,
+                    usage,
+                    continueMs,
+                    periodStarts,
+                    markFrictionPaid = false,
+                )
             is LimitEvaluator.LimitCheckResult.Allowed -> null
         }
     }

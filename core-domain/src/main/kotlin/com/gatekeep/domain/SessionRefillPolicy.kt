@@ -42,7 +42,13 @@ object SessionRefillPolicy {
         if (refillMs <= 0L) return null
         return when (SessionTracker.evaluateSession(limit, session, nowEpochMs)) {
             is SessionTracker.SessionCheckResult.SessionExceeded ->
-                SessionTracker.applyAppUseRefill(session, sessionLimitMs, refillMs, nowEpochMs)
+                SessionTracker.applyAppUseRefill(
+                    session,
+                    sessionLimitMs,
+                    refillMs,
+                    nowEpochMs,
+                    markFrictionPaid = false,
+                )
             else -> null
         }
     }

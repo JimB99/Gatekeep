@@ -2132,7 +2132,11 @@ class EnforcementCoordinator @Inject constructor(
                         ?: fullEvaluation.period as? RuleResult.Blocked
                     if (blockedAxis != null && currentForegroundPackage == packageName) {
                         val blockMessage = BlockMessageResolver.blockMessage(
-                            localizedContext, blockedAxis.reason, appLabel,
+                            localizedContext,
+                            blockedAxis.reason,
+                            appLabel,
+                            bypassAllowed = blockedAxis.bypassAllowed,
+                            breakUntilEpochMs = blockedAxis.breakUntilEpochMs,
                         )
                         showBlocked(
                             packageName, blockMessage,
@@ -2330,7 +2334,13 @@ class EnforcementCoordinator @Inject constructor(
                 }
                 stopCountdownTicker()
                 persistBreakIfNeeded(packageName, primaryProfile.id, result.breakUntilEpochMs, sessionForEval)
-                val blockMessage = BlockMessageResolver.blockMessage(localizedContext, result.reason, appLabel)
+                val blockMessage = BlockMessageResolver.blockMessage(
+                    localizedContext,
+                    result.reason,
+                    appLabel,
+                    bypassAllowed = result.bypassAllowed,
+                    breakUntilEpochMs = result.breakUntilEpochMs,
+                )
                 showBlocked(
                     packageName, blockMessage, BlockPresentationReason.fromBlockReason(result.reason),
                     result.breakUntilEpochMs, primaryProfile, mergedLimit, result,

@@ -234,6 +234,9 @@
     <string name="limit_action_notify">Notify only</string>
     <string name="limit_action_extend">Limit + extend</string>
     <string name="limit_action_hard_block">Hard block</string>
+    <string name="session_action_hard_block">Hard block (this sitting)</string>
+    <string name="session_hard_block_hint">This sitting stays blocked until you leave for at least 1 minute.</string>
+    <string name="limit_hard_block_hint">Blocked until this hour, day, or week resets.</string>
     <string name="difficulty_easy">Easy</string>
     <string name="difficulty_medium">Medium</string>
     <string name="difficulty_hard">Hard</string>
@@ -414,6 +417,10 @@
     <string name="block_daily_limit">Daily limit reached</string>
     <string name="block_hourly_limit">Hourly limit reached</string>
     <string name="block_weekly_limit">Weekly limit reached</string>
+    <string name="block_session_hard_block">This sitting is blocked. Leave for at least 1 minute to start a new sitting.</string>
+    <string name="block_hourly_hard_block">Blocked until this hour resets.</string>
+    <string name="block_daily_hard_block">Blocked until this day resets.</string>
+    <string name="block_weekly_hard_block">Blocked until this week resets.</string>
     <string name="block_generic">Limit reached</string>
     <string name="block_open_gate">Open gate</string>
     <string name="enter_profile_pin">Enter profile PIN</string>

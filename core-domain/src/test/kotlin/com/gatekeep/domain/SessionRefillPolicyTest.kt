@@ -114,7 +114,7 @@ class SessionRefillPolicyTest {
         )
         assertNotNull(applied)
         assertEquals(cap, remaining(applied!!))
-        assertTrue(applied.limitFrictionPaidThisSitting)
+        assertFalse(applied.limitFrictionPaidThisSitting)
     }
 
     @Test

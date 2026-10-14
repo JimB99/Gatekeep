@@ -229,6 +229,9 @@
     <string name="limit_action_notify">Nur benachrichtigen</string>
     <string name="limit_action_extend">Limit + verlängern</string>
     <string name="limit_action_hard_block">Harte Blockierung</string>
+    <string name="session_action_hard_block">Harte Blockierung (diese Sitzung)</string>
+    <string name="session_hard_block_hint">Diese Sitzung bleibt gesperrt, bis du mindestens 1 Minute weggehst.</string>
+    <string name="limit_hard_block_hint">Gesperrt, bis diese Stunde, dieser Tag oder diese Woche zurückgesetzt wird.</string>
     <string name="difficulty_easy">Leicht</string>
     <string name="difficulty_medium">Mittel</string>
     <string name="difficulty_hard">Schwer</string>
@@ -399,6 +402,10 @@
     <string name="block_daily_limit">Tageslimit erreicht</string>
     <string name="block_hourly_limit">Stundenlimit erreicht</string>
     <string name="block_weekly_limit">Wochenlimit erreicht</string>
+    <string name="block_session_hard_block">Diese Sitzung ist gesperrt. Mindestens 1 Minute weggehen, um eine neue Sitzung zu starten.</string>
+    <string name="block_hourly_hard_block">Gesperrt, bis diese Stunde zurückgesetzt wird.</string>
+    <string name="block_daily_hard_block">Gesperrt, bis dieser Tag zurückgesetzt wird.</string>
+    <string name="block_weekly_hard_block">Gesperrt, bis diese Woche zurückgesetzt wird.</string>
     <string name="block_generic">Limit erreicht</string>
     <string name="block_open_gate">Öffnungssperre</string>
     <string name="enter_profile_pin">Profil-PIN eingeben</string>

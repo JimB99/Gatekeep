@@ -7,9 +7,10 @@ object OpenGatePassPolicy {
     const val DEFAULT_GRACE_MS = SessionContinuityPolicy.RESUME_GRACE_MS
 
     /**
-     * Skip open-gate friction only when it was already passed in the current session.
-     * Session continuity (close-to-reopen within [DEFAULT_GRACE_MS]) is decided separately
-     * by [SessionContinuityPolicy]; a never-passed bounce must still show on-open.
+     * Skip on-open when it was paid in this sitting, or when wait/math/break
+     * was paid ([SessionState.limitFrictionPaidThisSitting]). Session continuity
+     * (leave within [DEFAULT_GRACE_MS]) is decided separately by
+     * [SessionContinuityPolicy]; a never-passed bounce must still show on-open.
      */
     @Suppress("UNUSED_PARAMETER")
     fun shouldSkipOpenGate(
@@ -17,7 +18,9 @@ object OpenGatePassPolicy {
         nowEpochMs: Long,
         graceMs: Long = DEFAULT_GRACE_MS,
     ): Boolean {
-        val passedAt = session?.openGatePassedEpochMs ?: return false
+        if (session == null) return false
+        if (session.limitFrictionPaidThisSitting) return true
+        val passedAt = session.openGatePassedEpochMs ?: return false
         return passedAt >= session.sessionStartEpochMs
     }
 
