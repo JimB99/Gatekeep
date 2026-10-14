@@ -370,6 +370,10 @@ class UsageRepository(
         )
     }
 
+    suspend fun deleteExtensionGraceForProfile(profileId: Long) {
+        pauseDao.deleteExtensionGraceForProfile(profileId)
+    }
+
     suspend fun addFocusBlock(
         profileId: Long?,
         untilEpochMs: Long,

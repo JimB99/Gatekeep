@@ -450,6 +450,8 @@ class BlockOverlayManager @Inject constructor(
             }
             OverlayFrictionGrantPolicy.Grant.SessionRefill ->
                 coordinator.get().grantSessionRefill(request.packageName)
+            OverlayFrictionGrantPolicy.Grant.PeriodContinue ->
+                coordinator.get().grantPeriodContinue(request.packageName)
             OverlayFrictionGrantPolicy.Grant.PeriodExtension -> {
                 coordinator.get().onFrictionCompleted(request.packageName)
                 coordinator.get().grantExtensionMinutes(

@@ -193,4 +193,10 @@ data class SessionStateEntity(
     val lastForegroundEndEpochMs: Long? = null,
     val devicePausedAtEpochMs: Long? = null,
     val limitFrictionPaidThisSitting: Boolean = false,
+    val periodAppUseUntilDailyMs: Long = 0L,
+    val periodAppUseUntilHourlyMs: Long = 0L,
+    val periodAppUseUntilWeeklyMs: Long = 0L,
+    val periodAppUseDayStartMs: Long = 0L,
+    val periodAppUseHourStartMs: Long = 0L,
+    val periodAppUseWeekStartMs: Long = 0L,
 )

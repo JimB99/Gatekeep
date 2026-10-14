@@ -13,6 +13,7 @@ import com.gatekeep.domain.model.FrictionDifficulty
 import com.gatekeep.domain.model.FrictionMethod
 import com.gatekeep.domain.model.MonitoredApp
 import com.gatekeep.domain.model.OnLimitAction
+import com.gatekeep.domain.model.PeriodAppUseBudget
 import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.Pause
@@ -263,6 +264,14 @@ fun SessionStateEntity.toDomain() = SessionState(
     lastForegroundEndEpochMs = lastForegroundEndEpochMs,
     devicePausedAtEpochMs = devicePausedAtEpochMs,
     limitFrictionPaidThisSitting = limitFrictionPaidThisSitting,
+    periodAppUse = PeriodAppUseBudget(
+        untilDailyMs = periodAppUseUntilDailyMs,
+        untilHourlyMs = periodAppUseUntilHourlyMs,
+        untilWeeklyMs = periodAppUseUntilWeeklyMs,
+        dayStartMs = periodAppUseDayStartMs,
+        hourStartMs = periodAppUseHourStartMs,
+        weekStartMs = periodAppUseWeekStartMs,
+    ),
 )
 
 fun SessionState.toEntity(profileId: Long) = SessionStateEntity(
@@ -279,4 +288,10 @@ fun SessionState.toEntity(profileId: Long) = SessionStateEntity(
     lastForegroundEndEpochMs = lastForegroundEndEpochMs,
     devicePausedAtEpochMs = devicePausedAtEpochMs,
     limitFrictionPaidThisSitting = limitFrictionPaidThisSitting,
+    periodAppUseUntilDailyMs = periodAppUse.untilDailyMs,
+    periodAppUseUntilHourlyMs = periodAppUse.untilHourlyMs,
+    periodAppUseUntilWeeklyMs = periodAppUse.untilWeeklyMs,
+    periodAppUseDayStartMs = periodAppUse.dayStartMs,
+    periodAppUseHourStartMs = periodAppUse.hourStartMs,
+    periodAppUseWeekStartMs = periodAppUse.weekStartMs,
 )

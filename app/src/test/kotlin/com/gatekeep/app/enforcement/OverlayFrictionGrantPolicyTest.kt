@@ -47,12 +47,26 @@ class OverlayFrictionGrantPolicyTest {
     }
 
     @Test
-    fun periodWait_keepsExtensionPathUntilPeriodTicket() {
+    fun periodWait_grantsContinueNotExtension() {
         val request = request(reason = BlockPresentationReason.dailyLimit)
         assertEquals(
-            OverlayFrictionGrantPolicy.Grant.PeriodExtension,
+            OverlayFrictionGrantPolicy.Grant.PeriodContinue,
             OverlayFrictionGrantPolicy.grant(request),
         )
+    }
+
+    @Test
+    fun periodMath_grantsContinueWhenFiveIsNotAnOption() {
+        val request = request(
+            reason = BlockPresentationReason.hourlyLimit,
+            frictionMethod = FrictionMethod.math,
+            extensionOptionMinutes = listOf(1, 10),
+        )
+        assertEquals(
+            OverlayFrictionGrantPolicy.Grant.PeriodContinue,
+            OverlayFrictionGrantPolicy.grant(request),
+        )
+        assertEquals(false, request.extensionOptionMinutes.contains(5))
     }
 
     @Test

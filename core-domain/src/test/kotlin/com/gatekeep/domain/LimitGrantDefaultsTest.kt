@@ -111,6 +111,44 @@ class LimitGrantDefaultsTest {
     }
 
     @Test
+    fun `period continue inherit uses the session cap not a refill override`() {
+        val cap = 20 * 60_000L
+        val refillOverride = 10 * 60_000L
+        assertEquals(
+            cap,
+            LimitGrantDefaults.periodContinueMs(
+                sessionLimitMs = cap,
+                inheritSessionCap = true,
+                customMs = refillOverride,
+            ),
+        )
+        assertEquals(
+            12 * 60_000L,
+            LimitGrantDefaults.periodContinueMs(
+                sessionLimitMs = cap,
+                inheritSessionCap = false,
+                customMs = 12 * 60_000L,
+            ),
+        )
+        assertEquals(
+            LimitGrantDefaults.DEFAULT_PERIOD_CONTINUE_MS,
+            LimitGrantDefaults.periodContinueMs(
+                sessionLimitMs = null,
+                inheritSessionCap = true,
+                customMs = 0L,
+            ),
+        )
+        assertNotEquals(
+            5 * 60_000L,
+            LimitGrantDefaults.periodContinueMs(
+                sessionLimitMs = cap,
+                inheritSessionCap = true,
+                customMs = 5 * 60_000L,
+            ),
+        )
+    }
+
+    @Test
     fun `session refill inherits the session cap and is never a hidden 5 minutes`() {
         val cap = 15 * 60_000L
         assertEquals(cap, LimitGrantDefaults.sessionRefillMs(cap, null))

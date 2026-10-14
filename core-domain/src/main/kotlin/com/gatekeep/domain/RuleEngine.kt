@@ -109,11 +109,13 @@ object RuleEngine {
             limitExtensionBonus = context.limitExtensionBonus,
             periodLimitsDisabled = context.periodLimitsDisabled,
             nowEpochMs = context.nowEpochMs,
+            sessionState = context.sessionState,
             sessionAllowed = sessionAxis as? SessionTracker.SessionCheckResult.Allowed,
             pauses = context.pauses,
             profileId = context.profile.id,
             packageName = context.packageName,
             sharedPool = sharedPool,
+            periodStarts = context.periodStarts,
         )
         val openAxis = evaluateOpenAxis(config, context.profile)
         val dailyCapMs = LimitEvaluator.dailyCapMs(
@@ -269,11 +271,13 @@ object RuleEngine {
         limitExtensionBonus: com.gatekeep.domain.model.LimitExtensionBonus,
         periodLimitsDisabled: Boolean,
         nowEpochMs: Long,
+        sessionState: com.gatekeep.domain.model.SessionState?,
         sessionAllowed: SessionTracker.SessionCheckResult.Allowed?,
         pauses: List<Pause>,
         profileId: Long,
         packageName: String,
         sharedPool: Boolean,
+        periodStarts: com.gatekeep.domain.model.PeriodStarts,
     ): RuleResult? {
         if (periodLimitsDisabled) {
             return RuleResult.Allowed(
@@ -284,26 +288,29 @@ object RuleEngine {
             )
         }
 
-        val graceRemainingMs = graceRemainingMs(
+        val appUseRemainingMs = sessionState?.periodAppUse
+            ?.remainingMs(usage, periodStarts, limit)
+            ?.takeIf { it > 0L }
+        val wallClockGraceMs = graceRemainingMs(
             pauses = pauses,
             profileId = profileId,
             packageName = packageName,
             nowEpochMs = nowEpochMs,
             sharedPool = sharedPool,
         )
+        val extraRemainingMs = appUseRemainingMs ?: wallClockGraceMs
         val limitResult = LimitEvaluator.evaluate(
             limit = limit,
             usage = usage,
             extensionBonus = limitExtensionBonus,
-            graceRemainingMs = graceRemainingMs,
+            graceRemainingMs = extraRemainingMs,
         )
         return when (limitResult) {
             is LimitEvaluator.LimitCheckResult.Blocked -> applyLimitAction(
                 config = config,
                 reason = limitResult.reason,
                 nowEpochMs = nowEpochMs,
-                limit = limit,
-                usage = usage,
+                existingBreakUntilEpochMs = sessionState?.breakUntilEpochMs,
             )
             is LimitEvaluator.LimitCheckResult.Allowed -> RuleResult.Allowed(
                 remainingDailyMs = limitResult.remainingDailyMs,
@@ -415,11 +422,13 @@ object RuleEngine {
         config: ProfileEnforcementConfig,
         reason: BlockReason,
         nowEpochMs: Long,
-        limit: AppLimit,
-        usage: com.gatekeep.domain.model.UsageSnapshot,
+        existingBreakUntilEpochMs: Long?,
     ): RuleResult {
-        val limitCrossedAt = limitCrossedAtFor(reason, limit, usage, nowEpochMs)
-        val breakUntil = SessionTracker.breakUntilFromCrossed(limitCrossedAt, config.limitBreakDurationMs)
+        val breakUntil = PeriodContinuePolicy.periodBreakUntilEpochMs(
+            existingBreakUntilEpochMs = existingBreakUntilEpochMs,
+            nowEpochMs = nowEpochMs,
+            breakDurationMs = config.limitBreakDurationMs,
+        )
         return when (config.onLimitAction) {
             OnLimitAction.notifyOnly -> RuleResult.Allowed(
                 remainingDailyMs = 0L,
@@ -453,27 +462,6 @@ object RuleEngine {
                 bypassAllowed = false,
             )
         }
-    }
-
-    private fun limitCrossedAtFor(
-        reason: BlockReason,
-        limit: AppLimit,
-        usage: com.gatekeep.domain.model.UsageSnapshot,
-        nowEpochMs: Long,
-    ): Long = when (reason) {
-        BlockReason.dailyLimit -> {
-            val cap = limit.dailyLimitMs ?: return nowEpochMs
-            nowEpochMs - (usage.dailyMs - cap).coerceAtLeast(0)
-        }
-        BlockReason.hourlyLimit -> {
-            val cap = limit.hourlyLimitMs ?: return nowEpochMs
-            nowEpochMs - (usage.hourlyMs - cap).coerceAtLeast(0)
-        }
-        BlockReason.weeklyLimit -> {
-            val cap = limit.weeklyLimitMs ?: return nowEpochMs
-            nowEpochMs - (usage.weeklyMs - cap).coerceAtLeast(0)
-        }
-        else -> nowEpochMs
     }
 
     private fun applySessionLimitAction(

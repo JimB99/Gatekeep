@@ -217,6 +217,33 @@ class MigrationChainTest {
     }
 
     @Test
+    fun migrate19To20_addsPeriodAppUseColumns() {
+        LegacySchemaFixtures.createVersion12(context, TEST_DB)
+
+        val db = helper.runMigrationsAndValidate(
+            TEST_DB,
+            20,
+            true,
+            *GatekeepMigrations.ALL,
+        )
+
+        db.query("PRAGMA table_info(session_state)").use { cursor ->
+            val columns = buildList {
+                while (cursor.moveToNext()) {
+                    add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+                }
+            }
+            assertTrue("periodAppUseUntilDailyMs" in columns)
+            assertTrue("periodAppUseUntilHourlyMs" in columns)
+            assertTrue("periodAppUseUntilWeeklyMs" in columns)
+            assertTrue("periodAppUseDayStartMs" in columns)
+            assertTrue("periodAppUseHourStartMs" in columns)
+            assertTrue("periodAppUseWeekStartMs" in columns)
+        }
+        db.close()
+    }
+
+    @Test
     fun migrate18To19_addsLimitFrictionPaidColumn() {
         LegacySchemaFixtures.createVersion12(context, TEST_DB)
 

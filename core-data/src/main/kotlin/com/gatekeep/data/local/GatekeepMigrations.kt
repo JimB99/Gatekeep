@@ -25,6 +25,7 @@ object GatekeepMigrations {
             MIGRATION_16_17,
             MIGRATION_17_18,
             MIGRATION_18_19,
+            MIGRATION_19_20,
         )
 
     val MIGRATION_5_6 = object : Migration(5, 6) {
@@ -315,6 +316,29 @@ object GatekeepMigrations {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL(
                 "ALTER TABLE session_state ADD COLUMN limitFrictionPaidThisSitting INTEGER NOT NULL DEFAULT 0",
+            )
+        }
+    }
+
+    val MIGRATION_19_20 = object : Migration(19, 20) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE session_state ADD COLUMN periodAppUseUntilDailyMs INTEGER NOT NULL DEFAULT 0",
+            )
+            db.execSQL(
+                "ALTER TABLE session_state ADD COLUMN periodAppUseUntilHourlyMs INTEGER NOT NULL DEFAULT 0",
+            )
+            db.execSQL(
+                "ALTER TABLE session_state ADD COLUMN periodAppUseUntilWeeklyMs INTEGER NOT NULL DEFAULT 0",
+            )
+            db.execSQL(
+                "ALTER TABLE session_state ADD COLUMN periodAppUseDayStartMs INTEGER NOT NULL DEFAULT 0",
+            )
+            db.execSQL(
+                "ALTER TABLE session_state ADD COLUMN periodAppUseHourStartMs INTEGER NOT NULL DEFAULT 0",
+            )
+            db.execSQL(
+                "ALTER TABLE session_state ADD COLUMN periodAppUseWeekStartMs INTEGER NOT NULL DEFAULT 0",
             )
         }
     }

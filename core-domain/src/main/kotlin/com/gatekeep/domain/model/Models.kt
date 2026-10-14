@@ -320,6 +320,8 @@ data class SessionState(
     val devicePausedAtEpochMs: Long? = null,
     /** Wait/math/break paid in this sitting. Issue 04 uses this to skip on-open. */
     val limitFrictionPaidThisSitting: Boolean = false,
+    /** Period continue / period-extend remaining as usage watermarks. Survives a new sitting. */
+    val periodAppUse: PeriodAppUseBudget = PeriodAppUseBudget(),
 )
 
 data class RuleEvaluationContext(
@@ -339,6 +341,7 @@ data class RuleEvaluationContext(
     val enforcementConfig: ProfileEnforcementConfig = profile.enforcementConfig(),
     val limitExtensionBonus: LimitExtensionBonus = LimitExtensionBonus(),
     val periodLimitsDisabled: Boolean = false,
+    val periodStarts: PeriodStarts = PeriodStarts(),
 )
 
 /** Independent per-axis rule outcomes before presentation merge. */

@@ -3,14 +3,15 @@ package com.gatekeep.app.enforcement
 import com.gatekeep.domain.model.BlockPresentationReason
 
 /**
- * Completing overlay wait/math: session refill is independent of extension quota and
- * overlay surface. Period wait/math still uses the extension path until issue 03.
+ * Completing overlay wait/math: session refill and period continue are independent of
+ * extension quota and overlay surface. Limit + extend buttons still use the extension path.
  */
 object OverlayFrictionGrantPolicy {
 
     enum class Grant {
         OpenGate,
         SessionRefill,
+        PeriodContinue,
         PeriodExtension,
     }
 
@@ -18,6 +19,10 @@ object OverlayFrictionGrantPolicy {
         if (request.isOpenGate) return Grant.OpenGate
         return when (request.reason) {
             BlockPresentationReason.sessionLimit -> Grant.SessionRefill
+            BlockPresentationReason.hourlyLimit,
+            BlockPresentationReason.dailyLimit,
+            BlockPresentationReason.weeklyLimit,
+            -> Grant.PeriodContinue
             else -> Grant.PeriodExtension
         }
     }

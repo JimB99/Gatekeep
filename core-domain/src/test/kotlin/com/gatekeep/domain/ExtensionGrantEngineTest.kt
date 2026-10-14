@@ -4,6 +4,7 @@ import com.gatekeep.domain.model.BlockReason
 import com.gatekeep.domain.model.LimitUsageScope
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ExtensionGrantEngineTest {
@@ -24,7 +25,7 @@ class ExtensionGrantEngineTest {
     }
 
     @Test
-    fun `overlay daily block adds grace for per app`() {
+    fun `overlay daily block is period app-use not wall-clock grace`() {
         val plan = ExtensionGrantEngine.planGrant(
             profileId = 1L,
             packageName = "com.test",
@@ -35,13 +36,13 @@ class ExtensionGrantEngineTest {
             source = ExtensionGrantSource.overlay,
         )
         assertEquals(0L, plan.sessionExcludedMsDelta)
-        assertEquals(1L, plan.graceProfileId)
-        assertEquals("com.test", plan.gracePackageName)
-        assertEquals(1_000_000L + 5 * 60_000L, plan.graceUntilEpochMs)
+        assertNull(plan.graceUntilEpochMs)
+        assertTrue(plan.applyPeriodAppUse)
+        assertEquals(5 * 60_000L, plan.extensionMs)
     }
 
     @Test
-    fun `overlay daily block shared pool uses profile grace`() {
+    fun `overlay daily block shared pool flags pool app-use`() {
         val plan = ExtensionGrantEngine.planGrant(
             profileId = 2L,
             packageName = "com.test",
@@ -51,12 +52,12 @@ class ExtensionGrantEngineTest {
             blockedReason = BlockReason.hourlyLimit,
             source = ExtensionGrantSource.overlay,
         )
-        assertEquals(2L, plan.graceProfileId)
-        assertNull(plan.gracePackageName)
+        assertNull(plan.graceUntilEpochMs)
+        assertTrue(plan.applyPeriodAppUse)
     }
 
     @Test
-    fun `in app proactive grants session and period grace`() {
+    fun `in app proactive grants session excluded and period app-use`() {
         val plan = ExtensionGrantEngine.planGrant(
             profileId = 1L,
             packageName = "com.test",
@@ -67,12 +68,12 @@ class ExtensionGrantEngineTest {
             source = ExtensionGrantSource.inApp,
         )
         assertEquals(10 * 60_000L, plan.sessionExcludedMsDelta)
-        assertEquals(100L + 10 * 60_000L, plan.graceUntilEpochMs)
-        assertNull(plan.gracePackageName)
+        assertNull(plan.graceUntilEpochMs)
+        assertTrue(plan.applyPeriodAppUse)
     }
 
     @Test
-    fun `stacks grace onto remaining until not now`() {
+    fun `in app grant does not stack wall-clock grace`() {
         val now = 1_000_000L
         val existingUntil = now + 5 * 60_000L
         val plan = ExtensionGrantEngine.planGrant(
@@ -85,7 +86,9 @@ class ExtensionGrantEngineTest {
             source = ExtensionGrantSource.inApp,
             existingGraceUntilEpochMs = existingUntil,
         )
-        assertEquals(existingUntil + 15 * 60_000L, plan.graceUntilEpochMs)
+        assertNull(plan.graceUntilEpochMs)
+        assertTrue(plan.applyPeriodAppUse)
+        assertEquals(15 * 60_000L, plan.extensionMs)
     }
 
     @Test

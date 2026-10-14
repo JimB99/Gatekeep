@@ -46,6 +46,21 @@ object LimitGrantDefaults {
     fun sessionRefillMs(sessionLimitMs: Long?, overrideMs: Long?): Long =
         overrideMs?.takeIf { it > 0 } ?: sessionLimitMs?.takeIf { it > 0 } ?: 0L
 
+    /**
+     * Period wait/math/break continue. Inherit uses the session **cap**, never a session-refill
+     * override. Custom or missing cap seeds 15 minutes. Never 5 minutes.
+     */
+    fun periodContinueMs(
+        sessionLimitMs: Long?,
+        inheritSessionCap: Boolean,
+        customMs: Long,
+    ): Long {
+        if (inheritSessionCap) {
+            return sessionLimitMs?.takeIf { it > 0 } ?: DEFAULT_PERIOD_CONTINUE_MS
+        }
+        return customMs.takeIf { it > 0 } ?: DEFAULT_PERIOD_CONTINUE_MS
+    }
+
     fun showsSessionRefill(action: OnSessionLimitAction): Boolean = when (action) {
         OnSessionLimitAction.deterrentWait,
         OnSessionLimitAction.deterrentMath,

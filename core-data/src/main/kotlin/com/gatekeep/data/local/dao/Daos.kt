@@ -153,6 +153,9 @@ interface PauseDao {
 
     @Query("DELETE FROM pauses WHERE profileId = :profileId")
     suspend fun deleteForProfile(profileId: Long)
+
+    @Query("DELETE FROM pauses WHERE type = 'extensionGrace' AND profileId = :profileId")
+    suspend fun deleteExtensionGraceForProfile(profileId: Long)
 }
 
 @Dao

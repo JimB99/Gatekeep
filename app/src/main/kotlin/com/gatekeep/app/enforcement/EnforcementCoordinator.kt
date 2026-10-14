@@ -27,13 +27,16 @@ import com.gatekeep.domain.ExtensionGrantSource
 import com.gatekeep.domain.ExtensionDenialReason
 import com.gatekeep.domain.ExtensionPolicyEvaluator
 import com.gatekeep.domain.ExtensionRequestEvaluator
+import com.gatekeep.domain.LimitEvaluator
 import com.gatekeep.domain.LimitGrantDefaults
 import com.gatekeep.domain.PauseManager
+import com.gatekeep.domain.PeriodContinuePolicy
 import com.gatekeep.domain.PeriodDuration
 import com.gatekeep.domain.ProfileMergeEngine
 import com.gatekeep.domain.RuleEngine
 import com.gatekeep.domain.SessionRefillPolicy
 import com.gatekeep.domain.SessionTracker
+import com.gatekeep.domain.withPeriodAppUse
 import com.gatekeep.domain.UsageSnapshotResolver
 import com.gatekeep.domain.model.BlockPresentationReason
 import com.gatekeep.domain.model.OverrideMethod
@@ -52,6 +55,8 @@ import com.gatekeep.domain.model.Profile
 import com.gatekeep.domain.model.RuleEvaluation
 import com.gatekeep.domain.model.RuleEvaluationContext
 import com.gatekeep.domain.model.RuleResult
+import com.gatekeep.domain.model.PeriodAppUseBudget
+import com.gatekeep.domain.model.PeriodStarts
 import com.gatekeep.domain.model.SessionState
 import com.gatekeep.domain.model.UsageSnapshot
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -168,6 +173,8 @@ class EnforcementCoordinator @Inject constructor(
     private var lastBlockProfileId: Long? = null
     private var lastSessionLimitMs: Long? = null
     private var lastSessionRefillOverrideMs: Long? = null
+    private var lastPeriodContinueInherit: Boolean = true
+    private var lastPeriodContinueDurationMs: Long = LimitGrantDefaults.DEFAULT_PERIOD_CONTINUE_MS
     private var lastDailyUsedMs: Long? = null
     private var lastDailyCapMs: Long? = null
     private var lastDailyRemainingMs: Long? = null
@@ -782,12 +789,49 @@ class EnforcementCoordinator @Inject constructor(
         scope.launch {
             try {
                 val profiles = profileRepository.observeActiveProfiles().first()
-                val profileId = profiles.firstOrNull()?.id ?: return@launch
+                val profileId = lastBlockProfileId ?: profiles.firstOrNull()?.id ?: return@launch
+                val profile = profileRepository.observeProfiles().first().find { it.id == profileId }
+                    ?: return@launch
                 val state = usageRepository.getSessionState(profileId, packageName) ?: return@launch
                 val now = System.currentTimeMillis()
-                val completed = SessionTracker.completeExpiredBreak(state, now)
+                val periodReason = lastBlockReason in setOf(
+                    BlockReason.dailyLimit,
+                    BlockReason.hourlyLimit,
+                    BlockReason.weeklyLimit,
+                )
+                val periodBreakExpired = periodReason ||
+                    (
+                        profile.onLimitAction == OnLimitAction.mandatoryBreak &&
+                            profile.onSessionLimitAction != OnSessionLimitAction.mandatoryBreak
+                        )
+                val completed = if (periodBreakExpired) {
+                    val usage = resolveUsageForEvaluation(
+                        profile = profile,
+                        packageName = packageName,
+                        now = now,
+                        matchingProfileIds = listOf(profile.id),
+                    )
+                    val continueMs = LimitGrantDefaults.periodContinueMs(
+                        sessionLimitMs = lastSessionLimitMs ?: profile.sessionLimitMs,
+                        inheritSessionCap = lastPeriodContinueInherit,
+                        customMs = lastPeriodContinueDurationMs,
+                    )
+                    PeriodContinuePolicy.completeExpiredPeriodBreak(
+                        session = state,
+                        usage = usage,
+                        continueMs = continueMs,
+                        periodStarts = periodStartsAt(now),
+                        nowEpochMs = now,
+                    )
+                } else {
+                    SessionTracker.completeExpiredBreak(state, now)
+                }
                 if (completed != state) {
-                    usageRepository.saveSessionState(completed, profileId)
+                    if (periodBreakExpired) {
+                        persistPeriodAppUse(profile, completed)
+                    } else {
+                        usageRepository.saveSessionState(completed, profileId)
+                    }
                     sessionStartedForPackage = packageName
                     recordFrictionEnd(packageName, profileId)
                 }
@@ -861,6 +905,52 @@ class EnforcementCoordinator @Inject constructor(
                 evaluate(packageName)
             } catch (e: Exception) {
                 enforcementLog.logError("Grant session refill failed", e)
+            }
+        }
+    }
+
+    fun grantPeriodContinue(packageName: String) {
+        scope.launch {
+            try {
+                val profileId = lastBlockProfileId
+                    ?: profileRepository.observeActiveProfiles().first().firstOrNull()?.id
+                if (profileId == null) return@launch
+                val profile = profileRepository.observeProfiles().first().find { it.id == profileId }
+                    ?: return@launch
+                val now = System.currentTimeMillis()
+                val perAppLimit = profileRepository.getLimit(profile.id, packageName)
+                val mergedLimit = ProfileMergeEngine.mergeProfileAndAppLimit(
+                    profile,
+                    packageName,
+                    perAppLimit,
+                )
+                val continueMs = LimitGrantDefaults.periodContinueMs(
+                    sessionLimitMs = lastSessionLimitMs ?: mergedLimit.sessionLimitMs,
+                    inheritSessionCap = lastPeriodContinueInherit,
+                    customMs = lastPeriodContinueDurationMs,
+                )
+                val usage = resolveUsageForEvaluation(
+                    profile = profile,
+                    packageName = packageName,
+                    now = now,
+                    matchingProfileIds = listOf(profile.id),
+                )
+                val periodStarts = periodStartsAt(now)
+                val session = usageRepository.getSessionState(profile.id, packageName)
+                    ?: SessionTracker.startSession(packageName, now)
+                val updated = PeriodContinuePolicy.applyContinue(
+                    session = session,
+                    usage = usage,
+                    continueMs = continueMs,
+                    periodStarts = periodStarts,
+                )
+                persistPeriodAppUse(profile, updated)
+                blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
+                blockOverlay.clearFrictionState()
+                blockOverlay.removeAfterResolution()
+                evaluate(packageName)
+            } catch (e: Exception) {
+                enforcementLog.logError("Grant period continue failed", e)
             }
         }
     }
@@ -1121,6 +1211,17 @@ class EnforcementCoordinator @Inject constructor(
             extensionMs = plan.extensionMs,
             anchors = anchors,
         )
+        if (plan.applyPeriodAppUse) {
+            val session = usageRepository.getSessionState(profile.id, packageName)
+                ?: SessionTracker.startSession(packageName, now)
+            val updated = PeriodContinuePolicy.applyExtendExtras(
+                session = session,
+                usage = grantUsage,
+                extraMs = plan.extensionMs,
+                periodStarts = periodStartsAt(now),
+            )
+            persistPeriodAppUse(profile, updated)
+        }
         if (plan.graceUntilEpochMs != null && plan.graceProfileId != null) {
             usageRepository.addExtensionGracePause(
                 profileId = plan.graceProfileId!!,
@@ -1132,8 +1233,10 @@ class EnforcementCoordinator @Inject constructor(
         if (plan.sessionExcludedMsDelta > 0) {
             val session = usageRepository.getSessionState(profile.id, packageName)
                 ?: SessionTracker.startSession(packageName, now)
-            var updated = SessionTracker.clearBreak(session)
-            updated = SessionTracker.addExcludedTime(updated, plan.sessionExcludedMsDelta)
+            val updated = SessionTracker.addExcludedTime(
+                SessionTracker.clearBreak(session),
+                plan.sessionExcludedMsDelta,
+            )
             usageRepository.saveSessionState(updated, profile.id)
             sessionStartedForPackage = packageName
         }
@@ -1279,6 +1382,8 @@ class EnforcementCoordinator @Inject constructor(
         lastBlockProfileId = null
         lastSessionLimitMs = null
         lastSessionRefillOverrideMs = null
+        lastPeriodContinueInherit = true
+        lastPeriodContinueDurationMs = LimitGrantDefaults.DEFAULT_PERIOD_CONTINUE_MS
         activeExtensionPolicy = null
         monitoredPackagesCache = emptySet()
         blockOverlay.clearFrictionState()
@@ -1643,7 +1748,7 @@ class EnforcementCoordinator @Inject constructor(
         val allScheduleWindows = profileRepository.observeAllScheduleWindows().first()
         val allScheduleSegments = profileRepository.observeAllScheduleSegments().first()
         val now = System.currentTimeMillis()
-        val pauses = usageRepository.getActivePauses(now)
+        var pauses = usageRepository.getActivePauses(now)
 
         var isMonitored = false
         var isEssential = false
@@ -1704,6 +1809,8 @@ class EnforcementCoordinator @Inject constructor(
         val config = effectiveConfig
         lastSessionLimitMs = mergedLimit?.sessionLimitMs
         lastSessionRefillOverrideMs = config.sessionRefillOverrideMs
+        lastPeriodContinueInherit = config.periodContinueInheritSessionCap
+        lastPeriodContinueDurationMs = config.periodContinueDurationMs
 
         val usage = resolveUsageForEvaluation(
             profile = primaryProfile,
@@ -1820,10 +1927,17 @@ class EnforcementCoordinator @Inject constructor(
         if (sessionState != sessionBeforePause) {
             usageRepository.saveSessionState(sessionState, primaryProfile.id)
         }
+        val periodStarts = periodStartsAt(now)
+        usageRepository.deleteExtensionGraceForProfile(primaryProfile.id)
+        pauses = usageRepository.getActivePauses(now)
         var sessionForEval = resolveSessionAfterBreak(
             packageName = packageName,
-            profileId = primaryProfile.id,
+            profile = primaryProfile,
+            limit = mergedLimit,
+            usage = usage,
+            config = config,
             sessionState = sessionState,
+            periodStarts = periodStarts,
             now = now,
         )
         val silentRefill = SessionRefillPolicy.applySilentRefillIfNeeded(
@@ -1836,6 +1950,21 @@ class EnforcementCoordinator @Inject constructor(
             val hadPendingWait = sessionForEval.pendingWaitUntilEpochMs != null
             sessionForEval = silentRefill
             usageRepository.saveSessionState(silentRefill, primaryProfile.id)
+            if (hadPendingWait) {
+                clearAbandonedWaitOverlay(packageName)
+            }
+        }
+        val silentContinue = PeriodContinuePolicy.applySilentContinueIfNeeded(
+            session = sessionForEval,
+            limit = mergedLimit,
+            usage = usage,
+            config = config,
+            periodStarts = periodStarts,
+        )
+        if (silentContinue != null) {
+            val hadPendingWait = sessionForEval.pendingWaitUntilEpochMs != null
+            sessionForEval = silentContinue
+            persistPeriodAppUse(primaryProfile, silentContinue)
             if (hadPendingWait) {
                 clearAbandonedWaitOverlay(packageName)
             }
@@ -1923,6 +2052,7 @@ class EnforcementCoordinator @Inject constructor(
             enforcementConfig = config,
             limitExtensionBonus = limitExtensionBonus,
             periodLimitsDisabled = noLimitToday,
+            periodStarts = periodStarts,
         )
 
         val openAlreadyPassed = openGatePassedPackage == packageName ||
@@ -2954,16 +3084,68 @@ class EnforcementCoordinator @Inject constructor(
 
     private suspend fun resolveSessionAfterBreak(
         packageName: String,
-        profileId: Long,
+        profile: Profile,
+        limit: AppLimit?,
+        usage: UsageSnapshot,
+        config: com.gatekeep.domain.model.ProfileEnforcementConfig,
         sessionState: SessionState,
+        periodStarts: PeriodStarts,
         now: Long,
     ): SessionState {
-        val resolved = SessionTracker.completeExpiredBreak(sessionState, now)
+        val expired = sessionState.breakUntilEpochMs?.let { now >= it } == true
+        if (!expired) return sessionState
+        val sessionWithoutBreak = SessionTracker.clearBreak(sessionState)
+        val sessionExceeded = SessionTracker.evaluateSession(limit, sessionWithoutBreak, now) is
+            SessionTracker.SessionCheckResult.SessionExceeded
+        var resolved = if (
+            config.onSessionLimitAction == OnSessionLimitAction.mandatoryBreak && sessionExceeded
+        ) {
+            SessionTracker.completeExpiredBreak(sessionState, now)
+        } else {
+            sessionWithoutBreak
+        }
+        val periodOver = LimitEvaluator.evaluate(limit, usage) is LimitEvaluator.LimitCheckResult.Blocked
+        val needsPeriodContinue = config.onLimitAction == OnLimitAction.mandatoryBreak &&
+            periodOver &&
+            resolved.periodAppUse.remainingMs(usage, periodStarts, limit) <= 0L
+        if (needsPeriodContinue) {
+            resolved = PeriodContinuePolicy.applyContinue(
+                session = resolved,
+                usage = usage,
+                continueMs = PeriodContinuePolicy.continueMs(config, limit?.sessionLimitMs),
+                periodStarts = periodStarts,
+            )
+        }
         if (resolved == sessionState) return sessionState
-        usageRepository.saveSessionState(resolved, profileId)
+        if (needsPeriodContinue) {
+            persistPeriodAppUse(profile, resolved)
+        } else {
+            usageRepository.saveSessionState(resolved, profile.id)
+        }
         sessionStartedForPackage = packageName
-        recordFrictionEnd(packageName, profileId)
+        recordFrictionEnd(packageName, profile.id)
         return resolved
+    }
+
+    private fun periodStartsAt(now: Long) = PeriodStarts(
+        dayStartMs = usageStatsCollector.dayStartEpochMs(now),
+        hourStartMs = usageStatsCollector.hourStartEpochMs(now),
+        weekStartMs = usageStatsCollector.weekStartEpochMs(now),
+    )
+
+    private suspend fun persistPeriodAppUse(profile: Profile, session: SessionState) {
+        usageRepository.saveSessionState(session, profile.id)
+        if (profile.limitUsageScope != LimitUsageScope.sharedPool) return
+        val apps = profileRepository.getMonitoredApps(profile.id)
+        for (app in apps) {
+            if (app.packageName == session.packageName) continue
+            val existing = usageRepository.getSessionState(profile.id, app.packageName)
+                ?: SessionTracker.startSession(app.packageName, session.sessionStartEpochMs)
+            usageRepository.saveSessionState(
+                existing.withPeriodAppUse(session.periodAppUse),
+                profile.id,
+            )
+        }
     }
 
     private suspend fun ensureSessionStarted(
@@ -3007,6 +3189,7 @@ class EnforcementCoordinator @Inject constructor(
                 }
                 SessionTracker.startSession(packageName, now).copy(
                     breakUntilEpochMs = existingState?.breakUntilEpochMs?.takeIf { now < it },
+                    periodAppUse = existingState?.periodAppUse ?: PeriodAppUseBudget(),
                 )
             }
             SessionStartDecision.Action.Continue -> existingState

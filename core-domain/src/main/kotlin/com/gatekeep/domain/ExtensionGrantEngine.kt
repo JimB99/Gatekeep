@@ -21,6 +21,7 @@ object ExtensionGrantEngine {
         val gracePackageName: String?,
         val graceUntilEpochMs: Long?,
         val blockedReason: BlockReason?,
+        val applyPeriodAppUse: Boolean,
     )
 
     fun planGrant(
@@ -34,11 +35,6 @@ object ExtensionGrantEngine {
         existingGraceUntilEpochMs: Long? = null,
     ): GrantPlan {
         val extensionMs = minutes.toLong() * 60_000L
-        val graceUntil = stackedGraceUntilEpochMs(
-            nowEpochMs = nowEpochMs,
-            extensionMs = extensionMs,
-            existingGraceUntilEpochMs = existingGraceUntilEpochMs,
-        )
         val isSessionBlock = blockedReason in setOf(
             BlockReason.sessionLimit,
             BlockReason.onBreak,
@@ -48,59 +44,24 @@ object ExtensionGrantEngine {
             BlockReason.hourlyLimit,
             BlockReason.weeklyLimit,
         )
-
         val sessionDelta = when {
             isSessionBlock -> extensionMs
             source == ExtensionGrantSource.inApp -> extensionMs
             else -> 0L
         }
-
-        val graceProfileId: Long?
-        val gracePackageName: String?
-        val graceUntilEpochMs: Long?
-
-        when {
-            isSessionBlock && source == ExtensionGrantSource.overlay -> {
-                graceProfileId = null
-                gracePackageName = null
-                graceUntilEpochMs = null
-            }
-            isPeriodBlock || (source == ExtensionGrantSource.inApp && blockedReason == null) -> {
-                if (limitUsageScope == LimitUsageScope.sharedPool) {
-                    graceProfileId = profileId
-                    gracePackageName = null
-                } else {
-                    graceProfileId = profileId
-                    gracePackageName = packageName
-                }
-                graceUntilEpochMs = graceUntil
-            }
-            source == ExtensionGrantSource.inApp -> {
-                if (limitUsageScope == LimitUsageScope.sharedPool) {
-                    graceProfileId = profileId
-                    gracePackageName = null
-                } else {
-                    graceProfileId = profileId
-                    gracePackageName = packageName
-                }
-                graceUntilEpochMs = graceUntil
-            }
-            else -> {
-                graceProfileId = null
-                gracePackageName = null
-                graceUntilEpochMs = null
-            }
-        }
+        val applyPeriodAppUse = isPeriodBlock ||
+            (source == ExtensionGrantSource.inApp && blockedReason == null)
 
         return GrantPlan(
             profileId = profileId,
             packageName = packageName,
             extensionMs = extensionMs,
             sessionExcludedMsDelta = sessionDelta,
-            graceProfileId = graceProfileId,
-            gracePackageName = gracePackageName,
-            graceUntilEpochMs = graceUntilEpochMs,
+            graceProfileId = null,
+            gracePackageName = null,
+            graceUntilEpochMs = null,
             blockedReason = blockedReason,
+            applyPeriodAppUse = applyPeriodAppUse,
         )
     }
 

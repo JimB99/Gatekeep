@@ -371,7 +371,7 @@ fun RuleLimitActionScreen(
                     p.copy(
                         onLimitAction = onLimit,
                         periodFrictionDifficulty = difficulty,
-                        limitWaitDurationSeconds = limitWaitSeconds.coerceIn(1, 3600),
+                        limitWaitDurationSeconds = limitWaitSeconds.coerceIn(0, 3600),
                         limitBreakDurationMs = limitBreak,
                         periodContinueInheritSessionCap = LimitGrantDefaults.continueInheritToPersist(continueInherit),
                         periodContinueDurationMs = continueMs,
@@ -431,7 +431,7 @@ fun RuleLimitActionScreen(
             showDifficultyPicker = overrideScope == null,
             onLimitChange = { onLimit = it },
             onDifficultyChange = { difficulty = it },
-            onLimitWaitChange = { limitWaitSeconds = it.coerceIn(1, 3600) },
+            onLimitWaitChange = { limitWaitSeconds = it.coerceIn(0, 3600) },
             onLimitBreakChange = { limitBreakMs = it },
             onContinueInheritChange = { continueInherit = it },
             onContinueMsChange = { continueMs = it },

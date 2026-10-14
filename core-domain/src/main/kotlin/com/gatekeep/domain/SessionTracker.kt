@@ -104,7 +104,9 @@ object SessionTracker {
     fun completeExpiredBreak(session: SessionState, nowEpochMs: Long): SessionState {
         val breakUntil = session.breakUntilEpochMs ?: return session
         if (nowEpochMs < breakUntil) return session
-        return markLimitFrictionPaid(startSession(session.packageName, nowEpochMs))
+        return markLimitFrictionPaid(
+            startSession(session.packageName, nowEpochMs).copy(periodAppUse = session.periodAppUse),
+        )
     }
 
     fun markLimitFrictionPaid(session: SessionState): SessionState =
