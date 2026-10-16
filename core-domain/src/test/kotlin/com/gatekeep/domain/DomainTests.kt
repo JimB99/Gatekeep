@@ -241,6 +241,28 @@ class RuleEngineTest {
     }
 
     @Test
+    fun `settings focus mode until blocks monitored app`() {
+        val blocked = RuleEngine.evaluate(
+            baseContext(now = 1_000_000L, focusModeUntilMs = 1_000_000L + 1),
+        )
+        assertTrue(blocked is RuleResult.Blocked)
+        assertEquals(BlockReason.focusMode, (blocked as RuleResult.Blocked).reason)
+        assertEquals(false, blocked.bypassAllowed)
+    }
+
+    @Test
+    fun `expired settings focus mode does not block under limit`() {
+        val result = RuleEngine.evaluate(
+            baseContext(
+                now = 2_000_000L,
+                usage = UsageSnapshot(dailyMs = 30 * 60_000L),
+                focusModeUntilMs = 1_000_000L,
+            ),
+        )
+        assertTrue(result is RuleResult.Allowed)
+    }
+
+    @Test
     fun `focus block returns blocked before pause allow`() {
         val focusBlock = PauseManager.createPause(
             type = com.gatekeep.domain.model.PauseType.focusBlock,
@@ -389,6 +411,7 @@ class RuleEngineTest {
         enforcementConfig: ProfileEnforcementConfig = profile.enforcementConfig(),
         sessionState: com.gatekeep.domain.model.SessionState? = null,
         limitExtensionBonus: LimitExtensionBonus = LimitExtensionBonus(),
+        focusModeUntilMs: Long? = null,
     ) = RuleEvaluationContext(
         nowEpochMs = now,
         packageName = "com.test.app",
@@ -399,6 +422,7 @@ class RuleEngineTest {
         sessionState = sessionState,
         pauses = pauses,
         resolvedSchedulePolicy = resolvedSchedulePolicy,
+        focusModeUntilMs = focusModeUntilMs,
         enforcementConfig = enforcementConfig,
         limitExtensionBonus = limitExtensionBonus,
     )
@@ -1046,6 +1070,58 @@ class FocusBlockManagerTest {
         )
         val check = FocusBlockManager.isBlocked(listOf(pause), profileId = 2, nowEpochMs = 1500)
         assertTrue(check is FocusBlockManager.BlockCheck.NotBlocked)
+    }
+}
+
+class PauseManagerOverlapTest {
+
+    @Test
+    fun `two concurrent profile pauses still pause enforcement`() {
+        val now = 1_000_000L
+        val five = PauseManager.createPause(
+            type = com.gatekeep.domain.model.PauseType.fiveMin,
+            nowEpochMs = now,
+            profileId = 1L,
+        )
+        val sixty = PauseManager.createPause(
+            type = com.gatekeep.domain.model.PauseType.sixtyMin,
+            nowEpochMs = now,
+            profileId = 1L,
+        )
+        val check = PauseManager.isFullEnforcementPaused(
+            pauses = listOf(five, sixty),
+            profileId = 1L,
+            packageName = "com.test.app",
+            nowEpochMs = now,
+        )
+        assertTrue(check is PauseManager.PauseCheck.Paused)
+    }
+
+    @Test
+    fun `expired short pause keeps the still-active longer pause`() {
+        val now = 1_000_000L
+        val five = PauseManager.createPause(
+            type = com.gatekeep.domain.model.PauseType.fiveMin,
+            nowEpochMs = now,
+            profileId = 1L,
+        )
+        val sixty = PauseManager.createPause(
+            type = com.gatekeep.domain.model.PauseType.sixtyMin,
+            nowEpochMs = now,
+            profileId = 1L,
+        )
+        val afterFive = now + 6 * 60_000L
+        val check = PauseManager.isFullEnforcementPaused(
+            pauses = listOf(five, sixty),
+            profileId = 1L,
+            packageName = "com.test.app",
+            nowEpochMs = afterFive,
+        )
+        assertTrue(check is PauseManager.PauseCheck.Paused)
+        assertEquals(
+            com.gatekeep.domain.model.PauseType.sixtyMin,
+            (check as PauseManager.PauseCheck.Paused).pause.type,
+        )
     }
 }
 

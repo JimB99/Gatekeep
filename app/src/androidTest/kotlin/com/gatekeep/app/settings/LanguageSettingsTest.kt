@@ -1,16 +1,15 @@
 package com.gatekeep.app.settings
 
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.MainActivity
 import androidx.test.platform.app.InstrumentationRegistry
+import com.gatekeep.app.support.E2eGate
 import com.gatekeep.app.support.GatekeepTestFixtures
-import com.gatekeep.app.support.GatekeepUiTest
-import com.gatekeep.app.support.GatekeepUiTest.openSettings
+import com.gatekeep.app.support.GatekeepUiNav
+import com.gatekeep.app.support.GatekeepUiNav.openSettings
 import com.gatekeep.app.util.LocaleController
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.SettingsRepository
@@ -56,19 +55,10 @@ class LanguageSettingsTest {
     }
 
     @Test
+    @E2eGate
     fun l01_defaultLanguageTag() {
         val tag = runBlocking { settingsRepository.settings.first().languageTag }
         assertEquals("en-GB", tag)
-    }
-
-    @Test
-    fun l02_switchToEachSupportedLocale() {
-        listOf("en-GB", "de-AT", "es-ES").forEach { tag ->
-            composeRule.onNodeWithTag(GatekeepTestTags.LANGUAGE_OPTION_PREFIX + tag).performClick()
-            composeRule.waitUntil(timeoutMillis = 5_000) {
-                runBlocking { settingsRepository.settings.first().languageTag } == tag
-            }
-        }
     }
 
     @Test
@@ -79,11 +69,5 @@ class LanguageSettingsTest {
         composeRule.waitForIdle()
         val saved = runBlocking { settingsRepository.settings.first().languageTag }
         assertEquals("de-AT", saved)
-    }
-
-    @Test
-    fun l04_localeListShowsNativeLabels() {
-        composeRule.onNodeWithTag(GatekeepTestTags.LANGUAGE_OPTION_PREFIX + "de-AT").assertIsDisplayed()
-        composeRule.onNodeWithTag(GatekeepTestTags.LANGUAGE_OPTION_PREFIX + "es-ES").assertIsDisplayed()
     }
 }

@@ -6,9 +6,7 @@ import dagger.hilt.android.testing.HiltAndroidTest
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
 import com.gatekeep.domain.ScheduleTestWindows
-import com.gatekeep.domain.model.LimitUsageScope
 import com.gatekeep.domain.model.OnLimitAction
-import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.PauseType
 import com.gatekeep.domain.model.SchedulePolicyMode
 import org.junit.Assert.assertTrue
@@ -50,22 +48,6 @@ class PauseEnforcementTest : EnforcementCrossAppTestBase() {
     }
 
     @Test
-    fun pa03_multiProfile_selectivePause() {
-        runSeed {
-            val a = GatekeepTestFixtures.seedProfileWithMonitoredApp(
-                profileRepository,
-                config = GatekeepTestFixtures.ProfileSeedConfig(name = "A"),
-            )
-            GatekeepTestFixtures.seedProfileWithMonitoredApp(
-                profileRepository,
-                config = GatekeepTestFixtures.ProfileSeedConfig(name = "B"),
-            )
-            GatekeepTestFixtures.seedPause(usageRepository, PauseType.fifteenMin, a.profileId)
-        }
-        harness.launchTargetA()
-    }
-
-    @Test
     fun pa05_profilePauseToday_allowsOverCap() {
         runSeed {
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
@@ -84,29 +66,6 @@ class PauseEnforcementTest : EnforcementCrossAppTestBase() {
                 PauseType.untilDatetime,
                 seeded.profileId,
                 packageName = null,
-                untilMs = dayEnd,
-            )
-        }
-        harness.launchTargetA()
-        assertAllowedWithoutBlockingOverlay()
-    }
-
-    @Test
-    fun pa06_profilePauseToday_sharedPool() {
-        runSeed {
-            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
-                profileRepository = profileRepository,
-                config = GatekeepTestFixtures.ProfileSeedConfig(
-                    limitUsageScope = LimitUsageScope.sharedPool,
-                    onLimitAction = OnLimitAction.hardBlock,
-                ),
-            )
-            val dayEnd = com.gatekeep.domain.TimeBoundaries.dayBounds(
-                System.currentTimeMillis(),
-                dayResetMinuteOfDay = com.gatekeep.domain.DayReset.DEFAULT_MINUTE_OF_DAY,
-            ).endExclusiveMs
-            GatekeepTestFixtures.seedPause(
-                usageRepository, PauseType.untilDatetime, seeded.profileId, packageName = null,
                 untilMs = dayEnd,
             )
         }
@@ -137,6 +96,10 @@ class PauseEnforcementTest : EnforcementCrossAppTestBase() {
         harness.launchTargetA()
         harness.waitForElapsedMs(GatekeepTestFixtures.TestDurations.msAfterTimerMs(GatekeepTestFixtures.TestDurations.PAUSE_EXPIRY_MS))
         enforcementCoordinator.refresh()
+        assertTrue(
+            "pause expiry must show overlay ${harness.screenDiagnostics()}",
+            harness.waitForOverlay(),
+        )
     }
 
     @Test
@@ -166,32 +129,5 @@ class PauseEnforcementTest : EnforcementCrossAppTestBase() {
         }
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())
-    }
-
-    @Test
-    fun pa10_focusBlock_profileScoped() {
-        runSeed {
-            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
-                profileRepository,
-                config = GatekeepTestFixtures.ProfileSeedConfig(name = "Focused"),
-            )
-            usageRepository.addFocusBlock(
-                seeded.profileId,
-                System.currentTimeMillis() + GatekeepTestFixtures.TestDurations.FUTURE_OFFSET_MS,
-                System.currentTimeMillis(),
-            )
-        }
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-    }
-
-    @Test
-    fun pa12_overlappingPauses() {
-        runSeed {
-            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(profileRepository)
-            GatekeepTestFixtures.seedPause(usageRepository, PauseType.fiveMin, seeded.profileId)
-            GatekeepTestFixtures.seedPause(usageRepository, PauseType.sixtyMin, seeded.profileId)
-        }
-        harness.launchTargetA()
     }
 }

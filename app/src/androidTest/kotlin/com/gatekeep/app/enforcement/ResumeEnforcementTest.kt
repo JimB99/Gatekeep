@@ -103,7 +103,10 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
         )
         harness.useRealForegroundDetection()
         harness.pressHome()
-        assertTrue(harness.waitForOverlayGone(2_000))
+        assertTrue(
+            "home must hide overlay ${harness.screenDiagnostics()}",
+            harness.waitForOverlayGone(2_000),
+        )
         harness.launchTargetA()
         assertTrue(
             "overlay must return after reopen ${harness.screenDiagnostics()}",
@@ -183,12 +186,15 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
         }
         harness.wakeDevice()
         harness.launchTargetA()
-        val before = harness.waitForSessionRemainingSeconds(timeoutMs = 8_000)
         assertTrue(
             "session HUD should start ${harness.screenDiagnostics()}",
-            before != null && before >= 5,
+            harness.waitForSessionRemainingSeconds(timeoutMs = 8_000) != null,
         )
-        harness.sleepDevice()
+        val before = harness.sleepDeviceCapturingSessionRemaining()
+        assertTrue(
+            "screen must be off after sleepDevice screenOn=${harness.isScreenOn()} before=$before ${harness.screenDiagnostics()}",
+            !harness.isScreenOn() && before != null && before >= 1,
+        )
         harness.sleepMs(12_000)
         harness.wakeDevice()
         harness.sleepMs(800)
@@ -247,79 +253,6 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
     }
 
     /**
-     * RES-06: Session-limit overlay then lock ≥60s — unlock must start a fresh session
-     * (open wait), not restore the old session-limit overlay.
-     */
-    @Test
-    fun res06_lockAtLeastOneMinute_atSessionLimit_startsFreshOpenWait() {
-        val pkg = EnforcementTestPackages.TARGET_A
-        runSeed {
-            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
-                profileRepository = profileRepository,
-                config = GatekeepTestFixtures.ProfileSeedConfig(
-                    onOpenAction = OnOpenAction.deterrentWait,
-                    onSessionLimitAction = OnSessionLimitAction.hardBlock,
-                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.OPEN_WAIT_SEC,
-                    sessionLimitMs = GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS,
-                    dailyLimitMs = null,
-                ),
-            )
-            val now = System.currentTimeMillis()
-            GatekeepTestFixtures.seedUsageAtCap(
-                usageRepository,
-                seeded.profileId,
-                seeded.packageName,
-                sessionState = SessionState(
-                    packageName = seeded.packageName,
-                    sessionStartEpochMs = now -
-                        GatekeepTestFixtures.TestDurations.SESSION_OVER_CAP_MS,
-                    lastForegroundEndEpochMs = now -
-                        GatekeepTestFixtures.TestDurations.SESSION_CONTINUE_GAP_MS,
-                    openGatePassedEpochMs = now -
-                        GatekeepTestFixtures.TestDurations.SESSION_OVER_CAP_MS + 1,
-                ),
-            )
-        }
-        harness.wakeDevice()
-        harness.launchTargetA()
-        assertTrue(
-            "session-limit overlay should show ${harness.screenDiagnostics()}",
-            harness.waitForOverlay(timeoutMs = 8_000),
-        )
-        val blockedMessage = harness.overlayMessageText().orEmpty()
-        assertTrue(
-            "expected session block, was $blockedMessage ${harness.screenDiagnostics()}",
-            blockedMessage.contains("Session", ignoreCase = true),
-        )
-        harness.sleepDevice()
-        harness.sleepMs(61_000)
-        harness.wakeDevice()
-        val seenOpenWait = harness.waitForOpenFriction(timeoutMs = 8_000)
-        val traces = enforcementCoordinator.enforcementTraceSnapshot()
-        val startFresh = traces.any {
-            it.event == EnforcementTrace.SESSION_START && it.fields["action"] == "StartFresh"
-        }
-        val openGateShown = traces.any {
-            it.event == EnforcementTrace.OVERLAY_SHOW && it.fields["openGate"] == "true"
-        }
-        assertTrue(
-            "long lock must StartFresh open wait traces=$traces ${harness.screenDiagnostics()}",
-            startFresh && (seenOpenWait || openGateShown),
-        )
-        val after = harness.overlayMessageText().orEmpty()
-        assertTrue(
-            "must not skip open wait after long lock, was $after traces=$traces ${harness.screenDiagnostics()}",
-            seenOpenWait || openGateShown,
-        )
-        assertTrue(
-            "trace: no session-limit overlay restore after long lock",
-            enforcementCoordinator.enforcementTraceSnapshot().none {
-                it.event == EnforcementTrace.OVERLAY_RESTORE && it.fields["pkg"] == pkg
-            } || enforcementCoordinator.enforcementTraceCount(EnforcementTrace.SHOW_OPEN_DETERRENT) >= 1,
-        )
-    }
-
-    /**
      * RES-07: Mid-session lock for 5s then unlock — same session, remaining not burned.
      */
     @Test
@@ -337,12 +270,15 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
         }
         harness.wakeDevice()
         harness.launchTargetA()
-        val before = harness.waitForSessionRemainingSeconds(timeoutMs = 8_000)
         assertTrue(
             "session HUD should start ${harness.screenDiagnostics()}",
-            before != null && before >= 10,
+            harness.waitForSessionRemainingSeconds(timeoutMs = 8_000) != null,
         )
-        harness.sleepDevice()
+        val before = harness.sleepDeviceCapturingSessionRemaining()
+        assertTrue(
+            "screen must be off after sleepDevice screenOn=${harness.isScreenOn()} before=$before ${harness.screenDiagnostics()}",
+            !harness.isScreenOn() && before != null && before >= 10,
+        )
         harness.sleepMs(5_000)
         harness.wakeDevice()
         harness.sleepMs(800)

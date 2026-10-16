@@ -2,12 +2,16 @@ package com.gatekeep.app.enforcement
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
+import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
 import dagger.hilt.android.testing.HiltAndroidTest
 import com.gatekeep.domain.model.ExtensionPolicy
 import com.gatekeep.domain.model.ExtensionSurfaceMode
 import com.gatekeep.domain.model.OnLimitAction
+import com.gatekeep.domain.model.OnOpenAction
+import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.PauseType
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,8 +32,11 @@ class ExtensionEnforcementTest : EnforcementCrossAppTestBase() {
             )
         }
         harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-        assertTrue(harness.clickOverlayExtensionMinutes(5))
+        assertTrue("e01 overlay", harness.waitForOverlay())
+        assertTrue(
+            "e01 +5 click and overlay gone ${harness.screenDiagnostics()}",
+            harness.clickOverlayExtensionMinutes(5),
+        )
         assertOverlayHidden()
         assertAllowedWithoutBlockingOverlay()
     }
@@ -88,9 +95,10 @@ class ExtensionEnforcementTest : EnforcementCrossAppTestBase() {
     }
 
     @Test
-    fun e06_extensionGrace_pause() {
+    fun e06_leftoverGracePause_doesNotAllow_extrasDo() {
+        lateinit var seeded: GatekeepTestFixtures.SeededProfile
         runSeed {
-            val seeded = seedBlockedProfile(
+            seeded = seedBlockedProfile(
                 config = GatekeepTestFixtures.ProfileSeedConfig(
                     onLimitAction = OnLimitAction.limitWithExtensions,
                 ),
@@ -102,7 +110,80 @@ class ExtensionEnforcementTest : EnforcementCrossAppTestBase() {
             )
         }
         harness.launchTargetA()
+        assertTrue("e06 overlay", harness.waitForOverlay())
+        val granted = runBlocking {
+            enforcementCoordinator.grantExtensionForProfileAwait(
+                seeded.profileId,
+                seeded.packageName,
+                minutes = 5,
+            )
+        }
+        assertTrue(granted)
         assertAllowedWithoutBlockingOverlay()
+    }
+
+    @Test
+    fun sessionWait_grantSessionRefill_allowsOverCap() {
+        runSeed {
+            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.none,
+                    onLimitAction = OnLimitAction.notifyOnly,
+                    onSessionLimitAction = OnSessionLimitAction.deterrentWait,
+                    dailyLimitMs = null,
+                    sessionLimitMs = GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS,
+                    sessionWaitDurationSeconds = 30,
+                ),
+            )
+            GatekeepTestFixtures.seedUsageAtCap(
+                usageRepository,
+                seeded.profileId,
+                seeded.packageName,
+                sessionState = GatekeepTestFixtures.continuedSession(
+                    seeded.packageName,
+                    GatekeepTestFixtures.TestDurations.SESSION_OVER_CAP_MS,
+                ),
+            )
+        }
+        harness.launchTargetA()
+        assertTrue(
+            "session wait overlay ${harness.screenDiagnostics()}",
+            harness.waitForOverlay(),
+        )
+        assertTrue(
+            "grantSessionRefill",
+            runBlocking { enforcementCoordinator.grantSessionRefillAwait(EnforcementTestPackages.TARGET_A) },
+        )
+        assertAllowedWithoutBlockingOverlay()
+        assertOverlayHidden()
+    }
+
+    @Test
+    fun periodWait_grantPeriodContinue_allowsOverCap() {
+        runSeed {
+            seedBlockedProfile(
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.none,
+                    onLimitAction = OnLimitAction.deterrentWait,
+                    onSessionLimitAction = OnSessionLimitAction.notifyOnly,
+                    sessionLimitMs = null,
+                    limitWaitDurationSeconds = 30,
+                ),
+                dailyMs = GatekeepTestFixtures.TestDurations.OVER_DAILY_CAP_MS,
+            )
+        }
+        harness.launchTargetA()
+        assertTrue(
+            "period wait overlay ${harness.screenDiagnostics()}",
+            harness.waitForOverlay(),
+        )
+        assertTrue(
+            "grantPeriodContinue",
+            runBlocking { enforcementCoordinator.grantPeriodContinueAwait(EnforcementTestPackages.TARGET_A) },
+        )
+        assertAllowedWithoutBlockingOverlay()
+        assertOverlayHidden()
     }
 
     @Test
@@ -118,7 +199,7 @@ class ExtensionEnforcementTest : EnforcementCrossAppTestBase() {
             seedHardBlockProfile()
         }
         harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
+        assertTrue("e07 overlay", harness.waitForOverlay())
     }
 
     @Test
@@ -134,7 +215,7 @@ class ExtensionEnforcementTest : EnforcementCrossAppTestBase() {
             seedHardBlockProfile()
         }
         harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
+        assertTrue("e08 overlay", harness.waitForOverlay())
     }
 
     @Test

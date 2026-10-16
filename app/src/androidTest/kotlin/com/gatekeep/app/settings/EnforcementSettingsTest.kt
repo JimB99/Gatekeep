@@ -7,9 +7,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.MainActivity
+import com.gatekeep.app.support.E2eGate
 import com.gatekeep.app.support.GatekeepTestFixtures
-import com.gatekeep.app.support.GatekeepUiTest
-import com.gatekeep.app.support.GatekeepUiTest.openSettings
+import com.gatekeep.app.support.GatekeepUiNav
+import com.gatekeep.app.support.GatekeepUiNav.openSettings
 import com.gatekeep.app.enforcement.EnforcementTraceQuery
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.SettingsRepository
@@ -79,12 +80,16 @@ class EnforcementSettingsTest {
     }
 
     @Test
+    @E2eGate
     fun set01_sessionTimerToggle() {
         openNotificationSettings()
         composeRule.onNodeWithTag(GatekeepTestTags.SETTINGS_SESSION_TIMER_TOGGLE).performClick()
         composeRule.waitForIdle()
         val on = runBlocking { settingsRepository.settings.first().showSessionTimerNotification }
-        assertFalse(on)
+        assertFalse(
+            "session timer still on after toggle (leftover overlay can eat the click)",
+            on,
+        )
     }
 
     @Test
@@ -92,7 +97,9 @@ class EnforcementSettingsTest {
         val initial = runBlocking { settingsRepository.settings.first().weeklyReportEnabled }
         openNotificationSettings()
         composeRule.onNodeWithTag(GatekeepTestTags.SETTINGS_WEEKLY_REPORT_TOGGLE).performClick()
-        composeRule.waitForIdle()
+        composeRule.waitUntil(5_000) {
+            runBlocking { settingsRepository.settings.first().weeklyReportEnabled } != initial
+        }
         val after = runBlocking { settingsRepository.settings.first().weeklyReportEnabled }
         assertTrue(initial != after)
     }

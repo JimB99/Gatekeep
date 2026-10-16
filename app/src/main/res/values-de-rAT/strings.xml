@@ -177,7 +177,6 @@
     <string name="limits_apply_all_apps">Limits gelten für alle Apps im Profil</string>
     <string name="daily_limit">Tageslimit</string>
     <string name="session_limit">Sitzungslimit</string>
-    <string name="break_duration">Pausendauer (0 = keine Wartezeit)</string>
     <string name="hourly_limit_off">Stundenlimit (0 = aus)</string>
     <string name="weekly_limit_off">Wochenlimit (0 = aus)</string>
     <string name="save_limits">Limits speichern</string>
@@ -197,7 +196,7 @@
     <string name="period_continue_inherit">Wie Sitzungslimit</string>
     <string name="period_continue_duration">Fortsetzen</string>
     <string name="wait_before_opening_label">Warten vor dem Öffnen</string>
-    <string name="wait_during_use">Warten während der Nutzung (Sitzung/Limit)</string>
+    <string name="wait_during_use">Warten während der Nutzung</string>
     <string name="extension_options">Verlängerungsoptionen</string>
     <string name="extension_minutes_label">Verlängerungsminuten</string>
     <string name="extension_custom">Benutzerdefiniert</string>
@@ -453,7 +452,7 @@
     <string name="limit_usage_scope_per_app_hint">Jede überwachte App hat einen eigenen Zähler für dieselben Limitwerte.</string>
     <string name="limit_usage_scope_shared">Gemeinsam</string>
     <string name="limit_usage_scope_shared_hint">Nutzung aller überwachten Apps zählt zu einem gemeinsamen Pool.</string>
-    <string name="limit_wait_duration">Warten vor Umgehung des Nutzungslimits</string>
+    <string name="limit_wait_duration">Warten nach Nutzungslimit</string>
     <string name="limits_hierarchy_error">Wöchentlich muss mindestens täglich, täglich mindestens stündlich und stündlich mindestens Sitzung sein.</string>
     <string name="limits_hierarchy_hint">Wöchentlich ≥ täglich ≥ stündlich ≥ Sitzung</string>
     <string name="no_limit_today_short">Heute kein Limit</string>

@@ -9,8 +9,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.MainActivity
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
-import com.gatekeep.app.support.GatekeepUiTest
-import com.gatekeep.app.support.GatekeepUiTest.openProfile
+import com.gatekeep.app.support.GatekeepUiNav
+import com.gatekeep.app.support.GatekeepUiNav.openProfile
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository

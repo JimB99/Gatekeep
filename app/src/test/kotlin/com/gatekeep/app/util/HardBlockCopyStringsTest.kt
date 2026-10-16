@@ -13,7 +13,7 @@ import org.junit.Test
 class HardBlockCopyStringsTest {
 
     @Test
-    fun sessionHardBlockOverlayUsesSittingCopy() {
+    fun sessionHardBlockOverlayUsesSessionLeaveCopy() {
         assertEquals(
             R.string.block_session_hard_block,
             BlockMessageResolver.blockMessageRes(
@@ -24,7 +24,7 @@ class HardBlockCopyStringsTest {
     }
 
     @Test
-    fun periodHardBlockOverlayUsesResetCopyNotSittingLeave() {
+    fun periodHardBlockOverlayUsesResetCopyNotSessionLeave() {
         assertEquals(
             R.string.block_daily_hard_block,
             BlockMessageResolver.blockMessageRes(
@@ -74,7 +74,7 @@ class HardBlockCopyStringsTest {
     }
 
     @Test
-    fun sessionRulesLabelNamesThisSitting() {
+    fun sessionRulesLabelNamesThisSession() {
         assertEquals(
             R.string.session_action_hard_block,
             sessionActionLabelRes(OnSessionLimitAction.hardBlock),

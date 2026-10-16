@@ -15,24 +15,33 @@ abstract class EnforcementCrossAppTestBase : GatekeepInstrumentedTestBase() {
 
     @After
     fun tearDownEnforcement() {
-        harness.onNavigatedAway = null
-        harness.onTargetLaunched = null
+        runCatching { harness.failIfAnr("tearDown") }
+        runCatching { harness.pressHome() }
+        runCatching { enforcementCoordinator.resetInstrumentationState() }
+        // Hide claim is 1.5s. A leftover session-wait overlay is suite pollution
+        // (obs02 isolation-green; suite dump was "Leave for at least 1m 0s").
+        if (!harness.waitForOverlayGone(1_500)) {
+            runCatching { enforcementCoordinator.resetInstrumentationState() }
+            harness.waitForOverlayGone(1_500)
+        }
         runCatching { harness.restoreStayAwake() }
         runCatching { harness.wakeDevice() }
-        runCatching {
-            runBlocking { enforcementCoordinator.resetInstrumentationState() }
-        }
+        harness.onNavigatedAway = null
+        harness.onTargetLaunched = null
     }
 
     @Before
     override fun baseSetUp() {
         super.baseSetUp()
-        if (!harness.isAccessibilityHealthy()) {
+        harness.failIfAnr("baseSetUp")
+        if (!harness.isAccessibilityHealthy() || !harness.canReadAccessibilityWindows()) {
             GatekeepInstrumentedTestBase.resetEnforcementEnvironmentCache()
         }
         enforcementCoordinator.resetInstrumentationState()
+        harness.waitForOverlayGone(1_500)
         harness.resetTestTargetUsageStats()
         harness.wakeDevice()
+        harness.disableSoftImeForTests()
         restoreForegroundInjection()
         prepareEnforcementEnvironment()
     }
@@ -44,8 +53,26 @@ abstract class EnforcementCrossAppTestBase : GatekeepInstrumentedTestBase() {
             enforcementCoordinator.refresh()
         }
         harness.onNavigatedAway = {
-            enforcementCoordinator.pollForeground()
-            enforcementCoordinator.refresh()
+            val pkg = harness.device.currentPackageName
+            val leavePkg = if (pkg != null &&
+                (ForegroundStabilizationPolicy.isTransientForegroundPackage(pkg) ||
+                    OverlayWindowClassifier.isRecentsHost(pkg))
+            ) {
+                pkg
+            } else {
+                "com.google.android.apps.nexuslauncher"
+            }
+            enforcementCoordinator.injectWindowStackForTests(
+                listOf(
+                    OverlayWindowSnapshot(
+                        packageName = leavePkg,
+                        className = "android.launcher.Launcher",
+                        isOverlay = false,
+                        isFocused = true,
+                        isActive = true,
+                    ),
+                ),
+            )
         }
     }
 
@@ -64,7 +91,12 @@ abstract class EnforcementCrossAppTestBase : GatekeepInstrumentedTestBase() {
     }
 
     protected fun assertOverlayHidden() {
-        assertTrue(runBlocking { enforcementCoordinator.awaitOverlayHiddenForTests() })
+        val coordHidden = runBlocking { enforcementCoordinator.awaitOverlayHiddenForTests() }
+        val uiGone = harness.waitForOverlayGone(1_500)
+        assertTrue(
+            "overlay still visible coordHidden=$coordHidden ${harness.screenDiagnostics()}",
+            coordHidden && uiGone,
+        )
     }
 
     protected fun assertBlockedWithOverlay(

@@ -88,4 +88,16 @@ class OverlayPresentPolicyTest {
         assertFalse(OverlayPresentPolicy.shouldReshow(overlayVisible = false, showInFlight = true))
         assertTrue(OverlayPresentPolicy.shouldReshow(overlayVisible = false, showInFlight = false))
     }
+
+    @Test
+    fun postedDelayOpen_doesNotRunAfterHideEpochBump() {
+        assertTrue(OverlayPresentPolicy.shouldRunPostedShow(postedEpoch = 4L, currentEpoch = 4L))
+        assertFalse(OverlayPresentPolicy.shouldRunPostedShow(postedEpoch = 4L, currentEpoch = 5L))
+    }
+
+    @Test
+    fun staleWaitTick_removesOnlyWhileItIsTheActiveRunnable() {
+        assertTrue(OverlayPresentPolicy.shouldRemoveOnStaleWaitTick(isCurrentWaitRunnable = true))
+        assertFalse(OverlayPresentPolicy.shouldRemoveOnStaleWaitTick(isCurrentWaitRunnable = false))
+    }
 }

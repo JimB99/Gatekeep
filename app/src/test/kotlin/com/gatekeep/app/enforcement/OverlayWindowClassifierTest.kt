@@ -290,4 +290,29 @@ class OverlayWindowClassifierTest {
             top?.className,
         )
     }
+
+    @Test
+    fun pickTopRelevantWindow_ownerSystemOverlay_doesNotBeatFocusedLauncher() {
+        val owner = "com.gatekeep.app"
+        val launcher = "com.google.android.apps.nexuslauncher"
+        val windows = listOf(
+            OverlayWindowSnapshot(
+                packageName = owner,
+                className = "android.widget.FrameLayout",
+                isOverlay = false,
+                isFocused = false,
+                isActive = true,
+                windowType = OverlayWindowClassifier.TYPE_SYSTEM,
+            ),
+            OverlayWindowSnapshot(
+                packageName = launcher,
+                className = "com.google.android.apps.nexuslauncher.NexusLauncherActivity",
+                isOverlay = false,
+                isFocused = true,
+                isActive = true,
+            ),
+        )
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, owner, owner)
+        assertEquals(launcher, top?.packageName)
+    }
 }

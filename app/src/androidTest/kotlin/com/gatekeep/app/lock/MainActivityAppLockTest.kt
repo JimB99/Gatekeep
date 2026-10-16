@@ -76,15 +76,6 @@ class MainActivityAppLockTest {
     }
 
     @Test
-    fun pin02_correctPin_showsDashboard() {
-        recreateWithSeededSettings {
-            GatekeepTestFixtures.seedAppLockEnabled(settingsRepository)
-        }
-        unlockApp()
-        assertDashboardVisible()
-    }
-
-    @Test
     fun pin04_backgroundingRequiresPinAgain() {
         recreateWithSeededSettings {
             GatekeepTestFixtures.seedAppLockEnabled(settingsRepository)

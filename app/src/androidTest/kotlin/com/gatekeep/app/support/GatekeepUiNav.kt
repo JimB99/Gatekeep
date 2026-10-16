@@ -10,7 +10,7 @@ import androidx.test.ext.junit.rules.ActivityScenarioRule
 import com.gatekeep.app.MainActivity
 import com.gatekeep.app.ui.GatekeepTestTags
 
-object GatekeepUiTest {
+object GatekeepUiNav {
 
     fun AndroidComposeTestRule<ActivityScenarioRule<MainActivity>, MainActivity>.openSettings() {
         onNodeWithTag(GatekeepTestTags.NAV_SETTINGS).performClick()

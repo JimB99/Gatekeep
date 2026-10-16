@@ -1,0 +1,13 @@
+---
+description: Gatekeep JVM and instrumented tests — yield gate, ship bar, fail dumps
+globs: "**/androidTest/**/*.kt,**/src/test/**/*Test.kt,docs/instrumented-testing.md,docs/test-scenarios.md"
+alwaysApply: false
+---
+
+# Gatekeep tests
+
+Follow [docs/instrumented-testing.md](docs/instrumented-testing.md).
+
+- **Yield gate:** one cheap cycle with no new fact → stop, add a standing rule in that doc, then change harness or product.
+- **Ship bar:** JVM green, then `:core-data:connectedDebugAndroidTest` alone, then `:app:connectedDebugAndroidTest` alone, 0 failures. Full connected is the ship bar, not a debugger.
+- One leftover = one method until that cause is known.

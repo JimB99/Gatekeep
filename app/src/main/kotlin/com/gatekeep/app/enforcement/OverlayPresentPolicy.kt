@@ -35,4 +35,16 @@ object OverlayPresentPolicy {
     /** Restore/reshow must not tear down a visible or in-flight overlay. */
     fun shouldReshow(overlayVisible: Boolean, showInFlight: Boolean): Boolean =
         !overlayVisible && !showInFlight
+
+    /**
+     * DelayOpen posts onto the main queue. Hide / onOpenGatePassed bump the epoch
+     * first; a queued show must not rebuild the wait overlay on Home or after pass.
+     * A wait ticker that sees a stale epoch must remove only if it is still the
+     * active wait runnable — a replaced ticker must not tear down a newer overlay.
+     */
+    fun shouldRunPostedShow(postedEpoch: Long, currentEpoch: Long): Boolean =
+        postedEpoch == currentEpoch
+
+    fun shouldRemoveOnStaleWaitTick(isCurrentWaitRunnable: Boolean): Boolean =
+        isCurrentWaitRunnable
 }

@@ -160,6 +160,7 @@ class EnforcementCoordinator @Inject constructor(
     private var lastOverlayRestoreAtMs: Long = 0
     @Volatile private var lastPostedOverlay: OverlayPresentPolicy.Identity? = null
     @Volatile private var overlayShowInFlight: Boolean = false
+    @Volatile private var overlayGrantInProgress: Boolean = false
     private var lastLeftPackage: String? = null
     private var lastLeftAtMs: Long = 0
     private val warnedPackagesToday = mutableSetOf<String>()
@@ -233,6 +234,18 @@ class EnforcementCoordinator @Inject constructor(
                     } catch (e: Exception) {
                         enforcementLog.logError("Foreground change failed", e)
                     }
+                }
+                return
+            }
+            // UsageStats polls often omit the activity class. The debug test target is this
+            // same package; treating a class-less event as Gatekeep UI clears the overlay
+            // before addView runs.
+            if (BuildConfig.DEBUG &&
+                windowClassName.isNullOrBlank() &&
+                (packageName in monitoredPackagesCache || currentForegroundPackage == packageName)
+            ) {
+                if (shouldReevaluateSamePackageCommit(packageName)) {
+                    reevaluateSamePackage(packageName)
                 }
                 return
             }
@@ -654,6 +667,7 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     fun shouldPresentBlockOverlay(packageName: String): Boolean {
+        if (overlayGrantInProgress) return false
         val hasLeft = lastLeftPackage == packageName && currentForegroundPackage != packageName
         if (!DeviceUsePolicy.shouldRunEnforcement(
                 screenStateMonitor.deviceUsePhase(hasLeftApp = hasLeft),
@@ -751,6 +765,7 @@ class EnforcementCoordinator @Inject constructor(
                 return@post
             }
             blockOverlay.show(request)
+            if (blockOverlay.isVisible()) overlayShowInFlight = false
         }
     }
 
@@ -774,6 +789,21 @@ class EnforcementCoordinator @Inject constructor(
         stopCountdownTicker()
         blockOverlay.clearFrictionState()
         blockOverlay.removeOverlaySynchronously()
+    }
+
+    /** Overlay button already runs on main; tear down after the click returns so the window can detach. */
+    private fun beginOverlayGrant() {
+        overlayGrantInProgress = true
+        lastPostedOverlay = null
+        overlayShowInFlight = false
+        blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
+        stopCountdownTicker()
+        blockOverlay.clearFrictionState()
+        mainHandler.post { blockOverlay.removeOverlaySynchronously() }
+    }
+
+    private fun endOverlayGrant() {
+        overlayGrantInProgress = false
     }
 
     private fun clearAbandonedWaitOverlay(packageName: String) {
@@ -870,103 +900,120 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     fun grantSessionRefill(packageName: String) {
-        scope.launch {
-            try {
-                val profileId = lastBlockProfileId
-                    ?: profileRepository.observeActiveProfiles().first().firstOrNull()?.id
-                if (profileId == null) return@launch
-                val profile = profileRepository.observeProfiles().first().find { it.id == profileId }
-                    ?: return@launch
-                val now = System.currentTimeMillis()
-                val perAppLimit = profileRepository.getLimit(profile.id, packageName)
-                val mergedLimit = ProfileMergeEngine.mergeProfileAndAppLimit(
-                    profile,
-                    packageName,
-                    perAppLimit,
-                )
-                val sessionLimitMs = (lastSessionLimitMs ?: mergedLimit.sessionLimitMs)
-                    ?.takeIf { it > 0L } ?: return@launch
-                val refillMs = LimitGrantDefaults.sessionRefillMs(
-                    sessionLimitMs,
-                    lastSessionRefillOverrideMs ?: profile.sessionRefillOverrideMs,
-                )
-                val session = usageRepository.getSessionState(profile.id, packageName)
-                    ?: SessionTracker.startSession(packageName, now)
-                val updated = SessionTracker.applyAppUseRefill(
-                    session = session,
-                    sessionLimitMs = sessionLimitMs,
-                    refillMs = refillMs,
-                    nowEpochMs = now,
-                )
+        scope.launch { grantSessionRefillAwait(packageName) }
+    }
+
+    suspend fun grantSessionRefillAwait(packageName: String): Boolean {
+        return try {
+            val profileId = lastBlockProfileId
+                ?: profileRepository.observeActiveProfiles().first().firstOrNull()?.id
+            if (profileId == null) return false
+            val profile = profileRepository.observeProfiles().first().find { it.id == profileId }
+                ?: return false
+            val now = System.currentTimeMillis()
+            val perAppLimit = profileRepository.getLimit(profile.id, packageName)
+            val mergedLimit = ProfileMergeEngine.mergeProfileAndAppLimit(
+                profile,
+                packageName,
+                perAppLimit,
+            )
+            val sessionLimitMs = (lastSessionLimitMs ?: mergedLimit.sessionLimitMs)
+                ?.takeIf { it > 0L } ?: return false
+            val refillMs = LimitGrantDefaults.sessionRefillMs(
+                sessionLimitMs,
+                lastSessionRefillOverrideMs ?: profile.sessionRefillOverrideMs,
+            )
+            val session = usageRepository.getSessionState(profile.id, packageName)
+                ?: SessionTracker.startSession(packageName, now)
+            val updated = SessionTracker.applyAppUseRefill(
+                session = session,
+                sessionLimitMs = sessionLimitMs,
+                refillMs = refillMs,
+                nowEpochMs = now,
+            )
+            evaluateMutex.withLock {
                 usageRepository.saveSessionState(updated, profile.id)
-                blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
-                blockOverlay.clearFrictionState()
-                blockOverlay.removeAfterResolution()
-                evaluate(packageName)
-            } catch (e: Exception) {
-                enforcementLog.logError("Grant session refill failed", e)
+                clearBlockState()
+                evaluateInternal(packageName)
             }
+            true
+        } catch (e: Exception) {
+            enforcementLog.logError("Grant session refill failed", e)
+            false
         }
     }
 
     fun grantPeriodContinue(packageName: String) {
+        scope.launch { grantPeriodContinueAwait(packageName) }
+    }
+
+    suspend fun grantPeriodContinueAwait(packageName: String): Boolean {
+        return try {
+            val profileId = lastBlockProfileId
+                ?: profileRepository.observeActiveProfiles().first().firstOrNull()?.id
+            if (profileId == null) return false
+            val profile = profileRepository.observeProfiles().first().find { it.id == profileId }
+                ?: return false
+            val now = System.currentTimeMillis()
+            val perAppLimit = profileRepository.getLimit(profile.id, packageName)
+            val mergedLimit = ProfileMergeEngine.mergeProfileAndAppLimit(
+                profile,
+                packageName,
+                perAppLimit,
+            )
+            val continueMs = LimitGrantDefaults.periodContinueMs(
+                sessionLimitMs = lastSessionLimitMs ?: mergedLimit.sessionLimitMs,
+                inheritSessionCap = lastPeriodContinueInherit,
+                customMs = lastPeriodContinueDurationMs,
+            )
+            val usage = resolveUsageForEvaluation(
+                profile = profile,
+                packageName = packageName,
+                now = now,
+                matchingProfileIds = listOf(profile.id),
+            )
+            val periodStarts = periodStartsAt(now)
+            val session = usageRepository.getSessionState(profile.id, packageName)
+                ?: SessionTracker.startSession(packageName, now)
+            val updated = PeriodContinuePolicy.applyContinue(
+                session = session,
+                usage = usage,
+                continueMs = continueMs,
+                periodStarts = periodStarts,
+            )
+            evaluateMutex.withLock {
+                persistPeriodAppUse(profile, updated)
+                clearBlockState()
+                evaluateInternal(packageName)
+            }
+            true
+        } catch (e: Exception) {
+            enforcementLog.logError("Grant period continue failed", e)
+            false
+        }
+    }
+
+    fun grantExtensionMinutes(
+        packageName: String,
+        minutes: Int,
+        blockedReason: BlockReason? = lastBlockReason,
+    ) {
+        beginOverlayGrant()
         scope.launch {
             try {
                 val profileId = lastBlockProfileId
                     ?: profileRepository.observeActiveProfiles().first().firstOrNull()?.id
                 if (profileId == null) return@launch
-                val profile = profileRepository.observeProfiles().first().find { it.id == profileId }
-                    ?: return@launch
-                val now = System.currentTimeMillis()
-                val perAppLimit = profileRepository.getLimit(profile.id, packageName)
-                val mergedLimit = ProfileMergeEngine.mergeProfileAndAppLimit(
-                    profile,
-                    packageName,
-                    perAppLimit,
-                )
-                val continueMs = LimitGrantDefaults.periodContinueMs(
-                    sessionLimitMs = lastSessionLimitMs ?: mergedLimit.sessionLimitMs,
-                    inheritSessionCap = lastPeriodContinueInherit,
-                    customMs = lastPeriodContinueDurationMs,
-                )
-                val usage = resolveUsageForEvaluation(
-                    profile = profile,
+                grantExtensionForProfileLocked(
+                    profileId = profileId,
                     packageName = packageName,
-                    now = now,
-                    matchingProfileIds = listOf(profile.id),
+                    minutes = minutes,
+                    source = ExtensionGrantSource.overlay,
+                    blockedReason = blockedReason ?: lastBlockReason,
                 )
-                val periodStarts = periodStartsAt(now)
-                val session = usageRepository.getSessionState(profile.id, packageName)
-                    ?: SessionTracker.startSession(packageName, now)
-                val updated = PeriodContinuePolicy.applyContinue(
-                    session = session,
-                    usage = usage,
-                    continueMs = continueMs,
-                    periodStarts = periodStarts,
-                )
-                persistPeriodAppUse(profile, updated)
-                blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
-                blockOverlay.clearFrictionState()
-                blockOverlay.removeAfterResolution()
-                evaluate(packageName)
-            } catch (e: Exception) {
-                enforcementLog.logError("Grant period continue failed", e)
+            } finally {
+                endOverlayGrant()
             }
-        }
-    }
-
-    fun grantExtensionMinutes(packageName: String, minutes: Int) {
-        scope.launch {
-            val profileId = lastBlockProfileId
-                ?: profileRepository.observeActiveProfiles().first().firstOrNull()?.id
-            if (profileId == null) return@launch
-            grantExtensionForProfileInternal(
-                profileId = profileId,
-                packageName = packageName,
-                minutes = minutes,
-                source = ExtensionGrantSource.overlay,
-                blockedReason = lastBlockReason,
-            )
         }
     }
 
@@ -977,7 +1024,7 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     suspend fun grantExtensionForProfileAwait(profileId: Long, packageName: String, minutes: Int): Boolean {
-        return grantExtensionForProfileInternal(
+        return grantExtensionForProfileLocked(
             profileId = profileId,
             packageName = packageName,
             minutes = minutes,
@@ -986,7 +1033,7 @@ class EnforcementCoordinator @Inject constructor(
         )
     }
 
-    private suspend fun grantExtensionForProfileInternal(
+    private suspend fun grantExtensionForProfileLocked(
         profileId: Long,
         packageName: String,
         minutes: Int,
@@ -1010,6 +1057,7 @@ class EnforcementCoordinator @Inject constructor(
             when (decision) {
                 is ExtensionPolicyEvaluator.ExtensionDecision.Denied -> {
                     if (source == ExtensionGrantSource.overlay) {
+                        endOverlayGrant()
                         val denialMessage = BlockMessageResolver.extensionDenied(localizedContext, decision.reason)
                         val request = buildBlockRequest(
                             packageName = packageName,
@@ -1051,11 +1099,16 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     fun grantNoLimitToday(packageName: String) {
+        beginOverlayGrant()
         scope.launch {
-            val profileId = lastBlockProfileId
-                ?: profileRepository.observeActiveProfiles().first().firstOrNull()?.id
-            if (profileId == null) return@launch
-            grantNoLimitTodayForProfile(profileId, packageName)
+            try {
+                val profileId = lastBlockProfileId
+                    ?: profileRepository.observeActiveProfiles().first().firstOrNull()?.id
+                if (profileId == null) return@launch
+                grantNoLimitTodayForProfileAwait(profileId, packageName)
+            } finally {
+                endOverlayGrant()
+            }
         }
     }
 
@@ -1088,6 +1141,7 @@ class EnforcementCoordinator @Inject constructor(
             )
             if (decision is ExtensionPolicyEvaluator.ExtensionDecision.Denied) {
                 if (!fromInApp) {
+                    endOverlayGrant()
                     val denialMessage = BlockMessageResolver.extensionDenied(
                         localizedContext,
                         decision.reason,
@@ -1119,7 +1173,12 @@ class EnforcementCoordinator @Inject constructor(
             usageRepository.addNoLimitTodayPause(profileId, pausePackageName, dayEnd, now)
             usageRepository.logOverride(packageName, profileId, OverrideMethod.noLimitToday, 0L)
             clearBlockState()
-            evaluate(packageName)
+            if (fromInApp) {
+                // Persist first so Current Usage can show ∞ without waiting on evaluate().
+                scope.launch { evaluate(packageName) }
+            } else {
+                evaluate(packageName)
+            }
             return true
         } catch (e: Exception) {
             enforcementLog.logError("No limit today failed", e)
@@ -1191,57 +1250,57 @@ class EnforcementCoordinator @Inject constructor(
             source = source,
             existingGraceUntilEpochMs = existingGraceUntil,
         )
-        blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
-        blockOverlay.clearFrictionState()
-        recordFrictionEnd(packageName, profile.id)
-        val perAppLimit = profileRepository.getLimit(profile.id, packageName)
-        val mergedLimit = ProfileMergeEngine.mergeProfileAndAppLimit(profile, packageName, perAppLimit)
-        val grantUsage = if (profile.limitUsageScope == LimitUsageScope.sharedPool) {
-            val apps = profileRepository.getMonitoredApps(profile.id)
-            ProfileMergeEngine.sumUsageSnapshots(
-                apps.map { app -> usageStatsCollector.getUsageSnapshot(app.packageName, now) },
+        evaluateMutex.withLock {
+            recordFrictionEnd(packageName, profile.id)
+            val perAppLimit = profileRepository.getLimit(profile.id, packageName)
+            val mergedLimit = ProfileMergeEngine.mergeProfileAndAppLimit(profile, packageName, perAppLimit)
+            val grantUsage = resolveUsageForEvaluation(
+                profile = profile,
+                packageName = packageName,
+                now = now,
+                matchingProfileIds = listOf(profile.id),
             )
-        } else {
-            usageStatsCollector.getUsageSnapshot(packageName, now)
-        }
-        val anchors = ExtensionDisplayLogic.anchorsAtGrant(grantUsage, mergedLimit)
-        usageRepository.logExtensionOverride(
-            packageName = packageName,
-            profileId = profile.id,
-            extensionMs = plan.extensionMs,
-            anchors = anchors,
-        )
-        if (plan.applyPeriodAppUse) {
-            val session = usageRepository.getSessionState(profile.id, packageName)
-                ?: SessionTracker.startSession(packageName, now)
-            val updated = PeriodContinuePolicy.applyExtendExtras(
-                session = session,
-                usage = grantUsage,
-                extraMs = plan.extensionMs,
-                periodStarts = periodStartsAt(now),
+            val anchors = ExtensionDisplayLogic.anchorsAtGrant(grantUsage, mergedLimit)
+            usageRepository.logExtensionOverride(
+                packageName = packageName,
+                profileId = profile.id,
+                extensionMs = plan.extensionMs,
+                anchors = anchors,
             )
-            persistPeriodAppUse(profile, updated)
+            if (plan.applyPeriodAppUse) {
+                val session = usageRepository.getSessionState(profile.id, packageName)
+                    ?: SessionTracker.startSession(packageName, now)
+                val updated = PeriodContinuePolicy.applyExtendExtras(
+                    session = session,
+                    usage = grantUsage,
+                    extraMs = plan.extensionMs,
+                    periodStarts = periodStartsAt(now),
+                )
+                persistPeriodAppUse(profile, updated)
+            }
+            if (plan.graceUntilEpochMs != null && plan.graceProfileId != null) {
+                usageRepository.addExtensionGracePause(
+                    profileId = plan.graceProfileId!!,
+                    packageName = plan.gracePackageName,
+                    untilEpochMs = plan.graceUntilEpochMs!!,
+                    nowEpochMs = now,
+                )
+            }
+            if (plan.sessionExcludedMsDelta > 0) {
+                val session = usageRepository.getSessionState(profile.id, packageName)
+                    ?: SessionTracker.startSession(packageName, now)
+                val updated = SessionTracker.addExcludedTime(
+                    SessionTracker.clearBreak(session),
+                    plan.sessionExcludedMsDelta,
+                )
+                usageRepository.saveSessionState(updated, profile.id)
+                sessionStartedForPackage = packageName
+            }
+            // Persist extras before teardown so a concurrent evaluate cannot re-block
+            // on remaining=0 and re-post the overlay after this grant.
+            clearBlockState()
+            evaluateInternal(packageName)
         }
-        if (plan.graceUntilEpochMs != null && plan.graceProfileId != null) {
-            usageRepository.addExtensionGracePause(
-                profileId = plan.graceProfileId!!,
-                packageName = plan.gracePackageName,
-                untilEpochMs = plan.graceUntilEpochMs!!,
-                nowEpochMs = now,
-            )
-        }
-        if (plan.sessionExcludedMsDelta > 0) {
-            val session = usageRepository.getSessionState(profile.id, packageName)
-                ?: SessionTracker.startSession(packageName, now)
-            val updated = SessionTracker.addExcludedTime(
-                SessionTracker.clearBreak(session),
-                plan.sessionExcludedMsDelta,
-            )
-            usageRepository.saveSessionState(updated, profile.id)
-            sessionStartedForPackage = packageName
-        }
-        blockOverlay.removeAfterResolution()
-        evaluate(packageName)
     }
 
     /** @deprecated use grantExtensionMinutes */
@@ -1340,7 +1399,7 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     suspend fun awaitOverlayHiddenForTests(
-        attempts: Int = 15,
+        attempts: Int = 32,
         delayMs: Long = 250,
     ): Boolean {
         if (!BuildConfig.DEBUG) return false
@@ -1386,6 +1445,7 @@ class EnforcementCoordinator @Inject constructor(
         lastPeriodContinueDurationMs = LimitGrantDefaults.DEFAULT_PERIOD_CONTINUE_MS
         activeExtensionPolicy = null
         monitoredPackagesCache = emptySet()
+        overlayGrantInProgress = false
         blockOverlay.clearFrictionState()
         clearBlockState()
         screenStateMonitor.resetPauseTracking()
@@ -1433,17 +1493,19 @@ class EnforcementCoordinator @Inject constructor(
     private suspend fun checkAccessibilityHealth() {
         val settings = settingsRepository.settings.first()
         if (!settings.enforcementEnabled) return
-        val accessibilityEnabled = PermissionHelper.isAccessibilityEnabled(context)
-        if (accessibilityEnabled) {
+        val serviceConnected = ForegroundMonitorAccessibilityService.instance != null
+        if (serviceConnected) {
             accessibilityRevokedNotified = false
             notificationHelper.hideAccessibilityRevoked()
             return
         }
+        // Setting can still say "enabled" after the service unbound; FGS is the a11y-down fallback.
+        startEnforcementService()
+        if (PermissionHelper.isAccessibilityEnabled(context)) return
         if (!settings.accessibilityOptedIn) return
         if (accessibilityRevokedNotified) return
         accessibilityRevokedNotified = true
         notificationHelper.showAccessibilityRevoked()
-        startEnforcementService()
     }
 
     fun startEnforcementService() {
@@ -2092,7 +2154,12 @@ class EnforcementCoordinator @Inject constructor(
                     EnforcementTrace.SHOW_DELAY_OPEN,
                     mapOf("pkg" to packageName, "sec" to ruleResult.delaySeconds.toString()),
                 )
+                val postedEpoch = evaluationEpochAtStart
                 mainHandler.post {
+                    if (!OverlayPresentPolicy.shouldRunPostedShow(postedEpoch, evaluationEpoch)) {
+                        return@post
+                    }
+                    if (!shouldPresentBlockOverlay(packageName)) return@post
                     blockOverlay.showDelay(
                         ruleResult.delaySeconds,
                         BlockMessageResolver.delayOpenMessage(localizedContext),
@@ -2895,6 +2962,7 @@ class EnforcementCoordinator @Inject constructor(
         evaluationEpochAtStart: Long = evaluationEpoch,
     ) {
         if (evaluationEpochAtStart != evaluationEpoch) return
+        if (overlayGrantInProgress) return
         if (skipDailyLimitOverlay(packageName, reason)) {
             return
         }
@@ -3199,7 +3267,13 @@ class EnforcementCoordinator @Inject constructor(
         val state = when (action) {
             SessionStartDecision.Action.StartFresh -> {
                 screenStateMonitor.clearPersistedPause()
-                if (openGatePassedPackage == packageName) {
+                if (openGatePassedPackage == packageName &&
+                    !OpenGatePassPolicy.shouldSkipOpenGate(
+                        existingState,
+                        now,
+                        OPEN_GATE_GRACE_MS,
+                    )
+                ) {
                     openGatePassedPackage = null
                 }
                 if (lastLeftPackage == packageName) lastLeftPackage = null

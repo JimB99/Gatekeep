@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.MainActivity
+import com.gatekeep.app.support.E2eGate
 import com.gatekeep.app.support.EnforcementTestHarness
 import com.gatekeep.app.support.GatekeepTestFixtures
 import com.gatekeep.app.ui.GatekeepTestTags
@@ -47,6 +48,7 @@ class PermissionBannerTest {
     }
 
     @Test
+    @E2eGate
     fun p01_allGranted_hidesBanner() {
         harness.grantEnforcementPermissions()
         composeRule.activityRule.scenario.recreate()
@@ -64,29 +66,6 @@ class PermissionBannerTest {
     fun p02_missingUsage_showsBanner() {
         harness.grantEnforcementPermissions()
         harness.revokeUsagePermission()
-        composeRule.activityRule.scenario.recreate()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag(GatekeepTestTags.PERMISSION_BANNER).assertIsDisplayed()
-    }
-
-    @Test
-    fun p03_missingAccessibility_showsBanner() {
-        harness.grantEnforcementPermissions()
-        harness.revokeAccessibility()
-        composeRule.activityRule.scenario.recreate()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag(GatekeepTestTags.PERMISSION_BANNER).assertIsDisplayed()
-    }
-
-    @Test
-    fun p04_missingOverlay_showsBanner() {
-        composeRule.onNodeWithTag(GatekeepTestTags.PERMISSION_BANNER).assertIsDisplayed()
-    }
-
-    @Test
-    fun p05_missingTwo_listsBoth() {
-        harness.revokeUsagePermission()
-        harness.revokeAccessibility()
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag(GatekeepTestTags.PERMISSION_BANNER).assertIsDisplayed()

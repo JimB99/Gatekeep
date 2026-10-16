@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.gatekeep.app.MainActivity
+import com.gatekeep.app.support.E2eGate
 import com.gatekeep.app.support.GatekeepTestFixtures
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.SettingsRepository
@@ -74,6 +75,7 @@ class OnboardingTest {
     }
 
     @Test
+    @E2eGate
     fun ob03_completeOnboarding_reachesDashboard() {
         recreateWithSeed {
             settingsRepository.updateSettings {

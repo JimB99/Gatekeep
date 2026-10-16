@@ -2,6 +2,7 @@ package com.gatekeep.app.enforcement
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
+import androidx.test.uiautomator.By
 import dagger.hilt.android.testing.HiltAndroidTest
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
@@ -134,22 +135,6 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
     }
 
     @Test
-    fun g08_difficulty_affectsMath() {
-        runSeed {
-            GatekeepTestFixtures.seedProfileWithMonitoredApp(
-                profileRepository = profileRepository,
-                config = GatekeepTestFixtures.ProfileSeedConfig(
-                    onLimitAction = OnLimitAction.deterrentMath,
-                    defaultFrictionDifficulty = FrictionDifficulty.hard,
-                ),
-            )
-            seedHardBlockProfile()
-        }
-        harness.launchTargetA()
-        assertTrue(harness.isFrictionVisible() || harness.waitForOverlay())
-    }
-
-    @Test
     fun g09_openVsSessionWait_durations() {
         runSeed {
             GatekeepTestFixtures.seedProfileWithMonitoredApp(
@@ -210,13 +195,26 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
             )
         }
         harness.launchTargetA()
+        assertTrue(
+            "profile pin overlay missing ${harness.screenDiagnostics()}",
+            harness.waitForOverlay() || harness.isFrictionVisible(),
+        )
         harness.submitOverlayMathAnswer(GatekeepTestFixtures.PROFILE_PIN)
+        assertTrue(
+            "profile pin should dismiss overlay ${harness.screenDiagnostics()}",
+            harness.waitForOverlayGone(),
+        )
     }
 
     @Test
     fun pp03_switchApp_requiresPinAgain() {
         pp02_correctProfilePin_proceeds()
         harness.launchTargetB()
+        assertTrue(
+            "TARGET_B after pin switch ${harness.screenDiagnostics()}",
+            harness.device.currentPackageName == EnforcementTestPackages.TARGET_B ||
+                harness.device.hasObject(By.pkg(EnforcementTestPackages.TARGET_B)),
+        )
     }
 
     @Test

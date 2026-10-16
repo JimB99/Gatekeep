@@ -22,6 +22,7 @@ import com.gatekeep.domain.model.Pause
 import com.gatekeep.domain.model.PauseType
 import com.gatekeep.domain.model.SessionState
 import com.gatekeep.domain.model.UsagePeriod
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -127,7 +128,7 @@ class UsageRepository(
         sessionStateDao.get(profileId, packageName)?.toDomain()
 
     suspend fun saveSessionState(state: SessionState, profileId: Long) {
-        sessionStateDao.upsert(state.toEntity(profileId))
+        retryOnSqliteBusy { sessionStateDao.upsert(state.toEntity(profileId)) }
     }
 
     suspend fun clearSessionState(profileId: Long, packageName: String) {
@@ -371,7 +372,7 @@ class UsageRepository(
     }
 
     suspend fun deleteExtensionGraceForProfile(profileId: Long) {
-        pauseDao.deleteExtensionGraceForProfile(profileId)
+        retryOnSqliteBusy { pauseDao.deleteExtensionGraceForProfile(profileId) }
     }
 
     suspend fun addFocusBlock(
@@ -406,4 +407,26 @@ class UsageRepository(
 
     suspend fun getRecentSessions(profileId: Long, limit: Int = 100) =
         usageSessionDao.getRecent(profileId, limit)
+
+    private suspend fun <T> retryOnSqliteBusy(block: suspend () -> T): T {
+        var last: Throwable? = null
+        repeat(6) { attempt ->
+            try {
+                return block()
+            } catch (error: Throwable) {
+                if (!isSqliteBusy(error)) throw error
+                last = error
+                delay(40L * (attempt + 1))
+            }
+        }
+        throw last ?: IllegalStateException("retryOnSqliteBusy exhausted")
+    }
+
+    private fun isSqliteBusy(error: Throwable): Boolean =
+        generateSequence(error) { it.cause }.any { thrown ->
+            val message = thrown.message.orEmpty()
+            message.contains("SQLITE_BUSY", ignoreCase = true) ||
+                message.contains("database is locked", ignoreCase = true) ||
+                thrown.javaClass.simpleName.contains("DatabaseLocked")
+        }
 }

@@ -7,8 +7,8 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.MainActivity
 import com.gatekeep.app.support.GatekeepTestFixtures
-import com.gatekeep.app.support.GatekeepUiTest
-import com.gatekeep.app.support.GatekeepUiTest.openPause
+import com.gatekeep.app.support.GatekeepUiNav
+import com.gatekeep.app.support.GatekeepUiNav.openPause
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.SettingsRepository
 import dagger.hilt.android.testing.HiltAndroidRule

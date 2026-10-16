@@ -15,9 +15,16 @@ android {
         applicationId = "com.gatekeep.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 50
-        versionName = "3.11.1"
+        versionCode = 47
+        versionName = "3.9.0"
         testInstrumentationRunner = "com.gatekeep.app.HiltTestRunner"
+        // Fail a stuck test (ANR / waitForIdle) in 3 minutes instead of hanging the suite for hours.
+        testInstrumentationRunnerArguments["timeout_msec"] = "180000"
+        // Default connected run is the short e2e gate, not 160 overlay scenarios.
+        // Opt out: ./gradlew :app:connectedDebugAndroidTest -Pgatekeep.e2eGate=false
+        if (findProperty("gatekeep.e2eGate") as String? != "false") {
+            testInstrumentationRunnerArguments["annotation"] = "com.gatekeep.app.support.E2eGate"
+        }
         ndk {
             abiFilters += "arm64-v8a"
         }

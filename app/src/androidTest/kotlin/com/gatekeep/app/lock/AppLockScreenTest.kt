@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.gatekeep.app.support.E2eGate
 import com.gatekeep.app.support.GatekeepTestFixtures
 import com.gatekeep.app.ui.lock.AppLockScreen
 import com.gatekeep.app.ui.lock.AppLockTestTags
@@ -22,6 +23,7 @@ class AppLockScreenTest {
     val composeRule = createComposeRule()
 
     @Test
+    @E2eGate
     fun pin02_correctPin_unlocks() {
         var unlocked = false
         composeRule.setContent {

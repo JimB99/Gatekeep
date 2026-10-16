@@ -2,12 +2,13 @@ package com.gatekeep.app.permissions
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.MainActivity
 import com.gatekeep.app.support.GatekeepTestFixtures
-import com.gatekeep.app.support.GatekeepUiTest.openPermissions
+import com.gatekeep.app.support.GatekeepUiNav.openPermissions
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.SettingsRepository
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -44,6 +45,10 @@ class PermissionsScreenTest {
         composeRule.openPermissions()
         composeRule.onNodeWithTag(GatekeepTestTags.PERMISSIONS_ROOT).assertIsDisplayed()
         composeRule.onNodeWithText("Usage Access", substring = true, ignoreCase = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Manage", substring = true, ignoreCase = true).assertIsDisplayed()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText("Manage", substring = true, ignoreCase = true)
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
     }
 }

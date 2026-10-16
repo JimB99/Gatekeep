@@ -70,6 +70,15 @@ class OverlayFrictionGrantPolicyTest {
     }
 
     @Test
+    fun unknownReason_completesFrictionWithNoTimeGrant() {
+        val request = request(reason = BlockPresentationReason.unknown)
+        assertEquals(
+            OverlayFrictionGrantPolicy.Grant.None,
+            OverlayFrictionGrantPolicy.grant(request),
+        )
+    }
+
+    @Test
     fun sessionRefill_doesNotDependOnExtensionSurfaceMode() {
         ExtensionSurfaceMode.entries.forEach { _ ->
             assertEquals(

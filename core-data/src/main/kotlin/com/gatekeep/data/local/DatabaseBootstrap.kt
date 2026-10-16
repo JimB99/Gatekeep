@@ -2,6 +2,7 @@ package com.gatekeep.data.local
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
 
 object DatabaseBootstrap {
     private const val DB_NAME = "gatekeep.db"
@@ -10,14 +11,24 @@ object DatabaseBootstrap {
         context: Context,
         onMigrationFailure: (Throwable) -> Unit = {},
     ): GatekeepDatabase {
-        return try {
-            openAndValidate(buildDatabase(context))
-        } catch (first: Exception) {
-            if (!isMigrationFailure(first)) throw first
-            onMigrationFailure(first)
-            deleteDatabaseFiles(context)
-            openAndValidate(buildDatabase(context))
+        var lastBusy: Exception? = null
+        repeat(6) { attempt ->
+            try {
+                return try {
+                    openAndValidate(buildDatabase(context))
+                } catch (first: Exception) {
+                    if (!isMigrationFailure(first)) throw first
+                    onMigrationFailure(first)
+                    deleteDatabaseFiles(context)
+                    openAndValidate(buildDatabase(context))
+                }
+            } catch (error: Exception) {
+                if (!isSqliteBusy(error)) throw error
+                lastBusy = error
+                Thread.sleep(40L * (attempt + 1))
+            }
         }
+        throw lastBusy ?: IllegalStateException("Room open retry exhausted")
     }
 
     /**
@@ -37,7 +48,17 @@ object DatabaseBootstrap {
     private fun buildDatabase(context: Context): GatekeepDatabase =
         Room.databaseBuilder(context, GatekeepDatabase::class.java, DB_NAME)
             .addMigrations(*GatekeepMigrations.ALL)
+            // WAL extra reader connections race setLocaleFromConfiguration on API 36 (SQLITE_BUSY).
+            .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
             .build()
+
+    internal fun isSqliteBusy(error: Throwable): Boolean =
+        generateSequence(error) { it.cause }.any { thrown ->
+            val message = thrown.message.orEmpty()
+            message.contains("SQLITE_BUSY", ignoreCase = true) ||
+                message.contains("database is locked", ignoreCase = true) ||
+                thrown.javaClass.simpleName.contains("DatabaseLocked")
+        }
 
     fun isMigrationFailure(error: Throwable): Boolean {
         val message = generateSequence(error as Throwable?) { it.cause }

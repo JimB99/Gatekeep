@@ -62,7 +62,9 @@ object PeriodContinuePolicy {
             starts = periodStarts,
             stack = stack,
         )
-        val cleared = SessionTracker.clearBreak(session.withPeriodAppUse(granted))
+        val cleared = SessionTracker.clearPendingWait(
+            SessionTracker.clearBreak(session.withPeriodAppUse(granted)),
+        )
         return if (markFrictionPaid) SessionTracker.markLimitFrictionPaid(cleared) else cleared
     }
 

@@ -22,6 +22,10 @@ data class OverlayWindowSnapshot(
 
 object OverlayWindowClassifier {
 
+    // AccessibilityWindowInfo.TYPE_SYSTEM / TYPE_ACCESSIBILITY_OVERLAY (keep JVM unit tests android-free).
+    const val TYPE_SYSTEM = 3
+    const val TYPE_ACCESSIBILITY_OVERLAY = 4
+
     val imePackages = setOf(
         "com.google.android.inputmethod.latin",
         "com.samsung.android.honeyboard",
@@ -60,7 +64,7 @@ object OverlayWindowClassifier {
         overlayOwnerPackage: String,
     ): OverlayWindowSnapshot? {
         val relevant = windows.filter { window ->
-            if (window.isOverlay) return@filter false
+            if (isOwnerOverlayWindow(window, overlayOwnerPackage)) return@filter false
             if (window.packageName == overlayOwnerPackage &&
                 blockedPackage != overlayOwnerPackage
             ) {
@@ -98,6 +102,17 @@ object OverlayWindowClassifier {
             }?.let { return it }
         }
         return relevant.firstOrNull { it.isFocused || it.isActive } ?: relevant.first()
+    }
+
+    /** Gatekeep's TYPE_APPLICATION_OVERLAY is TYPE_SYSTEM, not TYPE_ACCESSIBILITY_OVERLAY. */
+    fun isOwnerOverlayWindow(
+        window: OverlayWindowSnapshot,
+        overlayOwnerPackage: String,
+    ): Boolean {
+        if (window.packageName != overlayOwnerPackage) return false
+        if (window.isOverlay) return true
+        return window.windowType == TYPE_SYSTEM ||
+            window.windowType == TYPE_ACCESSIBILITY_OVERLAY
     }
 
     fun isRecents(className: String): Boolean {

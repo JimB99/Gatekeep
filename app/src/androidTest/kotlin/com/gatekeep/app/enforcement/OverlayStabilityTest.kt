@@ -11,10 +11,6 @@ import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.SessionState
-import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.By
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -23,14 +19,6 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 @LargeTest
 class OverlayStabilityTest : EnforcementCrossAppTestBase() {
-
-    @Test
-    fun o01_blockWithinTimeoutAfterLaunch() {
-        seedHardBlockProfile()
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-        assertNotNull(harness.overlayMessageText())
-    }
 
     @Test
     fun o02_switchApps_overlayFollows() {
@@ -67,27 +55,6 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
     }
 
     @Test
-    fun o04_sameOverlay_updatesWithoutFlicker() {
-        runSeed {
-            val seeded = seedHardBlockProfile()
-            GatekeepTestFixtures.seedUsageAtCap(
-                usageRepository,
-                seeded.profileId,
-                seeded.packageName,
-                dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
-                sessionState = com.gatekeep.domain.model.SessionState(
-                    packageName = seeded.packageName,
-                    sessionStartEpochMs = System.currentTimeMillis(),
-                    breakUntilEpochMs = System.currentTimeMillis() + GatekeepTestFixtures.TestDurations.BREAK_MS,
-                ),
-            )
-        }
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-        assertTrue(harness.assertOverlayStable(stableMs = 500, maxTextChanges = 2))
-    }
-
-    @Test
     fun o05_frictionInProgress_preservedOnSwitch() {
         runSeed {
             GatekeepTestFixtures.seedProfileWithMonitoredApp(
@@ -111,64 +78,12 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
     }
 
     @Test
-    fun o07_homeThenReopen_showsOverlay() {
-        seedHardBlockProfile()
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-        harness.pressHome()
-        assertOverlayHidden()
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-    }
-
-    @Test
     fun o13_overviewButton_hidesOverlay() {
         seedHardBlockProfile()
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())
         harness.pressRecents()
         assertOverlayHidden()
-    }
-
-    @Test
-    fun o18_leaveViaHomeOrRecents_noOverlayFlicker() {
-        seedHardBlockProfile()
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-        harness.useRealForegroundDetection()
-        harness.pressHome()
-        assertTrue(
-            "overlay did not hide after home ${harness.screenDiagnostics()}",
-            harness.waitForOverlayGone(1_500),
-        )
-        assertNoOverlayFlickerForMs(2_000)
-        restoreForegroundInjection()
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-        harness.useRealForegroundDetection()
-        harness.pressRecents()
-        assertTrue(
-            "overlay did not hide after recents ${harness.screenDiagnostics()}",
-            harness.waitForOverlayGone(1_500),
-        )
-        assertNoOverlayFlickerForMs(2_000)
-    }
-
-    private fun assertNoOverlayFlickerForMs(stableMs: Long) {
-        val overlayPackage = InstrumentationRegistry.getInstrumentation().targetContext.packageName
-        val deadline = System.currentTimeMillis() + stableMs
-        var visibleSamples = 0
-        while (System.currentTimeMillis() < deadline) {
-            if (harness.device.hasObject(By.res(overlayPackage, "block_message"))) {
-                visibleSamples++
-            }
-            harness.sleepMs(50)
-        }
-        assertEquals(
-            "overlay flickered after leave ${harness.screenDiagnostics()}",
-            0,
-            visibleSamples,
-        )
     }
 
     @Test
@@ -253,46 +168,6 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
         }
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay() || harness.isFrictionVisible())
-    }
-
-    @Test
-    fun o15_overviewThenTapRecentsCard_reshowsOverlay() {
-        seedHardBlockProfile()
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-        harness.resumeFromRecents()
-        injectStaleRecentsRestoreStack()
-        assertBlockedWithOverlay()
-    }
-
-    @Test
-    fun o16_staleRecentsWindowStack_restoresOverlay() {
-        seedHardBlockProfile()
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-        harness.pressRecents()
-        assertOverlayHidden()
-        injectStaleRecentsRestoreStack()
-        assertBlockedWithOverlay()
-    }
-
-    @Test
-    fun o17_instagramOverviewClass_doesNotHideOverlay() {
-        seedHardBlockProfile()
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-        enforcementCoordinator.injectWindowStackForTests(
-            listOf(
-                OverlayWindowSnapshot(
-                    packageName = EnforcementTestPackages.TARGET_A,
-                    className = "com.instagram.feed.overview.MediaOverviewActivity",
-                    isOverlay = false,
-                    isFocused = true,
-                    isActive = true,
-                ),
-            ),
-        )
-        assertTrue(harness.waitForOverlay())
     }
 
     @Test

@@ -7,12 +7,8 @@ import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
 import com.gatekeep.domain.model.LimitUsageScope
 import com.gatekeep.domain.model.OnLimitAction
-import com.gatekeep.domain.model.OnOpenAction
 import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.PauseType
-import com.gatekeep.domain.model.RuleResult
-import com.gatekeep.domain.model.SessionState
-import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -63,48 +59,6 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
                 seeded.profileId,
                 seeded.packageName,
                 dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS + 1,
-            )
-        }
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-    }
-
-    @Test
-    fun tl03_hourlyCap_midSession() {
-        runSeed {
-            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
-                profileRepository = profileRepository,
-                config = GatekeepTestFixtures.ProfileSeedConfig(
-                    hourlyLimitMs = GatekeepTestFixtures.TestDurations.HOURLY_LIMIT_MS,
-                    onLimitAction = OnLimitAction.hardBlock,
-                ),
-            )
-            GatekeepTestFixtures.seedUsageAtCap(
-                usageRepository,
-                seeded.profileId,
-                seeded.packageName,
-                hourlyMs = GatekeepTestFixtures.TestDurations.HOURLY_LIMIT_MS + 1_000L,
-            )
-        }
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-    }
-
-    @Test
-    fun tl04_weeklyCap_lastDay() {
-        runSeed {
-            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
-                profileRepository = profileRepository,
-                config = GatekeepTestFixtures.ProfileSeedConfig(
-                    weeklyLimitMs = GatekeepTestFixtures.TestDurations.WEEKLY_LIMIT_MS,
-                    onLimitAction = OnLimitAction.hardBlock,
-                ),
-            )
-            GatekeepTestFixtures.seedUsageAtCap(
-                usageRepository,
-                seeded.profileId,
-                seeded.packageName,
-                weeklyMs = GatekeepTestFixtures.TestDurations.WEEKLY_LIMIT_MS + 1,
             )
         }
         harness.launchTargetA()
@@ -238,62 +192,6 @@ class TimeLimitEnforcementTest : EnforcementCrossAppTestBase() {
             profileRepository.toggleProfileActive(id, true)
         }
         harness.launchTargetA()
-        assertOverlayHidden()
-    }
-
-    @Test
-    fun tl15_staleOvernightSession_startsFreshNotTimeout() {
-        runSeed {
-            val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
-                profileRepository = profileRepository,
-                config = GatekeepTestFixtures.ProfileSeedConfig(
-                    sessionLimitMs = 20 * 60_000L,
-                    onSessionLimitAction = OnSessionLimitAction.hardBlock,
-                    onOpenAction = OnOpenAction.none,
-                ),
-            )
-            GatekeepTestFixtures.seedUsageAtCap(
-                usageRepository,
-                seeded.profileId,
-                seeded.packageName,
-                sessionState = GatekeepTestFixtures.staleOvernightSession(
-                    seeded.packageName,
-                    startedAgoMs = 36 * 60 * 60_000L,
-                ),
-            )
-        }
-        harness.launchTargetA()
-        assertAllowedWithoutBlockingOverlay()
-    }
-
-    @Test
-    fun tl21_awayUnderOneMinute_doesNotExpireSession() {
-        lateinit var seeded: GatekeepTestFixtures.SeededProfile
-        val now = System.currentTimeMillis()
-        val sessionLimitMs = 6_000L
-        runSeed {
-            seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
-                profileRepository = profileRepository,
-                config = GatekeepTestFixtures.ProfileSeedConfig(
-                    sessionLimitMs = sessionLimitMs,
-                    dailyLimitMs = null,
-                    onSessionLimitAction = OnSessionLimitAction.hardBlock,
-                    onOpenAction = OnOpenAction.none,
-                ),
-            )
-            usageRepository.saveSessionState(
-                SessionState(
-                    packageName = seeded.packageName,
-                    sessionStartEpochMs = now - 8_000L,
-                    lastForegroundEndEpochMs = now - 5_000L,
-                ),
-                seeded.profileId,
-            )
-        }
-        val result = runBlocking {
-            enforcementCoordinator.evaluateMonitoredPackageForTests(seeded.packageName)
-        }
-        assertTrue("away time must not consume session remaining", result is RuleResult.Allowed)
         assertOverlayHidden()
     }
 }

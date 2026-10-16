@@ -119,6 +119,19 @@ class PeriodContinuePolicyTest {
     }
 
     @Test
+    fun `continue grant clears an in-progress wait deadline`() {
+        val waiting = SessionTracker.startSession(pkg, now).copy(pendingWaitUntilEpochMs = now + 30_000L)
+        val granted = PeriodContinuePolicy.applyContinue(
+            session = waiting,
+            usage = overCap(),
+            continueMs = continueCustom,
+            periodStarts = periodStarts,
+        )
+        assertFalse(SessionTracker.hasPendingWait(granted, now + 1_000L))
+        assertNull(granted.pendingWaitUntilEpochMs)
+    }
+
+    @Test
     fun `continue inherit uses the session cap not a custom session-refill override`() {
         val p = profile(inherit = true, continueMs = continueCustom, refillOverrideMs = customRefill)
         val continueMs = PeriodContinuePolicy.continueMs(p.enforcementConfig(), p.sessionLimitMs)

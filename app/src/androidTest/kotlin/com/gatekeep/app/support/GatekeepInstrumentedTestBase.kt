@@ -35,6 +35,8 @@ abstract class GatekeepInstrumentedTestBase {
 
     @Before
     open fun baseSetUp() {
+        harness.wakeDevice()
+        harness.awaitCredentialEncryptedStorage()
         hiltRule.inject()
         runBlocking {
             GatekeepTestFixtures.resetInstrumentedUiState(settingsRepository, profileRepository)
@@ -52,9 +54,11 @@ abstract class GatekeepInstrumentedTestBase {
 
     protected fun prepareEnforcementEnvironment() {
         val accessibilityHealthy = harness.isAccessibilityHealthy()
+        val windowsReadable = harness.canReadAccessibilityWindows()
         if (enforcementEnvironmentPrepared &&
             harness.hasCoreEnforcementPermissionsGranted() &&
-            accessibilityHealthy
+            accessibilityHealthy &&
+            windowsReadable
         ) {
             enforcementCoordinator.ensureForegroundMonitoring()
             enforcementCoordinator.refresh()

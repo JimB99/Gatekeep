@@ -26,4 +26,13 @@ class DatabaseBootstrapTest {
         )
         assertTrue(DatabaseBootstrap.isMigrationFailure(nested))
     }
+
+    @Test
+    fun `isSqliteBusy detects journal lock on open`() {
+        val busy = IllegalStateException(
+            "database is locked (code 5 SQLITE_BUSY): , while compiling: PRAGMA journal_mode",
+        )
+        assertTrue(DatabaseBootstrap.isSqliteBusy(busy))
+        assertFalse(DatabaseBootstrap.isSqliteBusy(IllegalArgumentException("invalid profile name")))
+    }
 }

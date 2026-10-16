@@ -50,7 +50,10 @@ enum class PolicySource {
 }
 
 /**
- * Nullable fields inherit from the profile Default tab when merged.
+ * Action fields inherit from the profile Default tab when null.
+ * Limit fields do not inherit: null or 0 means that tier is off
+ * ([com.gatekeep.domain.CustomizeOverrides.apply]). Editor pre-fill is
+ * separate ([com.gatekeep.domain.CustomizeOverrides.resolveForEditor]).
  *
  * Session refill, period continue, wait/break lengths, and math difficulty are
  * default-tab-only: customize / no-schedule-match cannot express them yet

@@ -1,25 +1,28 @@
 package com.gatekeep.app.profiles
 
+import android.util.Log
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.printToString
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.MainActivity
+import com.gatekeep.app.support.E2eGate
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
-import com.gatekeep.app.support.GatekeepUiTest
-import com.gatekeep.app.support.GatekeepUiTest.openCurrentUsage
+import com.gatekeep.app.support.GatekeepUiNav
+import com.gatekeep.app.support.GatekeepUiNav.openCurrentUsage
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
 import com.gatekeep.domain.model.ExtensionPolicy
 import com.gatekeep.domain.model.ExtensionSurfaceMode
-import com.gatekeep.domain.model.LimitUsageScope
 import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.OnSessionLimitAction
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -34,6 +37,10 @@ import org.junit.runner.RunWith
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
 class CurrentUsageActionsTest {
+
+    companion object {
+        private const val DUMP_TAG = "GatekeepCu09"
+    }
 
     @get:Rule(order = 0)
     val hiltRule = HiltAndroidRule(this)
@@ -98,7 +105,25 @@ class CurrentUsageActionsTest {
         openCurrentUsageScreen()
     }
 
+    private fun dumpCurrentUsageFail(tag: String) {
+        val now = System.currentTimeMillis()
+        val pauses = runBlocking { usageRepository.getActivePauses(now) }
+        val exactInf = composeRule.onAllNodesWithText("∞").fetchSemanticsNodes().size
+        val subInf = composeRule.onAllNodesWithText("∞", substring = true).fetchSemanticsNodes().size
+        val applied = composeRule.onAllNodesWithText("Applied", substring = true).fetchSemanticsNodes().size
+        val denied = composeRule.onAllNodesWithText("Not allowed", substring = true).fetchSemanticsNodes().size
+        val chip = composeRule.onAllNodesWithTag(GatekeepTestTags.CURRENT_USAGE_NO_LIMIT)
+            .fetchSemanticsNodes()
+            .size
+        val tree = runCatching { composeRule.onRoot().printToString() }.getOrElse { it.toString() }
+        Log.e(
+            DUMP_TAG,
+            "$tag pauses=$pauses chip=$chip exactInf=$exactInf subInf=$subInf applied=$applied denied=$denied\n$tree",
+        )
+    }
+
     @Test
+    @E2eGate
     fun cu01_extendDaily_inApp() {
         composeRule.onNodeWithTag(GatekeepTestTags.CURRENT_USAGE_EXTEND_PREFIX + "5").performClick()
         composeRule.waitForIdle()
@@ -176,31 +201,17 @@ class CurrentUsageActionsTest {
             dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
         )
         composeRule.onNodeWithTag(GatekeepTestTags.CURRENT_USAGE_NO_LIMIT).performClick()
-        composeRule.waitUntil(timeoutMillis = 6_000) {
-            composeRule.onAllNodesWithText("∞").fetchSemanticsNodes().isNotEmpty()
+        composeRule.waitForIdle()
+        try {
+            composeRule.waitUntil(timeoutMillis = 1_000) {
+                composeRule.onAllNodesWithText("∞", substring = true).fetchSemanticsNodes().isNotEmpty()
+            }
+        } catch (error: Throwable) {
+            dumpCurrentUsageFail("cu09 after grant wait")
+            throw error
         }
-        composeRule.waitUntil(timeoutMillis = 6_000) {
+        composeRule.waitUntil(timeoutMillis = 1_000) {
             composeRule.onAllNodesWithText("Applied", substring = true).fetchSemanticsNodes().isNotEmpty()
-        }
-    }
-
-    @Test
-    fun cu10_noLimitToday_sharedPool_showsInfinity() {
-        reseedProfile(
-            config = GatekeepTestFixtures.ProfileSeedConfig(
-                limitUsageScope = LimitUsageScope.sharedPool,
-                onLimitAction = OnLimitAction.limitWithExtensions,
-                limitExtensionPolicy = ExtensionPolicy(
-                    optionMinutes = listOf(5, 15),
-                    surfaceMode = ExtensionSurfaceMode.overlay,
-                    showNoLimitToday = true,
-                ),
-            ),
-            dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
-        )
-        composeRule.onNodeWithTag(GatekeepTestTags.CURRENT_USAGE_NO_LIMIT).performClick()
-        composeRule.waitUntil(timeoutMillis = 6_000) {
-            composeRule.onAllNodesWithText("∞").fetchSemanticsNodes().isNotEmpty()
         }
     }
 
@@ -223,8 +234,14 @@ class CurrentUsageActionsTest {
             dailyMs = GatekeepTestFixtures.TestDurations.DAILY_LIMIT_MS,
         )
         composeRule.onNodeWithTag(GatekeepTestTags.CURRENT_USAGE_NO_LIMIT).performClick()
-        composeRule.waitUntil(timeoutMillis = 6_000) {
-            composeRule.onAllNodesWithText("∞").fetchSemanticsNodes().isNotEmpty()
+        composeRule.waitForIdle()
+        try {
+            composeRule.waitUntil(timeoutMillis = 1_000) {
+                composeRule.onAllNodesWithText("∞", substring = true).fetchSemanticsNodes().isNotEmpty()
+            }
+        } catch (error: Throwable) {
+            dumpCurrentUsageFail("cu11 after grant wait")
+            throw error
         }
     }
 

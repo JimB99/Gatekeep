@@ -48,7 +48,7 @@ See [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
 
 ## Architecture
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Scenario-level tests: [docs/test-scenarios.md](docs/test-scenarios.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Scenario catalog: [docs/test-scenarios.md](docs/test-scenarios.md). Instrumented process (yield gate, ship bar): [docs/instrumented-testing.md](docs/instrumented-testing.md).
 
 Project conventions: `.cursor/rules/gatekeep-*.mdc`.
 

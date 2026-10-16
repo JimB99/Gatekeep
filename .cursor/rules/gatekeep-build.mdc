@@ -16,6 +16,13 @@ JDK and the Android SDK are **not** on global PATH. They live under the **Privat
 
 `Gatekeep/local.properties` already points `sdk.dir` at the Android SDK.
 
+If `../.tools/jdk-*` is absent, use Studio JBR and the machine SDK:
+
+```bash
+export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr"
+export ANDROID_HOME="${LOCALAPPDATA}/Android/Sdk"
+```
+
 Before Gradle, set:
 
 ```bash

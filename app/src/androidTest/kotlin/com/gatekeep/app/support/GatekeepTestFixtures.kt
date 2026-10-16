@@ -49,7 +49,7 @@ object GatekeepTestFixtures {
         const val OPEN_WAIT_SEC = 1
         const val SESSION_WAIT_SEC = 2
         const val DELAY_OPEN_SEC = 1
-        const val CANCELLED_OPEN_WAIT_SEC = 2
+        const val CANCELLED_OPEN_WAIT_SEC = 8
         const val PAUSE_EXPIRY_MS = 800L
         const val FUTURE_OFFSET_MS = 30_000L
         const val EXTENSION_GRACE_MS = 2_000L

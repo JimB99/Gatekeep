@@ -188,13 +188,12 @@
     <string name="limits_apply_all_apps">Limits apply to all apps in profile</string>
     <string name="daily_limit">Daily limit</string>
     <string name="session_limit">Session limit</string>
-    <string name="break_duration">Break duration (0 = no wait)</string>
     <string name="hourly_limit_off">Hourly limit (0 = off)</string>
     <string name="hourly_limit_resets">Resets at the start of each hour.</string>
     <string name="save_schedule">Save schedule</string>
     <string name="break_duration_session">Break after session limit</string>
     <string name="limit_break_duration">Break after usage cap</string>
-    <string name="limit_wait_duration">Wait before bypassing usage cap</string>
+    <string name="limit_wait_duration">Wait after usage cap</string>
     <string name="weekly_limit_off">Weekly limit (0 = off)</string>
     <string name="save_limits">Save limits</string>
     <string name="save_changes">Save changes</string>
@@ -215,7 +214,7 @@
     <string name="period_continue_inherit">Same as session limit</string>
     <string name="period_continue_duration">Continue</string>
     <string name="wait_before_opening_label">Wait before opening</string>
-    <string name="wait_during_use">Wait during use (session/limit)</string>
+    <string name="wait_during_use">Wait during use</string>
     <string name="extension_options">Extension options</string>
     <string name="extension_minutes_label">Extension minutes</string>
     <string name="extension_custom">Custom</string>
@@ -263,8 +262,8 @@
     <string name="limit_action_notify">Notify only</string>
     <string name="limit_action_extend">Limit + extend</string>
     <string name="limit_action_hard_block">Hard block</string>
-    <string name="session_action_hard_block">Hard block (this sitting)</string>
-    <string name="session_hard_block_hint">This sitting stays blocked until you leave for at least %1$s.</string>
+    <string name="session_action_hard_block">Hard block (this session)</string>
+    <string name="session_hard_block_hint">This session stays blocked until you leave for at least %1$s.</string>
     <string name="limit_hard_block_hint">Blocked until this hour, day, or week resets.</string>
     <string name="difficulty_easy">Easy</string>
     <string name="difficulty_medium">Medium</string>
@@ -453,7 +452,7 @@
     <string name="block_daily_limit">Daily limit reached</string>
     <string name="block_hourly_limit">Hourly limit reached</string>
     <string name="block_weekly_limit">Weekly limit reached</string>
-    <string name="block_session_hard_block">This sitting is blocked. Leave for at least %1$s to start a new sitting.</string>
+    <string name="block_session_hard_block">This session is blocked. Leave for at least %1$s to start a new session.</string>
     <string name="block_hourly_hard_block">Blocked until this hour resets.</string>
     <string name="block_daily_hard_block">Blocked until this day resets.</string>
     <string name="block_weekly_hard_block">Blocked until this week resets.</string>

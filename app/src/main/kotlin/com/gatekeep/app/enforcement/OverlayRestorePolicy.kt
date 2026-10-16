@@ -81,12 +81,9 @@ object OverlayRestorePolicy {
             ) {
                 return ForegroundRoutingPolicy.Route.Ignore
             }
-            if (input.blockingActive &&
-                input.presentation is BlockPresentation.Visible &&
-                input.nowMs - input.blockEnteredAtMs < ForegroundRoutingPolicy.BLOCK_STABILIZATION_MS
-            ) {
-                return ForegroundRoutingPolicy.Route.Ignore
-            }
+            // Home/Recents must hide even in the 400ms after the overlay first appears.
+            // Ignoring HideNow here dropped the one-shot test inject; later polls often
+            // have windows=[] and never hide (obs02 1.5s Home claim).
             if (input.blockingActive && input.presentation is BlockPresentation.Visible) {
                 return ForegroundRoutingPolicy.Route.HideNow(top.packageName)
             }

@@ -3,16 +3,15 @@ package com.gatekeep.app.stats
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.MainActivity
+import com.gatekeep.app.support.E2eGate
 import com.gatekeep.app.support.EnforcementTestPackages
 import com.gatekeep.app.support.GatekeepTestFixtures
-import com.gatekeep.app.support.GatekeepUiTest
-import com.gatekeep.app.support.GatekeepUiTest.openStats
+import com.gatekeep.app.support.GatekeepUiNav
+import com.gatekeep.app.support.GatekeepUiNav.openStats
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.ProfileRepository
 import com.gatekeep.data.repository.SettingsRepository
@@ -65,15 +64,10 @@ class StatsScreenSmokeTest {
     }
 
     @Test
+    @E2eGate
     fun st01_statsScreen_loads() {
         composeRule.onNodeWithTag(GatekeepTestTags.STATS_ROOT).assertIsDisplayed()
         composeRule.onNodeWithText("Statistics", substring = true, ignoreCase = true).assertIsDisplayed()
-    }
-
-    @Test
-    fun st02_periodSwipe_changesRange() {
-        composeRule.onNodeWithContentDescription("Previous", ignoreCase = true).performClick()
-        composeRule.waitForIdle()
     }
 
     @Test

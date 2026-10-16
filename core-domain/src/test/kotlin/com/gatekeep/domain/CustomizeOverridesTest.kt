@@ -1,7 +1,11 @@
 package com.gatekeep.domain
 
+import com.gatekeep.domain.model.OnLimitAction
 import com.gatekeep.domain.model.Profile
+import com.gatekeep.domain.model.RuleEvaluationContext
+import com.gatekeep.domain.model.RuleResult
 import com.gatekeep.domain.model.SchedulePolicyOverrides
+import com.gatekeep.domain.model.UsageSnapshot
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -61,6 +65,29 @@ class CustomizeOverridesTest {
         assertEquals(30 * 60_000L, applied.dailyLimitMs)
         assertNull(applied.hourlyLimitMs)
         assertNull(applied.sessionLimitMs)
+    }
+
+    @Test
+    fun `apply with only onLimitAction leaves daily off so RuleEngine allows at profile cap`() {
+        val applied = CustomizeOverrides.apply(
+            profile,
+            SchedulePolicyOverrides(onLimitAction = OnLimitAction.hardBlock),
+        )
+        assertNull(applied.dailyLimitMs)
+        val result = RuleEngine.evaluate(
+            RuleEvaluationContext(
+                nowEpochMs = 1_000L,
+                packageName = "com.test",
+                profile = applied,
+                limit = applied.toAppLimit("com.test"),
+                isMonitored = true,
+                usage = UsageSnapshot(dailyMs = profile.dailyLimitMs!!),
+                sessionState = null,
+                pauses = emptyList(),
+                enforcementConfig = applied.enforcementConfig(),
+            ),
+        )
+        assertTrue(result is RuleResult.Allowed)
     }
 
     @Test

@@ -14,6 +14,7 @@ _Avoid_: Overlay (too broad — includes hard block and extension UI)
 
 **Sitting**:
 One stretch of monitored use, ended by leave or device pause of the session continuity grace.
+Agent-only: user-facing copy says **session**, not sitting.
 _Avoid_: Session (the session *limit* is the cap inside a sitting)
 
 **Session continuity grace**:

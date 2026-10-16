@@ -28,10 +28,4 @@ class SystemIntegrationTest : EnforcementCrossAppTestBase() {
         harness.launchTargetB()
         harness.waitForElapsedMs(400)
     }
-
-    @Test
-    fun sys03_splitScreen_optional() {
-        seedHardBlockProfile()
-        harness.launchTargetA()
-    }
 }

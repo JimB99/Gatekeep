@@ -48,6 +48,7 @@ class BlockOverlayManager @Inject constructor(
     private val inputMethodManager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
     private val mainHandler = Handler(Looper.getMainLooper())
     private var overlayView: View? = null
+    private val attachedOverlayViews = ArrayList<View>(2)
     private var waitRunnable: Runnable? = null
     private var breakRunnable: Runnable? = null
     private var waitStopwatch: PausedStopwatch? = null
@@ -75,18 +76,25 @@ class BlockOverlayManager @Inject constructor(
 
     @SuppressLint("InflateParams")
     fun show(request: BlockOverlayRequest) {
-        mainHandler.post {
+        val epoch = overlayEpoch
+        runOnMain {
             try {
+                if (epoch != overlayEpoch) {
+                    coordinator.get().onOverlayShowAborted()
+                    return@runOnMain
+                }
                 if (!coordinator.get().shouldPresentBlockOverlay(request.packageName)) {
                     coordinator.get().onOverlayShowAborted()
-                    return@post
+                    return@runOnMain
                 }
                 currentRequest = request
-                if (overlayView != null && frictionInProgress) return@post
+                if (overlayView != null && frictionInProgress) return@runOnMain
                 if (overlayView != null) {
+                    overlayView?.let { restoreInteractive(it) }
+                    overlayVisible = true
                     updateBlock(request.message, request.reason, request.breakUntilMs)
                     startBreakTicker(request.breakUntilMs)
-                    return@post
+                    return@runOnMain
                 }
                 createBlockOverlay(request)
             } catch (e: Exception) {
@@ -97,10 +105,13 @@ class BlockOverlayManager @Inject constructor(
     }
 
     fun showDelay(delaySeconds: Int, message: String, onComplete: () -> Unit) {
-        mainHandler.post {
+        val epoch = overlayEpoch
+        runOnMain {
+            if (!OverlayPresentPolicy.shouldRunPostedShow(epoch, overlayEpoch)) return@runOnMain
             try {
                 clearOverlayState()
                 removeOverlayOnly()
+                if (!OverlayPresentPolicy.shouldRunPostedShow(epoch, overlayEpoch)) return@runOnMain
                 val view = LayoutInflater.from(localizedContext).inflate(R.layout.overlay_block, null)
                 applyChrome(view, BlockPresentationReason.openGate)
                 view.findViewById<TextView>(R.id.block_message).text = message
@@ -113,11 +124,15 @@ class BlockOverlayManager @Inject constructor(
                 var remaining = delaySeconds
                 countdown.text = localizedContext.getString(R.string.countdown_seconds_format, remaining)
                 val stopwatch = screenStateMonitor.createStopwatch()
-                waitActive = true
                 addOverlay(view, focusable = false)
+                waitActive = true
                 waitRunnable = object : Runnable {
                     override fun run() {
                         if (!waitActive) return
+                        if (!OverlayPresentPolicy.shouldRunPostedShow(epoch, overlayEpoch)) {
+                            abortStaleWaitTicker(this)
+                            return
+                        }
                         if (screenStateMonitor.isWaitClockFrozen()) {
                             if (waitActive) mainHandler.postDelayed(this, 500)
                             return
@@ -127,10 +142,14 @@ class BlockOverlayManager @Inject constructor(
                         if (remaining <= 0) {
                             waitActive = false
                             removeOverlayOnly()
-                            onComplete()
+                            if (OverlayPresentPolicy.shouldRunPostedShow(epoch, overlayEpoch)) {
+                                onComplete()
+                            }
                         } else {
                             countdown.text = localizedContext.getString(R.string.countdown_seconds_format, remaining)
-                            if (waitActive) mainHandler.postDelayed(this, 1000)
+                            if (waitActive && OverlayPresentPolicy.shouldRunPostedShow(epoch, overlayEpoch)) {
+                                mainHandler.postDelayed(this, 1000)
+                            }
                         }
                     }
                 }
@@ -142,19 +161,12 @@ class BlockOverlayManager @Inject constructor(
     }
 
     fun hideTemporarily() {
-        val epoch = ++overlayEpoch
-        overlayVisible = false
-        val remove = Runnable {
-            if (epoch != overlayEpoch && overlayVisible) return@Runnable
+        overlayEpoch++
+        runOnMainSync {
             clearOverlayTimers()
             removeOverlayOnly()
             // RES-02: frictionInProgress guards active math/wait UI, not an unresolved limit decision.
             frictionInProgress = LimitOverlayHidePolicy.frictionInProgressAfterTemporaryHide()
-        }
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            remove.run()
-        } else {
-            mainHandler.post(remove)
         }
     }
 
@@ -187,25 +199,54 @@ class BlockOverlayManager @Inject constructor(
 
     fun removeAfterResolution() {
         overlayEpoch++
-        mainHandler.post {
+        val work = {
             clearOverlayState()
             removeOverlayOnly()
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            mainHandler.post(work)
+        } else {
+            runOnMainSync(block = work)
         }
     }
 
     fun removeOverlaySynchronously(timeoutMs: Long = 3_000L) {
-        if (Looper.myLooper() == Looper.getMainLooper()) {
+        overlayEpoch++
+        runOnMainSync(timeoutMs) {
             clearOverlayState()
             removeOverlayOnly()
+            if (overlayView?.isAttachedToWindow == true) {
+                removeOverlayOnly()
+            }
+        }
+    }
+
+    private fun runOnMain(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            block()
+        } else {
+            mainHandler.post(block)
+        }
+    }
+
+    private fun runOnMainSync(timeoutMs: Long = 3_000L, block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            block()
             return
         }
         val latch = CountDownLatch(1)
+        val error = arrayOfNulls<Throwable>(1)
         mainHandler.post {
-            clearOverlayState()
-            removeOverlayOnly()
-            latch.countDown()
+            try {
+                block()
+            } catch (t: Throwable) {
+                error[0] = t
+            } finally {
+                latch.countDown()
+            }
         }
         latch.await(timeoutMs, TimeUnit.MILLISECONDS)
+        error[0]?.let { throw it }
     }
 
     private fun clearOverlayTimers() {
@@ -224,14 +265,101 @@ class BlockOverlayManager @Inject constructor(
         currentRequest = null
     }
 
+    private fun abortStaleWaitTicker(ticker: Runnable) {
+        waitActive = false
+        if (OverlayPresentPolicy.shouldRemoveOnStaleWaitTick(waitRunnable === ticker)) {
+            removeOverlayOnly()
+        }
+    }
+
     private fun removeOverlayOnly() {
-        overlayView?.let {
-            runCatching { windowManager.removeView(it) }
-                .onFailure { e -> enforcementLog.logError("Block overlay remove failed", e) }
+        val views = (attachedOverlayViews + listOfNotNull(overlayView)).distinct()
+        if (views.isEmpty()) {
             overlayView = null
             overlayParams = null
+            overlayVisible = LimitOverlayHidePolicy.overlayVisibleAfterHideRequested(
+                removeCompleted = true,
+            )
+            return
         }
-        overlayVisible = false
+        views.forEach { view ->
+            view.clearFocus()
+            neutralizeForRemove(view)
+            repeat(3) {
+                if (!isInWindowManager(view)) return@repeat
+                runCatching { windowManager.removeViewImmediate(view) }
+                    .recoverCatching { windowManager.removeView(view) }
+                    .onFailure { e ->
+                        enforcementLog.logError(
+                            "Block overlay remove failed attached=${view.isAttachedToWindow}",
+                            e,
+                        )
+                    }
+            }
+        }
+        val stillInWm = views.filter { isInWindowManager(it) }
+        attachedOverlayViews.clear()
+        if (stillInWm.isNotEmpty()) {
+            attachedOverlayViews.addAll(stillInWm)
+            overlayView = stillInWm.last()
+            overlayVisible = LimitOverlayHidePolicy.overlayVisibleAfterHideRequested(
+                removeCompleted = false,
+            )
+            return
+        }
+        overlayView = null
+        overlayParams = null
+        overlayVisible = LimitOverlayHidePolicy.overlayVisibleAfterHideRequested(
+            removeCompleted = true,
+        )
+    }
+
+    private fun neutralizeForRemove(view: View) {
+        view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        view.alpha = 0f
+        view.visibility = View.GONE
+        val params = overlayParams ?: (view.layoutParams as? WindowManager.LayoutParams) ?: return
+        if (!LimitOverlayHidePolicy.consumeTouches(hideRequested = true)) {
+            params.width = 1
+            params.height = 1
+            params.flags = params.flags or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        }
+        overlayParams = params
+        runCatching { windowManager.updateViewLayout(view, params) }
+    }
+
+    private fun restoreInteractive(view: View) {
+        view.visibility = View.VISIBLE
+        view.alpha = 1f
+        view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT,
+        )
+        overlayParams = params
+        if (isInWindowManager(view)) {
+            runCatching { windowManager.updateViewLayout(view, params) }
+        }
+    }
+
+    private fun isInWindowManager(view: View): Boolean {
+        if (view.isAttachedToWindow) return true
+        val params = overlayParams ?: (view.layoutParams as? WindowManager.LayoutParams)
+            ?: return false
+        return try {
+            windowManager.updateViewLayout(view, params)
+            true
+        } catch (_: IllegalArgumentException) {
+            false
+        } catch (_: Exception) {
+            false
+        }
     }
 
     @SuppressLint("InflateParams")
@@ -264,6 +392,8 @@ class BlockOverlayManager @Inject constructor(
             }
         }
 
+        view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        // Not focusable: FLAG_ALT_FOCUSABLE_IM + focusable overlay stalls the main thread (IME churn / ANR).
         addOverlay(view, focusable = false)
         startBreakTicker(request.breakUntilMs)
 
@@ -287,6 +417,7 @@ class BlockOverlayManager @Inject constructor(
             val vPadding = (8 * density).toInt()
             extensionLayout.minuteOptions.forEach { minutes ->
                 val btn = Button(localizedContext).apply {
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
                     text = localizedContext.getString(R.string.extension_minutes_format, minutes)
                     styleFilledButton(
                         this,
@@ -305,13 +436,18 @@ class BlockOverlayManager @Inject constructor(
                         bottomMargin = vPadding / 2
                     }
                     setOnClickListener {
-                        coordinator.get().grantExtensionMinutes(request.packageName, minutes)
+                        coordinator.get().grantExtensionMinutes(
+                            request.packageName,
+                            minutes,
+                            OverlayFrictionGrantPolicy.blockReason(request.reason),
+                        )
                     }
                 }
                 timeButtons.addView(btn)
             }
             if (extensionLayout.showNoLimitToday) {
                 val noLimitBtn = Button(localizedContext).apply {
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
                     text = localizedContext.getString(R.string.overlay_no_limit_today)
                     styleFilledButton(
                         this,
@@ -408,9 +544,14 @@ class BlockOverlayManager @Inject constructor(
                 )
                 val stopwatch = screenStateMonitor.createStopwatch().also { waitStopwatch = it }
                 waitActive = true
+                val waitEpoch = overlayEpoch
                 waitRunnable = object : Runnable {
                     override fun run() {
                         if (!waitActive) return
+                        if (!OverlayPresentPolicy.shouldRunPostedShow(waitEpoch, overlayEpoch)) {
+                            abortStaleWaitTicker(this)
+                            return
+                        }
                         if (screenStateMonitor.isWaitClockFrozen()) {
                             if (waitActive) mainHandler.postDelayed(this, 500)
                             return
@@ -425,7 +566,11 @@ class BlockOverlayManager @Inject constructor(
                             onFrictionSuccess(request)
                         } else {
                             countdown.text = localizedContext.getString(R.string.countdown_seconds_format, remainingSec)
-                            if (waitActive) mainHandler.postDelayed(this, 1000)
+                            if (waitActive &&
+                                OverlayPresentPolicy.shouldRunPostedShow(waitEpoch, overlayEpoch)
+                            ) {
+                                mainHandler.postDelayed(this, 1000)
+                            }
                         }
                     }
                 }
@@ -452,12 +597,10 @@ class BlockOverlayManager @Inject constructor(
                 coordinator.get().grantSessionRefill(request.packageName)
             OverlayFrictionGrantPolicy.Grant.PeriodContinue ->
                 coordinator.get().grantPeriodContinue(request.packageName)
-            OverlayFrictionGrantPolicy.Grant.PeriodExtension -> {
+            OverlayFrictionGrantPolicy.Grant.None -> {
                 coordinator.get().onFrictionCompleted(request.packageName)
-                coordinator.get().grantExtensionMinutes(
-                    request.packageName,
-                    request.extensionOptionMinutes.firstOrNull() ?: 5,
-                )
+                dismissByUser()
+                coordinator.get().refresh()
             }
         }
     }
@@ -683,6 +826,8 @@ class BlockOverlayManager @Inject constructor(
     }
 
     private fun addOverlay(view: View, focusable: Boolean) {
+        clearOverlayTimers()
+        removeOverlayOnly()
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -691,15 +836,15 @@ class BlockOverlayManager @Inject constructor(
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
             } else {
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
             },
             PixelFormat.TRANSLUCENT,
         )
-        overlayView = view
-        overlayParams = params
         try {
             windowManager.addView(view, params)
+            overlayView = view
+            overlayParams = params
+            attachedOverlayViews.add(view)
             overlayVisible = true
         } catch (e: Exception) {
             overlayView = null

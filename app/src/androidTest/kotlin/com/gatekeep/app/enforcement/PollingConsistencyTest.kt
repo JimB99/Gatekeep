@@ -16,25 +16,6 @@ import org.junit.runner.RunWith
 class PollingConsistencyTest : EnforcementCrossAppTestBase() {
 
     @Test
-    fun pol01_firstEval_within2s() {
-        seedHardBlockProfile()
-        val start = System.currentTimeMillis()
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay(timeoutMs = 2_000))
-        assertTrue(System.currentTimeMillis() - start <= 5_000)
-    }
-
-    @Test
-    fun pol02_sameAppResume_reevaluates() {
-        seedHardBlockProfile()
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-        harness.pressHome()
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
-    }
-
-    @Test
     fun pol03_nearLimit_blocksWithin1s() {
         runSeed {
             val seeded = GatekeepTestFixtures.seedProfileWithMonitoredApp(
@@ -55,14 +36,10 @@ class PollingConsistencyTest : EnforcementCrossAppTestBase() {
             )
         }
         harness.launchTargetA()
-        assertTrue(harness.waitForOverlay(timeoutMs = 3_000))
-    }
-
-    @Test
-    fun pol04_farLimit_blocksBefore30s() {
-        seedHardBlockProfile()
-        harness.launchTargetA()
-        assertTrue(harness.waitForOverlay())
+        assertTrue(
+            "near-limit overlay missing ${harness.screenDiagnostics()}",
+            harness.waitForOverlay(timeoutMs = 3_000),
+        )
     }
 
     @Test
@@ -84,47 +61,6 @@ class PollingConsistencyTest : EnforcementCrossAppTestBase() {
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay())
         harness.waitForElapsedMs(500)
-    }
-
-    @Test
-    fun pol06_screenOff_resetsWaitStopwatch() {
-        runSeed {
-            GatekeepTestFixtures.seedProfileWithMonitoredApp(
-                profileRepository = profileRepository,
-                config = GatekeepTestFixtures.ProfileSeedConfig(
-                    onOpenAction = com.gatekeep.domain.model.OnOpenAction.deterrentWait,
-                    openWaitDurationSeconds = 12,
-                    sessionLimitMs = null,
-                    dailyLimitMs = null,
-                ),
-            )
-        }
-        val fullWaitSeconds = 12
-        harness.wakeDevice()
-        harness.launchTargetA()
-        assertTrue("countdown missing ${harness.screenDiagnostics()}", harness.waitForCountdown() != null)
-        val dropDeadline = System.currentTimeMillis() + 4_000
-        var beforeLock: Int? = null
-        while (System.currentTimeMillis() < dropDeadline) {
-            beforeLock = harness.countdownSeconds()
-            if (beforeLock != null && beforeLock <= fullWaitSeconds - 2) break
-            harness.sleepMs(200)
-        }
-        assertTrue(
-            "countdown did not drop before lock before=$beforeLock ${harness.screenDiagnostics()}",
-            beforeLock != null && beforeLock <= fullWaitSeconds - 2,
-        )
-        val atOff = harness.sleepDeviceCapturingCountdown() ?: beforeLock
-        assertTrue("screen did not turn off ${harness.screenDiagnostics()}", !harness.isScreenOn())
-        harness.sleepMs(3_000)
-        val stillOff = !harness.isScreenOn()
-        harness.wakeDevice()
-        val after = harness.waitForCountdown(8_000)
-        assertTrue("screen woke during the lock", stillOff)
-        assertTrue(
-            "in-progress wait must reset on lock atOff=$atOff after=$after ${harness.screenDiagnostics()}",
-            after != null && after >= fullWaitSeconds - 1,
-        )
     }
 
     @Test

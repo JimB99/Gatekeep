@@ -123,6 +123,30 @@ class OverlayRestorePolicyTest {
     }
 
     @Test
+    fun visibleLauncherDuringBlockStabilization_hideNow() {
+        val home = OverlayWindowSnapshot(
+            packageName = launcher,
+            className = "com.android.launcher3.Launcher",
+            isOverlay = false,
+            isFocused = true,
+            isActive = true,
+        )
+        val now = 10_000L
+        val route = OverlayRestorePolicy.decide(
+            input(
+                windows = listOf(home),
+                usage = launcher,
+                current = blocked,
+                presentation = visible,
+                now = now,
+                entered = now - 100L,
+            ),
+        )
+        assertTrue(route is ForegroundRoutingPolicy.Route.HideNow)
+        assertEquals(launcher, (route as ForegroundRoutingPolicy.Route.HideNow).packageName)
+    }
+
+    @Test
     fun visibleRecents_justRestored_ignore() {
         val now = 10_000L
         val route = OverlayRestorePolicy.decide(

@@ -177,7 +177,6 @@
     <string name="limits_apply_all_apps">Los límites se aplican a todas las apps del perfil</string>
     <string name="daily_limit">Límite diario</string>
     <string name="session_limit">Límite de sesión</string>
-    <string name="break_duration">Duración del descanso (0 = sin espera)</string>
     <string name="hourly_limit_off">Límite por hora (0 = desactivado)</string>
     <string name="weekly_limit_off">Límite semanal (0 = desactivado)</string>
     <string name="save_limits">Guardar límites</string>
@@ -197,7 +196,7 @@
     <string name="period_continue_inherit">Igual que el límite de sesión</string>
     <string name="period_continue_duration">Continuar</string>
     <string name="wait_before_opening_label">Esperar antes de abrir</string>
-    <string name="wait_during_use">Esperar durante el uso (sesión/límite)</string>
+    <string name="wait_during_use">Esperar durante el uso</string>
     <string name="extension_options">Opciones de extensión</string>
     <string name="extension_minutes_label">Minutos de extensión</string>
     <string name="extension_custom">Personalizado</string>
@@ -453,7 +452,7 @@
     <string name="limit_usage_scope_per_app_hint">Cada app monitorizada tiene su propio contador con los mismos límites.</string>
     <string name="limit_usage_scope_shared">Compartido</string>
     <string name="limit_usage_scope_shared_hint">El uso de todas las apps monitorizadas cuenta para un pool compartido.</string>
-    <string name="limit_wait_duration">Espera antes de omitir el límite de uso</string>
+    <string name="limit_wait_duration">Espera tras el límite de uso</string>
     <string name="limits_hierarchy_error">Semanal debe ser al menos diario, diario al menos por hora, y por hora al menos sesión.</string>
     <string name="limits_hierarchy_hint">Semanal ≥ diario ≥ por hora ≥ sesión</string>
     <string name="no_limit_today_short">Sin límite hoy</string>
