@@ -23,3 +23,9 @@ internal object CountdownNotificationState {
         dismissedByUser = false
     }
 }
+
+/** When the HUD may be posted or refreshed for the current foreground session. */
+internal object CountdownNotificationDismissPolicy {
+    fun shouldRefreshCountdown(showCountdownNotification: Boolean, dismissedByUser: Boolean): Boolean =
+        showCountdownNotification && !dismissedByUser
+}

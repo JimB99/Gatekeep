@@ -162,11 +162,17 @@ Instrumented tests can assert the same buffer via `EnforcementCoordinator.enforc
 | N-05 | Timer body dedup avoids flicker | JVM `UsageHudLinesTest`; connected smoke `NotificationEnforcementTest.n03_*` |
 | N-06 | Eighty percent warning fires | `NotificationEnforcementTest.n06_eightyPercentWarning_fires` |
 | N-07 | Tap notification opens MainActivity | `NotificationEnforcementTest.n07_tapNotification_opensMainActivity` |
-| N-08 | Swipe session timer reappears | `NotificationEnforcementTest.n08_swipeSessionTimer_reappears` |
+| N-08 | Swipe session timer stays dismissed until leave | `NotificationEnforcementTest.n08_swipeSessionTimer_staysDismissedUntilLeave` |
+| N-08b | Swipe dismiss policy (no refresh while dismissed) | JVM `CountdownNotificationDismissPolicyTest` |
 | N-09 | Swipe warning stays dismissed | `NotificationEnforcementTest.n09_swipeWarning_staysDismissed` |
 | N-10 | Timer toggle off hides countdown | `NotificationEnforcementTest.n10_timerToggleOff_hidesCountdown` |
+| N-16 | Leave home clears session timer | `NotificationEnforcementTest.n16_leaveHome_clearsSessionTimer` |
+| N-17 | Leave home clears approaching warning | `NotificationEnforcementTest.n17_leaveHome_clearsApproachingWarning` |
+| N-18 | Screen off clears timer; unlock restores | `NotificationEnforcementTest.n18_screenOff_clearsTimer_unlockRestores` |
+| N-19 | Leave home clears limit-reached warning | `NotificationEnforcementTest.n19_leaveHome_clearsLimitReachedWarning` |
+| N-20 | Switch monitored A→B clears prior usage notifications | `NotificationEnforcementTest.n20_switchMonitoredApp_clearsPreviousUsageNotifications` |
 | N-11 | Locale change localizes notification | JVM `StringsResourceParityTest`; persist path `LanguageSettingsTest.l03_*` |
-| N-12 | Screen off/on timer resumes | JVM `DeviceUsePolicyTest`; connected smoke `NotificationEnforcementTest.n03_*` |
+| N-12 | Screen off/on timer resumes (HUD phase; shade clear/restore see N-18) | JVM `DeviceUsePolicyTest`; connected smoke `NotificationEnforcementTest.n03_*` |
 
 ---
 

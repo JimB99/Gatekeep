@@ -602,6 +602,10 @@ class EnforcementCoordinator @Inject constructor(
         finalizePreviousSession(prevPackage)
         previousForegroundPackage = prevPackage
 
+        if (prevPackage != null && prevPackage != packageName) {
+            onMonitoredAppLeftForeground(prevPackage)
+        }
+
         if (prevPackage != null &&
             prevPackage in monitoredPackagesCache &&
             prevPackage != packageName &&
@@ -1581,6 +1585,27 @@ class EnforcementCoordinator @Inject constructor(
         enforcementPeriodHourStartMs = null
         enforcementPeriodDayStartMs = null
         notificationHelper.hideCountdown()
+        notificationHelper.hideUsageWarnings()
+    }
+
+    private fun canRefreshCountdown(): Boolean =
+        CountdownNotificationDismissPolicy.shouldRefreshCountdown(
+            showCountdownNotification,
+            CountdownNotificationState.dismissedByUser,
+        )
+
+    private fun onMonitoredAppLeftForeground(leavingPackage: String) {
+        if (leavingPackage in ignoredForegroundPackages) return
+        val wasMonitored = leavingPackage in monitoredPackagesCache ||
+            leavingPackage == lastMonitoredForegroundPackage ||
+            leavingPackage == countdownPackageName
+        if (!wasMonitored) return
+        CountdownNotificationState.reset()
+        stopCountdownTicker()
+    }
+
+    private fun onDeviceUsageNotificationsPaused() {
+        mainHandler.post { notificationHelper.hideAllUsageHudNotifications() }
     }
 
     private suspend fun onDeviceUsePaused() {
@@ -1590,6 +1615,7 @@ class EnforcementCoordinator @Inject constructor(
         )
         freezeSessionHudForDevicePause()
         persistDevicePauseOnCurrentSession()
+        onDeviceUsageNotificationsPaused()
         overlayShowInFlight = false
         mainHandler.post { blockOverlay.hideTemporarily() }
         enforcementTrace.record(
@@ -1629,6 +1655,11 @@ class EnforcementCoordinator @Inject constructor(
             mapOf("to" to DeviceUsePhase.Using.name),
         )
         resumeMonitoredForegroundAfterUnlock()
+        mainHandler.post {
+            if (canRefreshCountdown()) {
+                refreshCountdownNotification()
+            }
+        }
     }
 
     private suspend fun resumePersistedDevicePause(pausedAt: Long?, now: Long) {
@@ -2603,9 +2634,10 @@ class EnforcementCoordinator @Inject constructor(
         enforcementPeriodHourStartMs = usageStatsCollector.hourStartEpochMs(now)
         enforcementPeriodDayStartMs = usageStatsCollector.dayStartEpochMs(now)
 
-        if (showNotification) {
-            notificationHelper.resetCountdownDismissState()
+        if (showNotification && canRefreshCountdown()) {
             refreshCountdownNotification()
+        } else if (showNotification && CountdownNotificationState.dismissedByUser) {
+            notificationHelper.hideCountdown()
         }
 
         enforcementLoopRunnable = object : Runnable {
@@ -2665,7 +2697,7 @@ class EnforcementCoordinator @Inject constructor(
                     } else {
                         val matchesForeground = currentForegroundPackage == pkg ||
                             lastMonitoredForegroundPackage == pkg
-                        if (matchesForeground && showCountdownNotification) {
+                        if (matchesForeground && canRefreshCountdown()) {
                             refreshCountdownNotification()
                         }
                     }
@@ -2739,6 +2771,7 @@ class EnforcementCoordinator @Inject constructor(
         val incoming = usageStatsCollector.getForegroundPackageFallback()?.takeIf { it != pkg }
         scope.launch {
             try {
+                onMonitoredAppLeftForeground(pkg)
                 if (incoming != null) {
                     currentForegroundPackage = incoming
                     finalizePreviousSession(pkg)
@@ -2873,6 +2906,7 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private fun refreshCountdownNotification() {
+        if (!canRefreshCountdown()) return
         val label = countdownAppLabel ?: return
         if (countdownPackageName == null) return
         val title = countdownNotificationTitle

@@ -136,10 +136,6 @@ class GatekeepNotificationHelper @Inject constructor(
             .build()
     }
 
-    fun resetCountdownDismissState() {
-        CountdownNotificationState.reset()
-    }
-
     fun showCountdown(
         title: String,
         hud: UsageHudInfo,
@@ -212,6 +208,25 @@ class GatekeepNotificationHelper @Inject constructor(
 
     fun hideCountdown() {
         notificationManager.cancel(COUNTDOWN_NOTIFICATION_ID)
+    }
+
+    fun hideApproachingLimitWarning() {
+        notificationManager.cancel(APPROACHING_LIMIT_ID)
+    }
+
+    fun hideLimitReachedWarning() {
+        notificationManager.cancel(LIMIT_REACHED_ID)
+    }
+
+    fun hideUsageWarnings() {
+        hideApproachingLimitWarning()
+        hideLimitReachedWarning()
+    }
+
+    /** Session timer plus approaching / limit-reached warnings (not FGS, a11y, or weekly). */
+    fun hideAllUsageHudNotifications() {
+        hideCountdown()
+        hideUsageWarnings()
     }
 
     fun showApproachingLimitWarning(profileId: Long, appLabel: String) {

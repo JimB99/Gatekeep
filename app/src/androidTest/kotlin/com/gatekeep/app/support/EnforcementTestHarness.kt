@@ -908,6 +908,33 @@ class EnforcementTestHarness(
     fun waitForCountdownNotificationGone(timeoutMs: Long = DEFAULT_NOTIFICATION_TIMEOUT_MS): Boolean =
         awaitCondition(timeoutMs) { !hasActiveCountdownNotification() }
 
+    /**
+     * Same effect as swiping away the session-timer HUD: production posts
+     * [GatekeepNotificationHelper.showCountdown] with [NotificationCompat.Builder.setDeleteIntent]
+     * → [CountdownNotificationDismissReceiver]; the shade entry is removed separately.
+     */
+    fun dismissCountdownNotification() {
+        context.sendBroadcast(
+            android.content.Intent(context, com.gatekeep.app.enforcement.CountdownNotificationDismissReceiver::class.java),
+        )
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.cancel(GatekeepNotificationHelper.COUNTDOWN_NOTIFICATION_ID)
+    }
+
+    fun activeCountdownNotificationTitle(): String? =
+        activeNotification(GatekeepNotificationHelper.COUNTDOWN_NOTIFICATION_ID)
+            ?.extras
+            ?.getCharSequence(android.app.Notification.EXTRA_TITLE)
+            ?.toString()
+
+    fun waitForCountdownTitleNotContaining(
+        text: String,
+        timeoutMs: Long = DEFAULT_NOTIFICATION_TIMEOUT_MS,
+    ): Boolean = awaitCondition(timeoutMs) {
+        val title = activeCountdownNotificationTitle()
+        title == null || !title.contains(text, ignoreCase = true)
+    }
+
     /** Poll until a wall-clock timer elapses; returns as soon as [minElapsedMs] is met. */
     fun waitForElapsedMs(minElapsedMs: Long, timeoutMs: Long = minElapsedMs + 500): Boolean {
         val start = System.currentTimeMillis()
@@ -959,6 +986,26 @@ class EnforcementTestHarness(
             context.getString(R.string.approaching_limit_title),
             timeoutMs,
         )
+
+    fun hasActiveApproachingLimitNotification(): Boolean =
+        activeNotification(GatekeepNotificationHelper.APPROACHING_LIMIT_ID) != null
+
+    fun waitForApproachingLimitNotificationGone(timeoutMs: Long = DEFAULT_NOTIFICATION_TIMEOUT_MS): Boolean =
+        awaitCondition(timeoutMs) { !hasActiveApproachingLimitNotification() }
+
+    fun hasActiveLimitReachedNotification(): Boolean =
+        activeNotification(GatekeepNotificationHelper.LIMIT_REACHED_ID) != null
+
+    fun waitForLimitReachedNotification(timeoutMs: Long = DEFAULT_NOTIFICATION_TIMEOUT_MS): Boolean =
+        awaitCondition(timeoutMs) {
+            hasActiveLimitReachedNotification()
+        } || waitForNotificationText(
+            context.getString(R.string.limit_reached_title),
+            timeoutMs,
+        )
+
+    fun waitForLimitReachedNotificationGone(timeoutMs: Long = DEFAULT_NOTIFICATION_TIMEOUT_MS): Boolean =
+        awaitCondition(timeoutMs) { !hasActiveLimitReachedNotification() }
 
     fun waitForWeeklyReportNotification(timeoutMs: Long = DEFAULT_NOTIFICATION_TIMEOUT_MS): Boolean =
         awaitCondition(timeoutMs) {
