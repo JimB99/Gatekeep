@@ -378,6 +378,7 @@
     <string name="step_plus_5m">+5m</string>
 
     <string name="overlay_answer_hint">Antwort</string>
+    <string name="overlay_answer_rejected">Falsche Antwort</string>
     <string name="overlay_submit">Senden</string>
     <string name="overlay_continue_anyway">Trotzdem fortfahren</string>
     <string name="overlay_close_app">App schließen</string>

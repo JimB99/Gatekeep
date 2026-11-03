@@ -392,6 +392,7 @@
 
     <!-- Block overlay -->
     <string name="overlay_answer_hint">Answer</string>
+    <string name="overlay_answer_rejected">Incorrect answer</string>
     <string name="overlay_submit">Submit</string>
     <string name="overlay_continue_anyway">Continue anyway</string>
     <string name="overlay_close_app">Close app</string>

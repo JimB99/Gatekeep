@@ -7,8 +7,12 @@ import com.gatekeep.app.MainActivity
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
+import android.text.Editable
+import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
@@ -614,27 +618,23 @@ class BlockOverlayManager @Inject constructor(
             localizedContext.getString(R.string.overlay_enter_profile_pin)
         val input = view.findViewById<EditText>(R.id.friction_input)
         input.visibility = View.VISIBLE
-        prepareInputField(input)
+        clearFrictionInputError(input)
         input.inputType = android.text.InputType.TYPE_CLASS_NUMBER or
             android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
         val submit = view.findViewById<Button>(R.id.friction_submit)
         submit.visibility = View.VISIBLE
         submit.text = localizedContext.getString(R.string.unlock)
+        prepareFrictionInput(input, submit)
         submit.setOnClickListener {
             val pin = input.text.toString()
             if (!request.profilePasswordHash.isNullOrBlank() &&
                 PasswordHasher.verify(pin, request.profilePasswordHash)
             ) {
+                hideFrictionIme(input)
                 frictionInProgress = false
-                if (request.isOpenGate) {
-                    coordinator.get().onOpenGatePassed(request.packageName)
-                } else if (request.useExtensionButtons) {
-                    dismissByUser()
-                    coordinator.get().refresh()
-                } else {
-                    dismissByUser()
-                    coordinator.get().refresh()
-                }
+                onFrictionSuccess(request)
+            } else {
+                showFrictionInputError(input)
             }
         }
         showKeyboard(input)
@@ -644,20 +644,17 @@ class BlockOverlayManager @Inject constructor(
         view.findViewById<TextView>(R.id.friction_prompt).text = challenge.question
         val input = view.findViewById<EditText>(R.id.friction_input)
         input.visibility = View.VISIBLE
-        prepareInputField(input)
         val submit = view.findViewById<Button>(R.id.friction_submit)
         submit.visibility = View.VISIBLE
-        input.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                submit.performClick()
-                true
-            } else false
-        }
+        prepareFrictionInput(input, submit)
         submit.setOnClickListener {
             val answer = input.text.toString().toIntOrNull() ?: -1
             if (FrictionChallenge.verify(challenge, answer)) {
+                hideFrictionIme(input)
                 frictionInProgress = false
                 onFrictionSuccess(request)
+            } else {
+                showFrictionInputError(input)
             }
         }
         showKeyboard(input)
@@ -678,6 +675,52 @@ class BlockOverlayManager @Inject constructor(
         input.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) scrollInputIntoView(input)
         }
+    }
+
+    private fun prepareFrictionInput(input: EditText, submit: Button) {
+        clearFrictionInputError(input)
+        prepareInputField(input)
+        input.imeOptions = EditorInfo.IME_ACTION_DONE
+        if (input.getTag(R.id.tag_friction_text_watcher) == null) {
+            input.addTextChangedListener(
+                object : TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                    override fun afterTextChanged(s: Editable?) {
+                        clearFrictionInputError(input)
+                    }
+                },
+            )
+            input.setTag(R.id.tag_friction_text_watcher, true)
+        }
+        input.setOnEditorActionListener { _, actionId, event ->
+            val enterKey = event?.keyCode == KeyEvent.KEYCODE_ENTER &&
+                event.action == KeyEvent.ACTION_DOWN
+            if (actionId == EditorInfo.IME_ACTION_DONE || enterKey) {
+                submit.performClick()
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    private fun clearFrictionInputError(input: EditText) {
+        input.setBackgroundResource(R.drawable.bg_overlay_input)
+        input.contentDescription = null
+        input.isSelected = false
+    }
+
+    private fun showFrictionInputError(input: EditText) {
+        input.setBackgroundResource(R.drawable.bg_overlay_input_error)
+        input.contentDescription = localizedContext.getString(R.string.overlay_answer_rejected)
+        // Not list selection — automation/test seam (UiAutomator isSelected); cleared on edit.
+        input.isSelected = true
+        input.performHapticFeedback(HapticFeedbackConstants.REJECT)
+    }
+
+    private fun hideFrictionIme(input: EditText) {
+        inputMethodManager.hideSoftInputFromWindow(input.windowToken, 0)
     }
 
     private fun makeOverlayFocusableForInput() {

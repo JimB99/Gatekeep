@@ -27,6 +27,14 @@ fun PinGateDialog(
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
 
+    val verifyPin = {
+        if (!passwordHash.isNullOrBlank() && PasswordHasher.verify(pin, passwordHash)) {
+            onVerified()
+        } else {
+            error = true
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -38,6 +46,7 @@ fun PinGateDialog(
                     label = stringResource(R.string.pin),
                     isError = error,
                     requestInitialFocus = true,
+                    onImeSubmit = verifyPin,
                 )
                 if (error) {
                     Text(
@@ -48,13 +57,7 @@ fun PinGateDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                if (!passwordHash.isNullOrBlank() && PasswordHasher.verify(pin, passwordHash)) {
-                    onVerified()
-                } else {
-                    error = true
-                }
-            }) { Text(stringResource(R.string.confirm)) }
+            TextButton(onClick = verifyPin) { Text(stringResource(R.string.confirm)) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }

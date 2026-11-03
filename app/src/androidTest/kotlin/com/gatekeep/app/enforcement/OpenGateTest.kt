@@ -37,6 +37,32 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
         assertTrue(harness.waitForOverlay() || harness.isFrictionVisible())
         harness.submitOverlayMathAnswer("99999")
         assertTrue(harness.waitForOverlay())
+        assertTrue(
+            "wrong math should show error state ${harness.screenDiagnostics()}",
+            harness.isOverlayFrictionInputRejected(),
+        )
+    }
+
+    @Test
+    fun g18_mathWrong_enterKey_showsError() {
+        runSeed {
+            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onLimitAction = OnLimitAction.deterrentMath,
+                    defaultFrictionDifficulty = FrictionDifficulty.easy,
+                ),
+            )
+            seedHardBlockProfile()
+        }
+        harness.launchTargetA()
+        assertTrue(harness.waitForOverlay() || harness.isFrictionVisible())
+        harness.submitOverlayFrictionAnswerViaEnter("99999")
+        assertTrue(harness.waitForOverlay())
+        assertTrue(
+            "Enter should submit wrong math and show error ${harness.screenDiagnostics()}",
+            harness.isOverlayFrictionInputRejected(),
+        )
     }
 
     @Test
@@ -180,6 +206,34 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
         }
         harness.launchTargetA()
         assertTrue(harness.waitForOverlay() || harness.isFrictionVisible())
+        harness.submitOverlayMathAnswer("0000")
+        assertTrue(harness.waitForOverlay())
+        assertTrue(
+            "wrong profile PIN should show error state ${harness.screenDiagnostics()}",
+            harness.isOverlayFrictionInputRejected(),
+        )
+    }
+
+    @Test
+    fun pp19_wrongProfilePin_enterKey_showsError() {
+        runSeed {
+            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.pinGate,
+                    passwordHash = PasswordHasher.hash(GatekeepTestFixtures.PROFILE_PIN),
+                    lockEnabled = true,
+                ),
+            )
+        }
+        harness.launchTargetA()
+        assertTrue(harness.waitForOverlay() || harness.isFrictionVisible())
+        harness.submitOverlayFrictionAnswerViaEnter("0000")
+        assertTrue(harness.waitForOverlay())
+        assertTrue(
+            "Enter should submit wrong profile PIN and show error ${harness.screenDiagnostics()}",
+            harness.isOverlayFrictionInputRejected(),
+        )
     }
 
     @Test

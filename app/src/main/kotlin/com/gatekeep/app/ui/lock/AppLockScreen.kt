@@ -39,25 +39,27 @@ fun AppLockScreen(
     ) {
         Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
         Text(stringResource(R.string.enter_pin_unlock), style = MaterialTheme.typography.bodyMedium)
+        val tryUnlock = {
+            if (!passwordHash.isNullOrBlank() && PasswordHasher.verify(pin, passwordHash)) {
+                onUnlocked()
+            } else {
+                error = true
+            }
+        }
         PinTextField(
             value = pin,
             onValueChange = { pin = it; error = false },
             label = stringResource(R.string.pin),
             isError = error,
             requestInitialFocus = true,
+            onImeSubmit = tryUnlock,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 16.dp)
                 .testTag(AppLockTestTags.PIN_FIELD),
         )
         Button(
-            onClick = {
-                if (!passwordHash.isNullOrBlank() && PasswordHasher.verify(pin, passwordHash)) {
-                    onUnlocked()
-                } else {
-                    error = true
-                }
-            },
+            onClick = tryUnlock,
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(AppLockTestTags.UNLOCK_BUTTON),

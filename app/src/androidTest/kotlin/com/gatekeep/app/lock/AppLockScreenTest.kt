@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.gatekeep.app.support.E2eGate
@@ -35,6 +36,22 @@ class AppLockScreenTest {
 
         composeRule.onNodeWithTag(AppLockTestTags.PIN_FIELD).performTextInput(GatekeepTestFixtures.TEST_PIN)
         composeRule.onNodeWithTag(AppLockTestTags.UNLOCK_BUTTON).performClick()
+        composeRule.waitForIdle()
+        assert(unlocked)
+    }
+
+    @Test
+    fun pin04_correctPin_imeDone_unlocks() {
+        var unlocked = false
+        composeRule.setContent {
+            AppLockScreen(
+                passwordHash = PasswordHasher.hash(GatekeepTestFixtures.TEST_PIN),
+                onUnlocked = { unlocked = true },
+            )
+        }
+
+        composeRule.onNodeWithTag(AppLockTestTags.PIN_FIELD).performTextInput(GatekeepTestFixtures.TEST_PIN)
+        composeRule.onNodeWithTag(AppLockTestTags.PIN_FIELD).performImeAction()
         composeRule.waitForIdle()
         assert(unlocked)
     }

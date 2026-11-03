@@ -459,6 +459,7 @@ private fun AppLockSection(
         value = pin,
         onValueChange = { pin = it },
         label = stringResource(R.string.app_pin),
+        onImeSubmit = { if (pinDirty) savePin() },
     )
 
     if (pinDirty) {

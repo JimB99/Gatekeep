@@ -1051,6 +1051,26 @@ class EnforcementTestHarness(
         }
     }
 
+    fun isOverlayFrictionInputRejected(): Boolean {
+        val input = uiDevice.findObject(By.res(packageName, "friction_input")) ?: return false
+        return input.isSelected
+    }
+
+    fun submitOverlayFrictionAnswerViaEnter(answer: String) {
+        shell("settings put secure show_ime_with_hard_keyboard 0")
+        repeat(3) {
+            try {
+                val input = uiDevice.findObject(By.res(packageName, "friction_input")) ?: return
+                input.click()
+                input.text = answer
+                uiDevice.pressEnter()
+                return
+            } catch (_: StaleObjectException) {
+                Thread.sleep(POLL_INTERVAL_MS)
+            }
+        }
+    }
+
     fun clickOverlayBack() {
         uiDevice.findObject(By.res(packageName, "block_back_btn"))?.click()
     }

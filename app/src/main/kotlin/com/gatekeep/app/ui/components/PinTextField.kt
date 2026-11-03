@@ -1,6 +1,7 @@
 package com.gatekeep.app.ui.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
@@ -22,6 +23,7 @@ import androidx.compose.ui.res.stringResource
 import com.gatekeep.app.ui.GatekeepTestTags
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -36,6 +38,7 @@ fun PinTextField(
     isError: Boolean = false,
     requestInitialFocus: Boolean = false,
     testTag: String? = null,
+    onImeSubmit: (() -> Unit)? = null,
 ) {
     var visible by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
@@ -56,7 +59,13 @@ fun PinTextField(
             .then(if (testTag != null) Modifier.testTag(testTag) else Modifier),
         isError = isError,
         singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.NumberPassword,
+            imeAction = if (onImeSubmit != null) ImeAction.Done else ImeAction.Default,
+        ),
+        keyboardActions = KeyboardActions(
+            onDone = { onImeSubmit?.invoke() },
+        ),
         visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
         trailingIcon = {
             IconButton(onClick = { visible = !visible }) {

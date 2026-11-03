@@ -98,6 +98,7 @@
                         android:background="@drawable/bg_overlay_input"
                         android:hint="@string/overlay_answer_hint"
                         android:importantForAutofill="no"
+                        android:imeOptions="actionDone"
                         android:inputType="numberSigned"
                         android:textColor="@color/gatekeep_on_surface"
                         android:textColorHint="@color/gatekeep_on_surface_variant"

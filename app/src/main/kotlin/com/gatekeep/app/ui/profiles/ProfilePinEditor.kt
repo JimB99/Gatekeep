@@ -117,6 +117,8 @@ fun ProfilePinEditor(
 
             testTag = GatekeepTestTags.PROFILE_PIN_FIELD,
 
+            onImeSubmit = { if (pinDirty) savePin() },
+
         )
 
         hint?.let {
