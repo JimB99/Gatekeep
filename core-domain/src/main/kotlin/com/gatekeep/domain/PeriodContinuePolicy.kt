@@ -2,6 +2,7 @@ package com.gatekeep.domain
 
 import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.OnLimitAction
+import com.gatekeep.domain.model.OnSessionLimitAction
 import com.gatekeep.domain.model.PeriodAppUseBudget
 import com.gatekeep.domain.model.PeriodStarts
 import com.gatekeep.domain.model.ProfileEnforcementConfig
@@ -46,6 +47,102 @@ object PeriodContinuePolicy {
             return existingBreakUntilEpochMs
         }
         return nowEpochMs + breakDurationMs
+    }
+
+    /**
+     * Break deadlines after [SessionStartDecision] StartFresh or overlay ticker completion.
+     *
+     * StartFresh drops an expired [SessionState.breakUntilEpochMs] before enforcement can
+     * grant period continue; read [expiredBreakDeadline] from the persisted row (or
+     * [persistedBreakFallback]) when the in-memory session no longer carries the field.
+     *
+     * [hadExpiredBreakDeadline] / [sessionForExpiredBreakCompletion] / [resolveAfterExpiredBreakDeadline]
+     * share that contract for evaluate-on-reopen and break-ticker paths.
+     */
+    fun expiredBreakDeadline(
+        sessionState: SessionState,
+        persistedBeforeSessionStart: SessionState?,
+    ): Long? = sessionState.breakUntilEpochMs ?: persistedBeforeSessionStart?.breakUntilEpochMs
+
+    fun hadExpiredBreakDeadline(
+        sessionState: SessionState,
+        persistedBeforeSessionStart: SessionState?,
+        nowEpochMs: Long,
+    ): Boolean = expiredBreakDeadline(sessionState, persistedBeforeSessionStart)
+        ?.let { nowEpochMs >= it } == true
+
+    /** When Room lost [SessionState.breakUntilEpochMs], rebuild a prior snapshot for completion. */
+    fun persistedBreakFallback(
+        sessionState: SessionState,
+        fallbackBreakUntilEpochMs: Long?,
+    ): SessionState? {
+        if (sessionState.breakUntilEpochMs != null || fallbackBreakUntilEpochMs == null) return null
+        return sessionState.copy(breakUntilEpochMs = fallbackBreakUntilEpochMs)
+    }
+
+    fun sessionForExpiredBreakCompletion(
+        sessionState: SessionState,
+        persistedBeforeSessionStart: SessionState?,
+    ): SessionState {
+        val deadline = expiredBreakDeadline(sessionState, persistedBeforeSessionStart)
+            ?: return sessionState
+        return if (sessionState.breakUntilEpochMs != null) {
+            sessionState
+        } else {
+            sessionState.copy(breakUntilEpochMs = deadline)
+        }
+    }
+
+    data class ExpiredBreakResolution(
+        val session: SessionState,
+        val persistPeriodAppUse: Boolean,
+    )
+
+    /**
+     * Same resolution as enforcement evaluate after StartFresh: complete expired break,
+     * optional session sitting refresh, then period continue when at cap with mandatory break.
+     * Returns null when nothing changed.
+     */
+    fun resolveAfterExpiredBreakDeadline(
+        sessionState: SessionState,
+        persistedBeforeSessionStart: SessionState?,
+        nowEpochMs: Long,
+        limit: AppLimit?,
+        config: ProfileEnforcementConfig,
+        usage: UsageSnapshot,
+        periodStarts: PeriodStarts,
+    ): ExpiredBreakResolution? {
+        if (!hadExpiredBreakDeadline(sessionState, persistedBeforeSessionStart, nowEpochMs)) {
+            return null
+        }
+        val sessionWithBreak = sessionForExpiredBreakCompletion(
+            sessionState,
+            persistedBeforeSessionStart,
+        )
+        val sessionWithoutBreak = SessionTracker.clearBreak(sessionWithBreak)
+        val sessionExceeded = SessionTracker.evaluateSession(limit, sessionWithoutBreak, nowEpochMs) is
+            SessionTracker.SessionCheckResult.SessionExceeded
+        var resolved = if (
+            config.onSessionLimitAction == OnSessionLimitAction.mandatoryBreak && sessionExceeded
+        ) {
+            SessionTracker.completeExpiredBreak(sessionWithBreak, nowEpochMs)
+        } else {
+            sessionWithoutBreak
+        }
+        val periodOver = LimitEvaluator.evaluate(limit, usage) is LimitEvaluator.LimitCheckResult.Blocked
+        val needsPeriodContinue = config.onLimitAction == OnLimitAction.mandatoryBreak &&
+            periodOver &&
+            resolved.periodAppUse.remainingMs(usage, periodStarts, limit) <= 0L
+        if (needsPeriodContinue) {
+            resolved = applyContinue(
+                session = resolved,
+                usage = usage,
+                continueMs = continueMs(config, limit?.sessionLimitMs),
+                periodStarts = periodStarts,
+            )
+        }
+        if (resolved == sessionState) return null
+        return ExpiredBreakResolution(resolved, needsPeriodContinue)
     }
 
     fun applyContinue(

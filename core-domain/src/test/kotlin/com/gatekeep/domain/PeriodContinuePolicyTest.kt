@@ -174,6 +174,86 @@ class PeriodContinuePolicyTest {
     }
 
     @Test
+    fun `expired break deadline survives StartFresh strip and grants continue not a new break`() {
+        val p = profile(action = OnLimitAction.mandatoryBreak, breakMs = 30 * 60_000L)
+        val breakUntil = now - 60_000L
+        val persisted = SessionTracker.applyBreak(
+            SessionTracker.startSession(pkg, now - 45 * 60_000L),
+            breakUntil,
+        )
+        val afterStartFresh = SessionTracker.startSession(pkg, now).copy(
+            breakUntilEpochMs = null,
+            periodAppUse = persisted.periodAppUse,
+        )
+        assertTrue(
+            PeriodContinuePolicy.hadExpiredBreakDeadline(afterStartFresh, persisted, now),
+        )
+        val continueMs = PeriodContinuePolicy.continueMs(p.enforcementConfig(), p.sessionLimitMs)
+        val usage = overCap()
+        val withBreak = PeriodContinuePolicy.sessionForExpiredBreakCompletion(
+            afterStartFresh,
+            persisted,
+        )
+        val completed = PeriodContinuePolicy.completeExpiredPeriodBreak(
+            session = withBreak,
+            usage = usage,
+            continueMs = continueMs,
+            periodStarts = periodStarts,
+            nowEpochMs = now,
+        )
+        assertNull(completed.breakUntilEpochMs)
+        val result = RuleEngine.evaluate(context(p, usage, completed), openAlreadyPassed = true)
+        assertEquals(continueMs, remainingDaily(result))
+        assertNull((result as? RuleResult.Blocked)?.breakUntilEpochMs)
+    }
+
+    @Test
+    fun `resolveAfterExpiredBreakDeadline matches StartFresh strip then period continue`() {
+        val p = profile(action = OnLimitAction.mandatoryBreak, breakMs = 30 * 60_000L)
+        val breakUntil = now - 60_000L
+        val persisted = SessionTracker.applyBreak(
+            SessionTracker.startSession(pkg, now - 45 * 60_000L),
+            breakUntil,
+        )
+        val afterStartFresh = SessionTracker.startSession(pkg, now).copy(
+            breakUntilEpochMs = null,
+            periodAppUse = persisted.periodAppUse,
+        )
+        val usage = overCap()
+        val resolution = PeriodContinuePolicy.resolveAfterExpiredBreakDeadline(
+            sessionState = afterStartFresh,
+            persistedBeforeSessionStart = persisted,
+            nowEpochMs = now,
+            limit = limit().copy(sessionLimitMs = p.sessionLimitMs),
+            config = p.enforcementConfig(),
+            usage = usage,
+            periodStarts = periodStarts,
+        )
+        assertNotNull(resolution)
+        assertTrue(resolution!!.persistPeriodAppUse)
+        assertNull(resolution.session.breakUntilEpochMs)
+        val evaluated = RuleEngine.evaluate(
+            context(p, usage, resolution.session),
+            openAlreadyPassed = true,
+        )
+        assertEquals(
+            PeriodContinuePolicy.continueMs(p.enforcementConfig(), p.sessionLimitMs),
+            remainingDaily(evaluated),
+        )
+    }
+
+    @Test
+    fun `persistedBreakFallback supplies deadline when session row cleared breakUntil`() {
+        val breakUntil = now - 5_000L
+        val session = SessionTracker.startSession(pkg, now)
+        val fallback = PeriodContinuePolicy.persistedBreakFallback(session, breakUntil)
+        assertNotNull(fallback)
+        assertTrue(
+            PeriodContinuePolicy.hadExpiredBreakDeadline(session, fallback, now),
+        )
+    }
+
+    @Test
     fun `period break end grants continue once and does not re-enter with a past deadline`() {
         val p = profile(action = OnLimitAction.mandatoryBreak, breakMs = 5 * 60_000L)
         val pastDeadline = now - 1_000L

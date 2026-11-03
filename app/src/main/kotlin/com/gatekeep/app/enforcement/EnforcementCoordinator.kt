@@ -172,6 +172,8 @@ class EnforcementCoordinator @Inject constructor(
     private var activeExtensionPolicy: com.gatekeep.domain.model.ExtensionPolicy? = null
     private var lastBlockReason: BlockReason? = null
     private var lastBlockProfileId: Long? = null
+    /** Last break deadline written or shown; used when Room/StartFresh cleared [SessionState.breakUntilEpochMs]. */
+    private var lastCommittedBreakUntilEpochMs: Long? = null
     private var lastSessionLimitMs: Long? = null
     private var lastSessionRefillOverrideMs: Long? = null
     private var lastPeriodContinueInherit: Boolean = true
@@ -785,6 +787,7 @@ class EnforcementCoordinator @Inject constructor(
     private fun clearBlockState() {
         lastPostedOverlay = null
         overlayShowInFlight = false
+        lastCommittedBreakUntilEpochMs = null
         blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
         stopCountdownTicker()
         blockOverlay.clearFrictionState()
@@ -824,6 +827,17 @@ class EnforcementCoordinator @Inject constructor(
                     ?: return@launch
                 val state = usageRepository.getSessionState(profileId, packageName) ?: return@launch
                 val now = System.currentTimeMillis()
+                val persistedFallback = PeriodContinuePolicy.persistedBreakFallback(
+                    state,
+                    lastCommittedBreakUntilEpochMs,
+                )
+                if (!PeriodContinuePolicy.hadExpiredBreakDeadline(state, persistedFallback, now)) {
+                    return@launch
+                }
+                val sessionWithBreak = PeriodContinuePolicy.sessionForExpiredBreakCompletion(
+                    state,
+                    persistedFallback,
+                )
                 val periodReason = lastBlockReason in setOf(
                     BlockReason.dailyLimit,
                     BlockReason.hourlyLimit,
@@ -847,16 +861,17 @@ class EnforcementCoordinator @Inject constructor(
                         customMs = lastPeriodContinueDurationMs,
                     )
                     PeriodContinuePolicy.completeExpiredPeriodBreak(
-                        session = state,
+                        session = sessionWithBreak,
                         usage = usage,
                         continueMs = continueMs,
                         periodStarts = periodStartsAt(now),
                         nowEpochMs = now,
                     )
                 } else {
-                    SessionTracker.completeExpiredBreak(state, now)
+                    SessionTracker.completeExpiredBreak(sessionWithBreak, now)
                 }
                 if (completed != state) {
+                    lastCommittedBreakUntilEpochMs = null
                     if (periodBreakExpired) {
                         persistPeriodAppUse(profile, completed)
                     } else {
@@ -1944,6 +1959,7 @@ class EnforcementCoordinator @Inject constructor(
             usageRepository.saveSessionState(sessionStateRaw, primaryProfile.id)
         }
 
+        val persistedBeforeSessionStart = sessionStateRaw
         var sessionState = ensureSessionStarted(
             packageName = packageName,
             profileId = primaryProfile.id,
@@ -1999,6 +2015,7 @@ class EnforcementCoordinator @Inject constructor(
             usage = usage,
             config = config,
             sessionState = sessionState,
+            persistedBeforeSessionStart = persistedBeforeSessionStart,
             periodStarts = periodStarts,
             now = now,
         )
@@ -2445,6 +2462,13 @@ class EnforcementCoordinator @Inject constructor(
         notificationHelper.showApproachingLimitWarning(profileId, appLabel)
     }
 
+    private fun noteCommittedBreakUntil(breakUntilEpochMs: Long?) {
+        if (breakUntilEpochMs == null) return
+        lastCommittedBreakUntilEpochMs = lastCommittedBreakUntilEpochMs?.let { existing ->
+            maxOf(existing, breakUntilEpochMs)
+        } ?: breakUntilEpochMs
+    }
+
     private suspend fun persistBreakIfNeeded(
         packageName: String,
         profileId: Long,
@@ -2456,6 +2480,7 @@ class EnforcementCoordinator @Inject constructor(
         val effectiveUntil = state.breakUntilEpochMs?.let { existing ->
             maxOf(existing, breakUntilMs)
         } ?: breakUntilMs
+        noteCommittedBreakUntil(effectiveUntil)
         usageRepository.saveSessionState(
             SessionTracker.applyBreak(state, effectiveUntil),
             profileId,
@@ -2966,6 +2991,7 @@ class EnforcementCoordinator @Inject constructor(
         if (skipDailyLimitOverlay(packageName, reason)) {
             return
         }
+        noteCommittedBreakUntil(breakUntilMs)
         // RES-02: hideTemporarily can leave frictionInProgress true while the view is gone; do not skip re-block.
         if (blockOverlay.isFrictionInProgress() && !blockOverlay.isVisible()) {
             blockOverlay.clearFrictionState()
@@ -3177,42 +3203,27 @@ class EnforcementCoordinator @Inject constructor(
         usage: UsageSnapshot,
         config: com.gatekeep.domain.model.ProfileEnforcementConfig,
         sessionState: SessionState,
+        persistedBeforeSessionStart: SessionState?,
         periodStarts: PeriodStarts,
         now: Long,
     ): SessionState {
-        val expired = sessionState.breakUntilEpochMs?.let { now >= it } == true
-        if (!expired) return sessionState
-        val sessionWithoutBreak = SessionTracker.clearBreak(sessionState)
-        val sessionExceeded = SessionTracker.evaluateSession(limit, sessionWithoutBreak, now) is
-            SessionTracker.SessionCheckResult.SessionExceeded
-        var resolved = if (
-            config.onSessionLimitAction == OnSessionLimitAction.mandatoryBreak && sessionExceeded
-        ) {
-            SessionTracker.completeExpiredBreak(sessionState, now)
+        val resolution = PeriodContinuePolicy.resolveAfterExpiredBreakDeadline(
+            sessionState = sessionState,
+            persistedBeforeSessionStart = persistedBeforeSessionStart,
+            nowEpochMs = now,
+            limit = limit,
+            config = config,
+            usage = usage,
+            periodStarts = periodStarts,
+        ) ?: return sessionState
+        if (resolution.persistPeriodAppUse) {
+            persistPeriodAppUse(profile, resolution.session)
         } else {
-            sessionWithoutBreak
-        }
-        val periodOver = LimitEvaluator.evaluate(limit, usage) is LimitEvaluator.LimitCheckResult.Blocked
-        val needsPeriodContinue = config.onLimitAction == OnLimitAction.mandatoryBreak &&
-            periodOver &&
-            resolved.periodAppUse.remainingMs(usage, periodStarts, limit) <= 0L
-        if (needsPeriodContinue) {
-            resolved = PeriodContinuePolicy.applyContinue(
-                session = resolved,
-                usage = usage,
-                continueMs = PeriodContinuePolicy.continueMs(config, limit?.sessionLimitMs),
-                periodStarts = periodStarts,
-            )
-        }
-        if (resolved == sessionState) return sessionState
-        if (needsPeriodContinue) {
-            persistPeriodAppUse(profile, resolved)
-        } else {
-            usageRepository.saveSessionState(resolved, profile.id)
+            usageRepository.saveSessionState(resolution.session, profile.id)
         }
         sessionStartedForPackage = packageName
         recordFrictionEnd(packageName, profile.id)
-        return resolved
+        return resolution.session
     }
 
     private fun periodStartsAt(now: Long) = PeriodStarts(
