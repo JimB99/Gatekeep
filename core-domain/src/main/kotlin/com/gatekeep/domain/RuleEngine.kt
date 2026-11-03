@@ -232,6 +232,7 @@ object RuleEngine {
         nowEpochMs: Long,
         sharedPool: Boolean,
     ): Long? {
+        // Milliseconds left on extensionGrace pause, if present (instrumented tests / future anti-flash).
         val graceUntil = ExtensionGrantEngine.activeGraceUntilEpochMs(
             pauses = pauses,
             profileId = profileId,

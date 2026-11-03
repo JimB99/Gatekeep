@@ -1,6 +1,7 @@
 package com.gatekeep.app.enforcement
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import com.gatekeep.app.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -9,11 +10,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Ring buffer of enforcement decisions for debug logcat, release export, and instrumented tests.
- * Filter: `adb logcat -s GatekeepEnforcement`
+ * Ring buffer of app debug events for logcat, user export (About), and instrumented tests.
+ * Filter: `adb logcat -s GatekeepDebug`
  */
 @Singleton
-class EnforcementTrace @Inject constructor(
+class GatekeepDebugTrace @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
 
@@ -43,7 +44,7 @@ class EnforcementTrace @Inject constructor(
     fun record(event: String, fields: Map<String, String> = emptyMap()) {
         val skipped = synchronized(lock) {
             val last = buffer.lastOrNull()
-            if (EnforcementTraceQuery.shouldCoalesce(last?.event, last?.fields, event, fields)) {
+            if (GatekeepDebugTraceQuery.shouldCoalesce(last?.event, last?.fields, event, fields)) {
                 true
             } else {
                 val entry = Entry(System.currentTimeMillis(), event, fields)
@@ -68,24 +69,49 @@ class EnforcementTrace @Inject constructor(
     }
 
     fun exportText(
-        window: EnforcementTraceQuery.Window = EnforcementTraceQuery.Window.ALL,
+        window: GatekeepDebugTraceQuery.Window = GatekeepDebugTraceQuery.Window.ALL,
         nowMs: Long = System.currentTimeMillis(),
     ): String {
-        val since = EnforcementTraceQuery.sinceEpochMs(window, nowMs)
+        val since = GatekeepDebugTraceQuery.sinceEpochMs(window, nowMs)
+        val header = exportHeader(window, nowMs)
         val live = snapshot()
-        if (live.isNotEmpty()) {
-            return EnforcementTraceQuery.formatExport(live, since)
+        val body = if (live.isNotEmpty()) {
+            GatekeepDebugTraceQuery.formatExport(live, since)
+        } else {
+            val fileText = runCatching { persistFile().takeIf { it.exists() }?.readText().orEmpty() }
+                .getOrDefault("")
+            GatekeepDebugTraceQuery.filterFileText(fileText, since)
         }
-        val fileText = runCatching { persistFile().takeIf { it.exists() }?.readText().orEmpty() }
-            .getOrDefault("")
-        return EnforcementTraceQuery.filterFileText(fileText, since)
+        return if (body.isBlank()) "" else "$header\n$body"
     }
 
+    private fun exportHeader(window: GatekeepDebugTraceQuery.Window, nowMs: Long): String =
+        buildString {
+            append("# Gatekeep debug log")
+            append("\n# version=")
+            append(BuildConfig.VERSION_NAME)
+            append(" (")
+            append(BuildConfig.VERSION_CODE)
+            append(")")
+            append("\n# window=")
+            append(window.name)
+            append("\n# exportedAtMs=")
+            append(nowMs)
+            append("\n# device=")
+            append(Build.MANUFACTURER)
+            append(' ')
+            append(Build.MODEL)
+        }
+
     private fun loadFromDisk() {
-        val text = runCatching { persistFile().takeIf { it.exists() }?.readText().orEmpty() }
-            .getOrDefault("")
+        val text = runCatching {
+            persistFile().takeIf { it.exists() }?.readText()?.takeIf { it.isNotBlank() }
+                ?: legacyPersistFile().takeIf { it.exists() }?.readText().orEmpty()
+        }.getOrDefault("")
         if (text.isBlank()) return
-        val loaded = text.lineSequence().mapNotNull { EnforcementTraceQuery.parseLine(it) }.toList()
+        val loaded = text.lineSequence()
+            .mapNotNull { GatekeepDebugTraceQuery.parseLine(it) }
+            .toList()
         if (loaded.isEmpty()) return
         synchronized(lock) {
             buffer.clear()
@@ -102,8 +128,10 @@ class EnforcementTrace @Inject constructor(
 
     private fun persistFile(): File = File(context.filesDir, FILE_NAME)
 
+    private fun legacyPersistFile(): File = File(context.filesDir, LEGACY_FILE_NAME)
+
     companion object {
-        const val TAG = "GatekeepEnforcement"
+        const val TAG = "GatekeepDebug"
 
         const val EVALUATE = "evaluate"
         const val EVALUATE_SKIP_PAUSED = "evaluate_skip_paused"
@@ -126,8 +154,16 @@ class EnforcementTrace @Inject constructor(
         const val UNLOCK_SKIP = "unlock_skip"
         const val UNLOCK_RESUME = "unlock_resume"
 
+        const val EXTENSION_GRANT = "extension_grant"
+        const val EXTENSION_DENIED = "extension_denied"
+        const val EXTENSION_RESET = "extension_reset"
+        const val APP_ERROR = "app_error"
+        const val PERMISSION_BANNER_SHOWN = "permission_banner_shown"
+        const val PROFILE_SAVE = "profile_save"
+
         private const val MAX_ENTRIES = 2_000
         private const val PERSISTED_ENTRIES = 2_000
-        private const val FILE_NAME = "enforcement-trace.log"
+        private const val FILE_NAME = "gatekeep-debug.log"
+        private const val LEGACY_FILE_NAME = "enforcement-trace.log"
     }
 }

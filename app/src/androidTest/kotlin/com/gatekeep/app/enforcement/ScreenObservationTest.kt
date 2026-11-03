@@ -133,11 +133,11 @@ class ScreenObservationTest : EnforcementCrossAppTestBase() {
             "obs08 launch=${launchMs}ms extra=${extraMs}ms coord=$coord eval=$eval traces=$traces ${harness.screenDiagnostics()}",
         )
         val openShownInTrace = traces.any {
-            it.event == EnforcementTrace.SHOW_OPEN_DETERRENT ||
-                (it.event == EnforcementTrace.OVERLAY_SHOW && it.fields["openGate"] == "true")
+            it.event == GatekeepDebugTrace.SHOW_OPEN_DETERRENT ||
+                (it.event == GatekeepDebugTrace.OVERLAY_SHOW && it.fields["openGate"] == "true")
         }
         val overlayAt = traces.firstOrNull {
-            it.event == EnforcementTrace.OVERLAY_SHOW && it.fields["openGate"] == "true"
+            it.event == GatekeepDebugTrace.OVERLAY_SHOW && it.fields["openGate"] == "true"
         }?.epochMs
         val fromLaunch = overlayAt?.let { it - launchStart }
         // OPEN_WAIT_SEC is 1s; launchTargetA can wait 2s for the label, so leftover
@@ -307,8 +307,8 @@ class ScreenObservationTest : EnforcementCrossAppTestBase() {
         )
         assertTrue(
             "trace: session_leave or hud_freeze after home",
-            enforcementCoordinator.enforcementTraceCount(EnforcementTrace.SESSION_LEAVE) >= 1 ||
-                enforcementCoordinator.enforcementTraceCount(EnforcementTrace.HUD_FREEZE) >= 1,
+            enforcementCoordinator.enforcementTraceCount(GatekeepDebugTrace.SESSION_LEAVE) >= 1 ||
+                enforcementCoordinator.enforcementTraceCount(GatekeepDebugTrace.HUD_FREEZE) >= 1,
         )
     }
 

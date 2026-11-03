@@ -11,7 +11,7 @@ import com.gatekeep.app.support.E2eGate
 import com.gatekeep.app.support.GatekeepTestFixtures
 import com.gatekeep.app.support.GatekeepUiNav
 import com.gatekeep.app.support.GatekeepUiNav.openSettings
-import com.gatekeep.app.enforcement.EnforcementTraceQuery
+import com.gatekeep.app.enforcement.GatekeepDebugTraceQuery
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.data.repository.SettingsRepository
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -117,13 +117,13 @@ class EnforcementSettingsTest {
         composeRule.onNodeWithTag(GatekeepTestTags.SETTINGS_ABOUT).assertIsDisplayed()
         composeRule.onNodeWithTag(GatekeepTestTags.SETTINGS_ABOUT).performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("Copy enforcement log", substring = true, ignoreCase = true)
+        composeRule.onNodeWithText("Copy debug log", substring = true, ignoreCase = true)
             .assertIsDisplayed()
         composeRule.onNodeWithTag(
-            GatekeepTestTags.enforcementLogRange(EnforcementTraceQuery.Window.LAST_HOUR.name),
+            GatekeepTestTags.debugLogRange(GatekeepDebugTraceQuery.Window.LAST_HOUR.name),
         ).assertIsDisplayed()
         composeRule.onNodeWithTag(
-            GatekeepTestTags.enforcementLogRange(EnforcementTraceQuery.Window.ALL.name),
+            GatekeepTestTags.debugLogRange(GatekeepDebugTraceQuery.Window.ALL.name),
         ).assertIsDisplayed()
     }
 

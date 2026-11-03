@@ -322,7 +322,7 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
         harness.sleepMs(800)
         val traces = enforcementCoordinator.enforcementTraceSnapshot()
         val startFresh = traces.any {
-            it.event == EnforcementTrace.SESSION_START && it.fields["action"] == "StartFresh"
+            it.event == GatekeepDebugTrace.SESSION_START && it.fields["action"] == "StartFresh"
         }
         assertTrue(
             "lock past custom 15s grace must StartFresh traces=$traces ${harness.screenDiagnostics()}",
@@ -371,17 +371,17 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
         val afterUnlock = enforcementCoordinator.enforcementTraceSnapshot().filter { it.epochMs >= wakeAt }
         assertTrue(
             "must not overlay_show after unlock on home: $afterUnlock ${harness.screenDiagnostics()}",
-            afterUnlock.none { it.event == EnforcementTrace.OVERLAY_SHOW },
+            afterUnlock.none { it.event == GatekeepDebugTrace.OVERLAY_SHOW },
         )
         assertTrue(
             "must not overlay_restore last monitored after unlock on home: $afterUnlock",
             afterUnlock.none {
-                it.event == EnforcementTrace.OVERLAY_RESTORE && it.fields["pkg"] == pkg
+                it.event == GatekeepDebugTrace.OVERLAY_RESTORE && it.fields["pkg"] == pkg
             },
         )
         assertTrue(
             "must not show open wait after unlock on home: $afterUnlock ${harness.screenDiagnostics()}",
-            afterUnlock.none { it.event == EnforcementTrace.SHOW_OPEN_DETERRENT } &&
+            afterUnlock.none { it.event == GatekeepDebugTrace.SHOW_OPEN_DETERRENT } &&
                 harness.overlayMessageText() == null,
         )
     }

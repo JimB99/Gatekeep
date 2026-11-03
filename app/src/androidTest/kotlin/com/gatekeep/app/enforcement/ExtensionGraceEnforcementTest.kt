@@ -97,8 +97,8 @@ class ExtensionGraceEnforcementTest : EnforcementCrossAppTestBase() {
             "e15 open wait missing traces=$traces ${harness.screenDiagnostics()}",
             harness.waitForOpenFriction() ||
                 traces.any {
-                    it.event == EnforcementTrace.SHOW_OPEN_DETERRENT ||
-                        (it.event == EnforcementTrace.OVERLAY_SHOW && it.fields["openGate"] == "true")
+                    it.event == GatekeepDebugTrace.SHOW_OPEN_DETERRENT ||
+                        (it.event == GatekeepDebugTrace.OVERLAY_SHOW && it.fields["openGate"] == "true")
                 },
         )
         runBlocking {

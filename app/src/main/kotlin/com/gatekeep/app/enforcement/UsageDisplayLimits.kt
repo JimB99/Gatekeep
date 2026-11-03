@@ -16,5 +16,6 @@ object UsageDisplayLimits {
         extensionAnchorMs = extension.anchorMs,
         noLimitToday = noLimitToday,
         periodMs = periodMs,
+        maxExplicitCapMs = extension.maxExplicitCapMs,
     )
 }

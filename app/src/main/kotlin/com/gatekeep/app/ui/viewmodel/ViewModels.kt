@@ -15,7 +15,7 @@ import com.gatekeep.app.data.StatsRepository
 import com.gatekeep.app.data.StatsTimeRange
 import com.gatekeep.app.data.TopAppUsage
 import com.gatekeep.app.ui.components.buildPermissionState
-import com.gatekeep.app.enforcement.EnforcementTraceQuery
+import com.gatekeep.app.enforcement.GatekeepDebugTraceQuery
 import com.gatekeep.app.util.EnforcementLog
 import com.gatekeep.app.util.LocaleController
 import com.gatekeep.app.util.UsageStatsCollector
@@ -71,7 +71,10 @@ class ProfilesHomeViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     @ApplicationContext private val context: Context,
     private val enforcementLog: EnforcementLog,
+    private val appDebugEvents: com.gatekeep.app.enforcement.GatekeepAppDebugEvents,
 ) : ViewModel() {
+
+    private var lastPermissionBannerLogKey: String? = null
 
     val profiles = profileRepository.observeProfiles()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -87,17 +90,31 @@ class ProfilesHomeViewModel @Inject constructor(
     )
     val permissionState = _permissionState.asStateFlow()
 
+    private fun publishPermissionState(state: com.gatekeep.app.ui.components.PermissionState) {
+        _permissionState.value = state
+        if (!state.showBanner) {
+            lastPermissionBannerLogKey = null
+            return
+        }
+        val missing = com.gatekeep.app.ui.components.permissionBannerMissingKeys(state)
+        if (missing == lastPermissionBannerLogKey) return
+        lastPermissionBannerLogKey = missing
+        appDebugEvents.permissionBannerShown(missing)
+    }
+
     init {
         viewModelScope.launch {
             profiles.collect { loadSummaries(it) }
         }
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
-                _permissionState.value = buildPermissionState(
-                    context,
-                    enforcementLog,
-                    enforcementEnabled = settings.enforcementEnabled,
-                    accessibilityOptedIn = settings.accessibilityOptedIn,
+                publishPermissionState(
+                    buildPermissionState(
+                        context,
+                        enforcementLog,
+                        enforcementEnabled = settings.enforcementEnabled,
+                        accessibilityOptedIn = settings.accessibilityOptedIn,
+                    ),
                 )
             }
         }
@@ -106,11 +123,13 @@ class ProfilesHomeViewModel @Inject constructor(
     fun refreshPermissions() {
         viewModelScope.launch {
             val settings = settingsRepository.settings.first()
-            _permissionState.value = buildPermissionState(
-                context,
-                enforcementLog,
-                enforcementEnabled = settings.enforcementEnabled,
-                accessibilityOptedIn = settings.accessibilityOptedIn,
+            publishPermissionState(
+                buildPermissionState(
+                    context,
+                    enforcementLog,
+                    enforcementEnabled = settings.enforcementEnabled,
+                    accessibilityOptedIn = settings.accessibilityOptedIn,
+                ),
             )
         }
     }
@@ -178,6 +197,7 @@ class ProfileViewModel @Inject constructor(
     private val usageStatsCollector: UsageStatsCollector,
     private val pinStorage: PinStorage,
     private val enforcementCoordinator: com.gatekeep.app.enforcement.EnforcementCoordinator,
+    private val appDebugEvents: com.gatekeep.app.enforcement.GatekeepAppDebugEvents,
     @ApplicationContext private val context: Context,
     settingsRepository: SettingsRepository,
 ) : ViewModel() {
@@ -288,6 +308,7 @@ class ProfileViewModel @Inject constructor(
         message: String = context.getString(R.string.saved),
     ) {
         profileRepository.updateProfile(profile)
+        appDebugEvents.profileSaved(profile.id)
         _saveMessage.value = message
     }
 
@@ -382,6 +403,7 @@ class ProfileViewModel @Inject constructor(
         profileRepository.observeMonitoredApps(profileId).first().forEach { app ->
             usageRepository.clearSessionState(profileId, app.packageName)
         }
+        appDebugEvents.extensionReset(profileId, dayStart)
         refreshCurrentUsage(profileId)
     }
 
@@ -1015,7 +1037,7 @@ class SettingsViewModel @Inject constructor(
     private val pinStorage: PinStorage,
     @ApplicationContext private val context: Context,
     private val enforcementLog: EnforcementLog,
-    private val enforcementTrace: com.gatekeep.app.enforcement.EnforcementTrace,
+    private val debugTrace: com.gatekeep.app.enforcement.GatekeepDebugTrace,
 ) : ViewModel() {
 
     val settings = settingsRepository.settings
@@ -1055,9 +1077,9 @@ class SettingsViewModel @Inject constructor(
         enforcementLog.clear()
     }
 
-    fun enforcementTraceExport(
-        window: EnforcementTraceQuery.Window = EnforcementTraceQuery.Window.ALL,
-    ): String = enforcementTrace.exportText(window)
+    fun debugTraceExport(
+        window: GatekeepDebugTraceQuery.Window = GatekeepDebugTraceQuery.Window.ALL,
+    ): String = debugTrace.exportText(window)
 }
 
 @HiltViewModel

@@ -90,6 +90,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideEnforcementLog(@ApplicationContext context: Context): EnforcementLog =
-        EnforcementLog(context)
+    fun provideEnforcementLog(
+        @ApplicationContext context: Context,
+        debugTrace: com.gatekeep.app.enforcement.GatekeepDebugTrace,
+    ): EnforcementLog = EnforcementLog(context, debugTrace)
 }

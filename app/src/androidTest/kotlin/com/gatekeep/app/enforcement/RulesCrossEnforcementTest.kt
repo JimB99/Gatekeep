@@ -153,11 +153,11 @@ class RulesCrossEnforcementTest : EnforcementCrossAppTestBase() {
         val coord = enforcementCoordinator.state.value
         val traces = enforcementCoordinator.enforcementTraceSnapshot()
         val openIdx = traces.indexOfFirst {
-            it.event == EnforcementTrace.SHOW_OPEN_DETERRENT ||
-                (it.event == EnforcementTrace.OVERLAY_SHOW && it.fields["openGate"] == "true")
+            it.event == GatekeepDebugTrace.SHOW_OPEN_DETERRENT ||
+                (it.event == GatekeepDebugTrace.OVERLAY_SHOW && it.fields["openGate"] == "true")
         }
         val dailyIdx = traces.indexOfFirst {
-            it.event == EnforcementTrace.OVERLAY_SHOW && it.fields["reason"] == "dailyLimit"
+            it.event == GatekeepDebugTrace.OVERLAY_SHOW && it.fields["reason"] == "dailyLimit"
         }
         assertTrue(
             "open wait missing coord=$coord traces=$traces ${harness.screenDiagnostics()}",

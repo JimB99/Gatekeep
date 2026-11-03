@@ -42,16 +42,16 @@ class EnforcementDailyTraceTest {
 
     @Test
     fun overlayShow_withDailyBudget_roundTripsOnExportLine() {
-        val entry = EnforcementTrace.Entry(
+        val entry = GatekeepDebugTrace.Entry(
             epochMs = 1_791_757_377_947L,
-            event = EnforcementTrace.OVERLAY_SHOW,
+            event = GatekeepDebugTrace.OVERLAY_SHOW,
             fields = linkedMapOf(
                 "pkg" to "app.revanced.android.youtube",
                 "reason" to "dailyLimit",
                 "openGate" to "false",
             ) + EnforcementDailyTrace.fields(usedMs, capMs, remainingMs),
         )
-        val parsed = EnforcementTraceQuery.parseLine(entry.format())
+        val parsed = GatekeepDebugTraceQuery.parseLine(entry.format())
         assertEquals(entry, parsed)
         assertEquals(usedMs.toString(), parsed!!.fields[EnforcementDailyTrace.USED])
         assertEquals(capMs.toString(), parsed.fields[EnforcementDailyTrace.CAP])
@@ -67,13 +67,13 @@ class EnforcementDailyTraceTest {
             1791757377947 overlay_show pkg=app.revanced.android.youtube reason=dailyLimit openGate=false
             1791757399786 hud_freeze pkg=app.revanced.android.youtube remainingMs=106862
         """.trimIndent()
-        val entries = log.lineSequence().mapNotNull { EnforcementTraceQuery.parseLine(it) }.toList()
-        val overlay = entries.first { it.event == EnforcementTrace.OVERLAY_SHOW }
+        val entries = log.lineSequence().mapNotNull { GatekeepDebugTraceQuery.parseLine(it) }.toList()
+        val overlay = entries.first { it.event == GatekeepDebugTrace.OVERLAY_SHOW }
         assertEquals("dailyLimit", overlay.fields["reason"])
         assertEquals(
             "usage_paused",
             entries.last {
-                it.epochMs <= overlay.epochMs && it.event == EnforcementTrace.SESSION_LEAVE
+                it.epochMs <= overlay.epochMs && it.event == GatekeepDebugTrace.SESSION_LEAVE
             }.fields["reason"],
         )
         assertFalse(

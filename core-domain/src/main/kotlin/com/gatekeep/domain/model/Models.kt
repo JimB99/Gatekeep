@@ -9,6 +9,7 @@ enum class PauseType {
     focusMode,
     focusBlock,
     emergencyBypass,
+    /** Short post-extension pause; enforcement uses usage+grace (LimitEvaluator), not the +N HUD cap. */
     extensionGrace,
 }
 
@@ -126,6 +127,9 @@ data class LimitExtensionBonus(
     val dailyAnchorMs: Long = 0L,
     val hourlyAnchorMs: Long = 0L,
     val weeklyAnchorMs: Long = 0L,
+    val dailyMaxExplicitCapMs: Long = 0L,
+    val hourlyMaxExplicitCapMs: Long = 0L,
+    val weeklyMaxExplicitCapMs: Long = 0L,
 )
 
 data class ProfileEnforcementConfig(

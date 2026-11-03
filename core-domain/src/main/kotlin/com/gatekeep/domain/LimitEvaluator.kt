@@ -30,24 +30,27 @@ object LimitEvaluator {
             graceRemainingMs,
             PeriodDuration.dayMs,
             useDisplayCap = true,
+            maxExplicitCapMs = extensionBonus.dailyMaxExplicitCapMs,
         )
         val hourlyRemaining = remainingForPeriod(
             limit.hourlyLimitMs,
             usage.hourlyMs,
             extensionBonus.hourlyMs,
-            0L,
+            extensionBonus.hourlyAnchorMs,
             graceRemainingMs,
             PeriodDuration.hourMs,
-            useDisplayCap = false,
+            useDisplayCap = extensionBonus.hourlyMaxExplicitCapMs > 0L,
+            maxExplicitCapMs = extensionBonus.hourlyMaxExplicitCapMs,
         )
         val weeklyRemaining = remainingForPeriod(
             limit.weeklyLimitMs,
             usage.weeklyMs,
             extensionBonus.weeklyMs,
-            0L,
+            extensionBonus.weeklyAnchorMs,
             graceRemainingMs,
             PeriodDuration.weekMs,
-            useDisplayCap = false,
+            useDisplayCap = extensionBonus.weeklyMaxExplicitCapMs > 0L,
+            maxExplicitCapMs = extensionBonus.weeklyMaxExplicitCapMs,
         )
 
         if (dailyRemaining != null && dailyRemaining <= 0) {
@@ -69,24 +72,27 @@ object LimitEvaluator {
                 graceRemainingMs,
                 PeriodDuration.dayMs,
                 useDisplayCap = true,
+                maxExplicitCapMs = extensionBonus.dailyMaxExplicitCapMs,
             ) ||
                 isNearLimit(
                     limit.hourlyLimitMs,
                     usage.hourlyMs,
                     extensionBonus.hourlyMs,
-                    0L,
+                    extensionBonus.hourlyAnchorMs,
                     graceRemainingMs,
                     PeriodDuration.hourMs,
-                    useDisplayCap = false,
+                    useDisplayCap = extensionBonus.hourlyMaxExplicitCapMs > 0L,
+                    maxExplicitCapMs = extensionBonus.hourlyMaxExplicitCapMs,
                 ) ||
                 isNearLimit(
                     limit.weeklyLimitMs,
                     usage.weeklyMs,
                     extensionBonus.weeklyMs,
-                    0L,
+                    extensionBonus.weeklyAnchorMs,
                     graceRemainingMs,
                     PeriodDuration.weekMs,
-                    useDisplayCap = false,
+                    useDisplayCap = extensionBonus.weeklyMaxExplicitCapMs > 0L,
+                    maxExplicitCapMs = extensionBonus.weeklyMaxExplicitCapMs,
                 ) ->
                 WarningLevel.eightyPercent
             else -> WarningLevel.none
@@ -117,6 +123,7 @@ object LimitEvaluator {
             PeriodDuration.dayMs,
             periodLimitsDisabled,
             useDisplayCap = true,
+            maxExplicitCapMs = extensionBonus.dailyMaxExplicitCapMs,
         )
     }
 
@@ -128,11 +135,13 @@ object LimitEvaluator {
         graceRemainingMs: Long?,
         periodMs: Long,
         useDisplayCap: Boolean,
+        maxExplicitCapMs: Long = 0L,
     ): Long? {
         val effective = capForPeriod(
             limitMs, usedMs, bonusMs, anchorMs, graceRemainingMs, periodMs,
             periodLimitsDisabled = false,
             useDisplayCap = useDisplayCap,
+            maxExplicitCapMs = maxExplicitCapMs,
         ) ?: return null
         return effective - usedMs
     }
@@ -145,19 +154,25 @@ object LimitEvaluator {
         graceRemainingMs: Long?,
         periodMs: Long,
         useDisplayCap: Boolean,
+        maxExplicitCapMs: Long = 0L,
     ): Boolean {
         val effectiveLimit = capForPeriod(
             limitMs, usedMs, bonusMs, anchorMs, graceRemainingMs, periodMs,
             periodLimitsDisabled = false,
             useDisplayCap = useDisplayCap,
+            maxExplicitCapMs = maxExplicitCapMs,
         ) ?: return false
         if (effectiveLimit <= 0) return false
         return usedMs.toDouble() / effectiveLimit >= 0.8
     }
 
     /**
-     * Daily overlay remaining matches Current Usage (display cap = anchor + bonus) when there
-     * is no grace. Hourly/weekly keep base + bonus. Active grace is usage + remaining grace.
+     * Daily overlay remaining matches Current Usage (display cap = anchor + bonus, or explicit cap).
+     * Hourly/weekly use base + bonus unless [maxExplicitCapMs] > 0 (over-cap extension), then
+     * the same explicit display cap as HUD.
+     *
+     * When [graceRemainingMs] > 0 (extensionGrace pause only — not created by [ExtensionGrantEngine.planGrant]
+     * today), enforcement cap is usage + grace, which can sit above the HUD explicit cap until the pause ends.
      */
     private fun capForPeriod(
         limitMs: Long?,
@@ -168,9 +183,12 @@ object LimitEvaluator {
         periodMs: Long,
         periodLimitsDisabled: Boolean,
         useDisplayCap: Boolean,
+        maxExplicitCapMs: Long = 0L,
     ): Long? {
         if (periodLimitsDisabled) return null
         if (graceRemainingMs != null && graceRemainingMs > 0L) {
+            // extensionGrace pause: breathing room after grant overlay dismiss (see ExtensionGrantEngine).
+            // HUD still uses explicit display cap; this branch is for block math only.
             return EffectiveLimitDisplay.effectiveLimitMs(
                 baseLimitMs = limitMs,
                 usageMs = usedMs,
@@ -187,6 +205,7 @@ object LimitEvaluator {
                 extensionAnchorMs = anchorMs,
                 noLimitToday = false,
                 periodMs = periodMs,
+                maxExplicitCapMs = maxExplicitCapMs,
             )
         }
         return EffectiveLimitDisplay.effectiveLimitMs(

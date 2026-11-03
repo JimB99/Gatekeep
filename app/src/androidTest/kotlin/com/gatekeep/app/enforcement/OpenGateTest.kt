@@ -317,8 +317,8 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
             "open wait must start ${harness.screenDiagnostics()} traces=$launchTraces",
             sawWaitUi ||
                 launchTraces.any {
-                    it.event == EnforcementTrace.SHOW_OPEN_DETERRENT ||
-                        (it.event == EnforcementTrace.OVERLAY_SHOW && it.fields["openGate"] == "true")
+                    it.event == GatekeepDebugTrace.SHOW_OPEN_DETERRENT ||
+                        (it.event == GatekeepDebugTrace.OVERLAY_SHOW && it.fields["openGate"] == "true")
                 },
         )
         harness.waitForElapsedMs(
@@ -337,17 +337,17 @@ class OpenGateTest : EnforcementCrossAppTestBase() {
         }
         assertTrue(
             "trace: no session-limit pending resume after open wait",
-            enforcementCoordinator.enforcementTraceCount(EnforcementTrace.SHOW_PENDING_SESSION_WAIT) == 0,
+            enforcementCoordinator.enforcementTraceCount(GatekeepDebugTrace.SHOW_PENDING_SESSION_WAIT) == 0,
         )
         val traces = enforcementCoordinator.enforcementTraceSnapshot()
-        val passAt = traces.lastOrNull { it.event == EnforcementTrace.OPEN_GATE_PASSED }?.epochMs
+        val passAt = traces.lastOrNull { it.event == GatekeepDebugTrace.OPEN_GATE_PASSED }?.epochMs
         assertTrue("trace: open gate passed once traces=$traces", passAt != null)
         assertTrue(
             "pending_wait_resume must not fire after open gate passed traces=$traces",
             traces.none {
                 passAt != null &&
                     it.epochMs >= passAt &&
-                    it.event == EnforcementTrace.PENDING_WAIT_RESUME
+                    it.event == GatekeepDebugTrace.PENDING_WAIT_RESUME
             },
         )
     }

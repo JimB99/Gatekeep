@@ -52,6 +52,12 @@ object ExtensionGrantEngine {
         val applyPeriodAppUse = isPeriodBlock ||
             (source == ExtensionGrantSource.inApp && blockedReason == null)
 
+        // Extension grace (see stackedGraceUntilEpochMs): optional short post-grant pause so
+        // enforcement does not re-block the instant the overlay closes while usage is still
+        // above the old cap. User-facing +N minutes on period limits comes from explicit
+        // display cap + remaining (ExtensionDisplayLogic), not from this pause.
+        // Intentionally not wired here yet — set graceProfileId/graceUntilEpochMs when adding
+        // a measured anti-flash window (cap grace at explicit HUD line if enabled).
         return GrantPlan(
             profileId = profileId,
             packageName = packageName,
@@ -65,6 +71,7 @@ object ExtensionGrantEngine {
         )
     }
 
+    /** End time for a stacked extensionGrace pause (now + extensionMs, extended if grace already active). */
     fun stackedGraceUntilEpochMs(
         nowEpochMs: Long,
         extensionMs: Long,
@@ -74,6 +81,7 @@ object ExtensionGrantEngine {
         return base + extensionMs
     }
 
+    /** Active extensionGrace pause for profile/package, if any (feeds RuleEngine → LimitEvaluator grace path). */
     fun activeGraceUntilEpochMs(
         pauses: List<Pause>,
         profileId: Long,

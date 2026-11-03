@@ -14,13 +14,17 @@ import com.gatekeep.data.mapper.toEntity
 import com.gatekeep.domain.model.OverrideMethod
 import com.gatekeep.domain.PauseManager
 import com.gatekeep.domain.ExtensionDisplayAnchors
+import com.gatekeep.domain.ExtensionDisplayLogic
+import com.gatekeep.domain.ExtensionOverrideLogResult
 import com.gatekeep.domain.ExtensionPeriodDisplay
 import com.gatekeep.domain.UsageAggregator
 import com.gatekeep.domain.UsageSessionRecord
 import com.gatekeep.domain.UsageSnapshotResolver
+import com.gatekeep.domain.model.AppLimit
 import com.gatekeep.domain.model.Pause
 import com.gatekeep.domain.model.PauseType
 import com.gatekeep.domain.model.SessionState
+import com.gatekeep.domain.model.UsageSnapshot
 import com.gatekeep.domain.model.UsagePeriod
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -185,7 +189,25 @@ class UsageRepository(
         profileId: Long,
         extensionMs: Long,
         anchors: ExtensionDisplayAnchors,
-    ) {
+        usage: UsageSnapshot,
+        limit: AppLimit,
+        dayStartMs: Long,
+        hourStartMs: Long,
+        weekStartMs: Long,
+        sharedPool: Boolean,
+    ): ExtensionOverrideLogResult {
+        val priorDaily = dailyExtensionDisplay(profileId, packageName, dayStartMs, sharedPool)
+        val displayCapBeforeMs = ExtensionDisplayLogic.dailyDisplayCapMs(limit.dailyLimitMs, priorDaily)
+        val priorHourly = hourlyExtensionDisplay(profileId, packageName, hourStartMs, sharedPool)
+        val priorWeekly = weeklyExtensionDisplay(profileId, packageName, weekStartMs, sharedPool)
+        val explicit = ExtensionDisplayLogic.explicitCapsAfterGrant(
+            usage = usage,
+            limit = limit,
+            priorDaily = priorDaily,
+            priorHourly = priorHourly,
+            priorWeekly = priorWeekly,
+            extensionMs = extensionMs,
+        )
         overrideEventDao.insert(
             OverrideEventEntity(
                 packageName = packageName,
@@ -196,7 +218,18 @@ class UsageRepository(
                 dailyUsageAnchorMs = anchors.dailyMs,
                 hourlyUsageAnchorMs = anchors.hourlyMs,
                 weeklyUsageAnchorMs = anchors.weeklyMs,
+                dailyDisplayCapAfterMs = explicit.dailyMs,
+                hourlyDisplayCapAfterMs = explicit.hourlyMs,
+                weeklyDisplayCapAfterMs = explicit.weeklyMs,
             ),
+        )
+        val dailyAfter = dailyExtensionDisplay(profileId, packageName, dayStartMs, sharedPool)
+        return ExtensionOverrideLogResult(
+            displayCapBeforeMs = displayCapBeforeMs,
+            displayCapAfterMs = ExtensionDisplayLogic.dailyDisplayCapMs(limit.dailyLimitMs, dailyAfter),
+            dailyBonusSumMs = dailyAfter.bonusMs,
+            dailyAnchorMs = dailyAfter.anchorMs,
+            dailyMaxExplicitCapMs = dailyAfter.maxExplicitCapMs,
         )
     }
 
@@ -205,25 +238,12 @@ class UsageRepository(
         packageName: String,
         sinceMs: Long,
         sharedPool: Boolean,
-    ): ExtensionPeriodDisplay = periodExtensionDisplay(
-        profileId = profileId,
-        packageName = packageName,
-        sinceMs = sinceMs,
-        sharedPool = sharedPool,
-        sumExtensionMs = {
-            if (sharedPool) {
-                sumExtensionMsForProfileSince(profileId, sinceMs)
-            } else {
-                sumExtensionMsForPackageSince(profileId, packageName, sinceMs)
-            }
-        },
-        maxAnchorMs = {
-            if (sharedPool) {
-                overrideEventDao.maxDailyAnchorForProfileSince(profileId, sinceMs)
-            } else {
-                overrideEventDao.maxDailyAnchorForPackageSince(profileId, packageName, sinceMs)
-            }
-        },
+    ): ExtensionPeriodDisplay = extensionDisplayForPeriod(
+        ExtensionDisplayPeriod.Daily,
+        profileId,
+        packageName,
+        sinceMs,
+        sharedPool,
     )
 
     suspend fun hourlyExtensionDisplay(
@@ -231,25 +251,12 @@ class UsageRepository(
         packageName: String,
         sinceMs: Long,
         sharedPool: Boolean,
-    ): ExtensionPeriodDisplay = periodExtensionDisplay(
-        profileId = profileId,
-        packageName = packageName,
-        sinceMs = sinceMs,
-        sharedPool = sharedPool,
-        sumExtensionMs = {
-            if (sharedPool) {
-                sumExtensionMsForProfileSince(profileId, sinceMs)
-            } else {
-                sumExtensionMsForPackageSince(profileId, packageName, sinceMs)
-            }
-        },
-        maxAnchorMs = {
-            if (sharedPool) {
-                overrideEventDao.maxHourlyAnchorForProfileSince(profileId, sinceMs)
-            } else {
-                overrideEventDao.maxHourlyAnchorForPackageSince(profileId, packageName, sinceMs)
-            }
-        },
+    ): ExtensionPeriodDisplay = extensionDisplayForPeriod(
+        ExtensionDisplayPeriod.Hourly,
+        profileId,
+        packageName,
+        sinceMs,
+        sharedPool,
     )
 
     suspend fun weeklyExtensionDisplay(
@@ -257,26 +264,68 @@ class UsageRepository(
         packageName: String,
         sinceMs: Long,
         sharedPool: Boolean,
-    ): ExtensionPeriodDisplay = periodExtensionDisplay(
-        profileId = profileId,
-        packageName = packageName,
-        sinceMs = sinceMs,
-        sharedPool = sharedPool,
-        sumExtensionMs = {
-            if (sharedPool) {
-                sumExtensionMsForProfileSince(profileId, sinceMs)
-            } else {
-                sumExtensionMsForPackageSince(profileId, packageName, sinceMs)
-            }
-        },
-        maxAnchorMs = {
-            if (sharedPool) {
-                overrideEventDao.maxWeeklyAnchorForProfileSince(profileId, sinceMs)
-            } else {
-                overrideEventDao.maxWeeklyAnchorForPackageSince(profileId, packageName, sinceMs)
-            }
-        },
+    ): ExtensionPeriodDisplay = extensionDisplayForPeriod(
+        ExtensionDisplayPeriod.Weekly,
+        profileId,
+        packageName,
+        sinceMs,
+        sharedPool,
     )
+
+    private enum class ExtensionDisplayPeriod {
+        Daily,
+        Hourly,
+        Weekly,
+    }
+
+    private suspend fun extensionDisplayForPeriod(
+        period: ExtensionDisplayPeriod,
+        profileId: Long,
+        packageName: String,
+        sinceMs: Long,
+        sharedPool: Boolean,
+    ): ExtensionPeriodDisplay {
+        val dao = overrideEventDao
+        return periodExtensionDisplay(
+            profileId = profileId,
+            packageName = packageName,
+            sinceMs = sinceMs,
+            sharedPool = sharedPool,
+            sumExtensionMs = {
+                if (sharedPool) {
+                    sumExtensionMsForProfileSince(profileId, sinceMs)
+                } else {
+                    sumExtensionMsForPackageSince(profileId, packageName, sinceMs)
+                }
+            },
+            maxAnchorMs = {
+                when (period) {
+                    ExtensionDisplayPeriod.Daily ->
+                        if (sharedPool) dao.maxDailyAnchorForProfileSince(profileId, sinceMs)
+                        else dao.maxDailyAnchorForPackageSince(profileId, packageName, sinceMs)
+                    ExtensionDisplayPeriod.Hourly ->
+                        if (sharedPool) dao.maxHourlyAnchorForProfileSince(profileId, sinceMs)
+                        else dao.maxHourlyAnchorForPackageSince(profileId, packageName, sinceMs)
+                    ExtensionDisplayPeriod.Weekly ->
+                        if (sharedPool) dao.maxWeeklyAnchorForProfileSince(profileId, sinceMs)
+                        else dao.maxWeeklyAnchorForPackageSince(profileId, packageName, sinceMs)
+                }
+            },
+            maxExplicitCapMs = {
+                when (period) {
+                    ExtensionDisplayPeriod.Daily ->
+                        if (sharedPool) dao.maxDailyDisplayCapAfterForProfileSince(profileId, sinceMs)
+                        else dao.maxDailyDisplayCapAfterForPackageSince(profileId, packageName, sinceMs)
+                    ExtensionDisplayPeriod.Hourly ->
+                        if (sharedPool) dao.maxHourlyDisplayCapAfterForProfileSince(profileId, sinceMs)
+                        else dao.maxHourlyDisplayCapAfterForPackageSince(profileId, packageName, sinceMs)
+                    ExtensionDisplayPeriod.Weekly ->
+                        if (sharedPool) dao.maxWeeklyDisplayCapAfterForProfileSince(profileId, sinceMs)
+                        else dao.maxWeeklyDisplayCapAfterForPackageSince(profileId, packageName, sinceMs)
+                }
+            },
+        )
+    }
 
     private suspend fun periodExtensionDisplay(
         profileId: Long,
@@ -285,10 +334,12 @@ class UsageRepository(
         sharedPool: Boolean,
         sumExtensionMs: suspend () -> Long,
         maxAnchorMs: suspend () -> Long,
+        maxExplicitCapMs: suspend () -> Long,
     ): ExtensionPeriodDisplay {
         return ExtensionPeriodDisplay(
             bonusMs = sumExtensionMs(),
             anchorMs = maxAnchorMs(),
+            maxExplicitCapMs = maxExplicitCapMs(),
         )
     }
 

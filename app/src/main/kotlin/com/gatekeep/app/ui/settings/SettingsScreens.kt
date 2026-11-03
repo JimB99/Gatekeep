@@ -85,7 +85,7 @@ import com.gatekeep.app.ui.GatekeepTestTags
 
 import com.gatekeep.app.admin.GatekeepDeviceAdminReceiver
 
-import com.gatekeep.app.enforcement.EnforcementTraceQuery
+import com.gatekeep.app.enforcement.GatekeepDebugTraceQuery
 import com.gatekeep.app.ui.components.GatekeepFilterChip
 import com.gatekeep.app.ui.components.GatekeepFilterChipLabel
 import com.gatekeep.app.ui.components.GatekeepFilterChipRow
@@ -655,7 +655,7 @@ fun AboutSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     var lastError by remember { mutableStateOf(viewModel.lastEnforcementError()) }
-    var logWindow by remember { mutableStateOf(EnforcementTraceQuery.Window.LAST_HOUR) }
+    var logWindow by remember { mutableStateOf(GatekeepDebugTraceQuery.Window.LAST_HOUR) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
     SettingsDetailScaffold(title = stringResource(R.string.about), onBack = onBack) {
@@ -681,44 +681,44 @@ fun AboutSettingsScreen(
             }
         }
         Text(
-            stringResource(R.string.enforcement_log_range),
+            stringResource(R.string.debug_log_range),
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(top = 8.dp),
         )
         GatekeepFilterChipRow {
-            EnforcementTraceQuery.Window.entries.forEach { window ->
+            GatekeepDebugTraceQuery.Window.entries.forEach { window ->
                 GatekeepFilterChip(
                     selected = logWindow == window,
                     onClick = { logWindow = window },
-                    label = { GatekeepFilterChipLabel(stringResource(enforcementLogWindowLabel(window))) },
+                    label = { GatekeepFilterChipLabel(stringResource(debugLogWindowLabel(window))) },
                     modifier = Modifier.testTag(
-                        GatekeepTestTags.enforcementLogRange(window.name),
+                        GatekeepTestTags.debugLogRange(window.name),
                     ),
                 )
             }
         }
         TextButton(onClick = {
-            val log = viewModel.enforcementTraceExport(logWindow)
-            val text = log.ifBlank { context.getString(R.string.enforcement_log_empty) }
+            val log = viewModel.debugTraceExport(logWindow)
+            val text = log.ifBlank { context.getString(R.string.debug_log_empty) }
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Gatekeep enforcement log", text))
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Gatekeep debug log", text))
             android.widget.Toast.makeText(
                 context,
-                context.getString(R.string.enforcement_log_copied),
+                context.getString(R.string.debug_log_copied),
                 android.widget.Toast.LENGTH_SHORT,
             ).show()
         }) {
-            Text(stringResource(R.string.copy_enforcement_log))
+            Text(stringResource(R.string.copy_debug_log))
         }
     }
 }
 
-private fun enforcementLogWindowLabel(window: EnforcementTraceQuery.Window): Int = when (window) {
-    EnforcementTraceQuery.Window.LAST_15_MIN -> R.string.enforcement_log_range_15m
-    EnforcementTraceQuery.Window.LAST_HOUR -> R.string.enforcement_log_range_1h
-    EnforcementTraceQuery.Window.LAST_6_HOURS -> R.string.enforcement_log_range_6h
-    EnforcementTraceQuery.Window.LAST_24_HOURS -> R.string.enforcement_log_range_24h
-    EnforcementTraceQuery.Window.ALL -> R.string.enforcement_log_range_all
+private fun debugLogWindowLabel(window: GatekeepDebugTraceQuery.Window): Int = when (window) {
+    GatekeepDebugTraceQuery.Window.LAST_15_MIN -> R.string.debug_log_range_15m
+    GatekeepDebugTraceQuery.Window.LAST_HOUR -> R.string.debug_log_range_1h
+    GatekeepDebugTraceQuery.Window.LAST_6_HOURS -> R.string.debug_log_range_6h
+    GatekeepDebugTraceQuery.Window.LAST_24_HOURS -> R.string.debug_log_range_24h
+    GatekeepDebugTraceQuery.Window.ALL -> R.string.debug_log_range_all
 }
 
 

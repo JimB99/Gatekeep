@@ -138,6 +138,35 @@ class MigrationChainTest {
     }
 
     @Test
+    fun migrate20To21_addsDisplayCapAfterColumnsNullable() {
+        LegacySchemaFixtures.createVersion12(context, TEST_DB)
+        LegacySchemaFixtures.insertOverrideEvent(
+            context = context,
+            dbName = TEST_DB,
+            packageName = "com.example",
+            profileId = 1,
+            timestamp = 1_000,
+            method = "extension",
+            extensionMs = 300_000,
+        )
+
+        val db = helper.runMigrationsAndValidate(
+            TEST_DB,
+            21,
+            true,
+            *GatekeepMigrations.ALL,
+        )
+
+        assertNull(
+            db.query("SELECT dailyDisplayCapAfterMs FROM override_events").use { cursor ->
+                cursor.moveToFirst()
+                if (cursor.isNull(0)) null else cursor.getLong(0)
+            },
+        )
+        db.close()
+    }
+
+    @Test
     fun migrate14To15_addsOpenGatePassedColumn() {
         LegacySchemaFixtures.createVersion12(context, TEST_DB)
 

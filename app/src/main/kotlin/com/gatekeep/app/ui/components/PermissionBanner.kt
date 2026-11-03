@@ -112,6 +112,14 @@ data class PermissionState(
     val showBanner: Boolean get() = !enforcementEnabled || !allGranted || lastError != null
 }
 
+fun permissionBannerMissingKeys(state: PermissionState): String = buildList {
+    if (!state.enforcementEnabled) add("enforcementOff")
+    if (!state.usageGranted) add("usage")
+    if (!state.accessibilityGranted) add("accessibility")
+    if (!state.overlayGranted) add("overlay")
+    if (state.lastError != null) add("lastError")
+}.joinToString(",")
+
 fun buildPermissionState(
     context: android.content.Context,
     enforcementLog: EnforcementLog,
@@ -128,3 +136,4 @@ fun buildPermissionState(
         accessibilityRevokedBySystem = accessibilityOptedIn && !accessibilityGranted,
     )
 }
+

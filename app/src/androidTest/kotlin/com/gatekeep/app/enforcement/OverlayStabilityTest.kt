@@ -196,7 +196,7 @@ class OverlayStabilityTest : EnforcementCrossAppTestBase() {
         harness.sleepMs(1_200)
         val traces = enforcementCoordinator.enforcementTraceSnapshot()
         val shows = traces.filter {
-            it.event == EnforcementTrace.OVERLAY_SHOW && it.fields["reason"] == "sessionLimit"
+            it.event == GatekeepDebugTrace.OVERLAY_SHOW && it.fields["reason"] == "sessionLimit"
         }
         assertTrue(
             "session-limit overlay_show spam (${shows.size}): $shows ${harness.screenDiagnostics()}",

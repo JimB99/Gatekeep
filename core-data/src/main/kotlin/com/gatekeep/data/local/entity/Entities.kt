@@ -173,6 +173,10 @@ data class OverrideEventEntity(
     val dailyUsageAnchorMs: Long = 0L,
     val hourlyUsageAnchorMs: Long = 0L,
     val weeklyUsageAnchorMs: Long = 0L,
+    /** Per-grant over-cap display cap; day aggregate is [com.gatekeep.domain.ExtensionPeriodDisplay.maxExplicitCapMs]. */
+    val dailyDisplayCapAfterMs: Long? = null,
+    val hourlyDisplayCapAfterMs: Long? = null,
+    val weeklyDisplayCapAfterMs: Long? = null,
 )
 
 @Entity(

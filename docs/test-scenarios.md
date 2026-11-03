@@ -48,20 +48,20 @@ export ANDROID_HOME="$LOCALAPPDATA/Android/Sdk"
 
 ### Enforcement decision trace (emulator + phone)
 
-**Debug** builds log every major coordinator decision to logcat tag **`GatekeepEnforcement`**
+**Debug** builds log app debug events to logcat tag **`GatekeepDebug`**
 (`evaluate`, `unlock_skip`, `unlock_resume`, `open_gate_passed`, `pending_wait_resume`, `show_open_deterrent`, …).
 
 The **`dist/gatekeep-*.apk` on your phone is a release (minified) build** — it does **not** write that tag to logcat.
-The in-memory buffer is still filled, persisted to `enforcement-trace.log`, and exportable from **Settings → About → Copy enforcement log** (choose a time range first). Repeated identical `foreground_commit` lines are coalesced.
+The in-memory buffer is still filled, persisted to `gatekeep-debug.log` (legacy `enforcement-trace.log` is read on import), and exportable from **Settings → About → Copy debug log** (choose a time range first). Repeated identical `foreground_commit` lines are coalesced.
 To also stream traces live, install a debug APK:
 `./gradlew :app:assembleDebug` then `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
 
 Run connected tests against the emulator only (`ANDROID_SERIAL=emulator-5554`) so the phone is not included.
 
 ```bash
-adb logcat -s GatekeepEnforcement
+adb logcat -s GatekeepDebug
 # or clear and capture a repro:
-adb logcat -c && adb logcat -s GatekeepEnforcement
+adb logcat -c && adb logcat -s GatekeepDebug
 ```
 
 **Release-only crash:** if open-wait finishes then Gatekeep dies (double overlay flash), check
@@ -449,7 +449,7 @@ See also `docs/test-run-report.md` for latest run summary.
 | SET-01 | Session timer toggle | `EnforcementSettingsTest.set01_sessionTimerToggle` |
 | SET-02 | Weekly report toggle | `EnforcementSettingsTest.set02_weeklyReportToggle` |
 | SET-03 | HUD toggle linked to timer | `EnforcementSettingsTest.set03_hudToggle_linkedToTimer` |
-| SET-04 | About is last in Settings; enforcement log range chips copy | `EnforcementSettingsTest.set04_aboutIsLast_logRangeChipsVisible` |
+| SET-04 | About is last in Settings; debug log range chips copy | `EnforcementSettingsTest.set04_aboutIsLast_logRangeChipsVisible` |
 | SET-05 | Session continuity grace defaults to one minute and is visible | `EnforcementSettingsTest.sessionContinuityGrace_defaultsToOneMinuteAndIsVisible` |
 
 ---

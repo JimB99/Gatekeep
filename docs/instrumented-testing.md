@@ -17,7 +17,7 @@ A leftover is one failing method (or the 16-test pair when the bug is process ov
 
 1. **Cheapest red first.** Domain/ViewModel/display: JVM with `--tests`. Instrumented one method only when JVM cannot go red on this bug. Default `:app:connectedDebugAndroidTest` is the `@E2eGate` ship bar (under 10 min), not 160 overlay scenarios.
 2. **Debug install is the grant/display loop.** `connectedDebugAndroidTest` installs debug app + androidTest when those source sets change. `scripts/build_apk.sh` / `assembleRelease` is the APK step after the ship bar is green.
-3. **Fail dumps on every instrumented fail.** Grant boolean, `getActivePauses`, Current Usage rows (`effectiveLimitMs`, `noLimitToday`), snackbar text, Compose semantics (or `screenDiagnostics()` / `EnforcementTrace` on overlay tests), then `adb logcat -d` for Gatekeep / `EnforcementLog` / AndroidRuntime. A timeout with none of those is an incomplete fail: add logging, then re-run **once**.
+3. **Fail dumps on every instrumented fail.** Grant boolean, `getActivePauses`, Current Usage rows (`effectiveLimitMs`, `noLimitToday`), snackbar text, Compose semantics (or `screenDiagnostics()` / `GatekeepDebugTrace` on overlay tests), then `adb logcat -d` for Gatekeep / `GatekeepDebug` / `EnforcementLog` / AndroidRuntime. A timeout with none of those is an incomplete fail: add logging, then re-run **once**.
 4. **Waits match the claim.** Overlay show: 2s when the spec is 2s. Overlay hide: 1.5s from the hide request. Compose after a persisted grant: 1s. A longer wait needs a new hypothesis and a new log line. Session-continuity device tests inject `SessionContinuityGrace.MIN_MS` (15s) and sleep ~16s after `sleepDevice` has asserted `!isScreenOn`. Do not sleep 61s/65s for the 60s default; that math is `SessionStartDecisionTest`. `timeout_msec=180000` is ANR fail-fast.
 5. **One already-booted AVD.** `Medium_Phone_API_36.0` on `emulator-5554`. Cold-boot only when keyguard/a11y is the bug **or the AVD is dead** (gfxstream 139 / hung qemu). One emulator process per AVD. After reboot, wait until `service check lock_settings` is found (not only `boot_completed=1`), then `locksettings set-disabled true`. ANR dialog: Close app. Instrumentation timeout stays 180000. After a 139, do not snapshot-boot: kill leftover `emulator`/`qemu*`, then `-no-window -gpu swiftshader_indirect -no-snapshot-load` (windowed gfxstream hangs at Qt when `opengl32sw` is missing).
 6. **Reset overlay before later UI in the same process.** Filter a test by its class#method, not by the `com.gatekeep.app` prefix (that prefix matches helpers). Helpers are not JUnit classes (`GatekeepUiNav`). Isolation-green leftovers that fail the connected suite with `coordHidden=true` and leftover `block_message` are hide reporting gone before WindowManager remove — fix hide, do not isolate the 15 surfaces. Do not assert leftover overlay in `@After`: that turned 15 suite fails into 64.
@@ -53,8 +53,8 @@ On instrumented fail, capture before the next retry:
 1. Grant / evaluate return value
 2. Active pauses (`getActivePauses`)
 3. UI state that the assertion names (Current Usage rows, snackbar, overlay)
-4. Semantics dump or `screenDiagnostics()` / `EnforcementTrace`
-5. `adb logcat -d` filtered to Gatekeep / `EnforcementLog` / AndroidRuntime
+4. Semantics dump or `screenDiagnostics()` / `GatekeepDebugTrace`
+5. `adb logcat -d` filtered to Gatekeep / `GatekeepDebug` / `EnforcementLog` / AndroidRuntime
 
 ## Waits
 

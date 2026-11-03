@@ -350,6 +350,75 @@ interface OverrideEventDao {
 
     @Query(
         """
+        SELECT COALESCE(MAX(dailyDisplayCapAfterMs), 0) FROM override_events
+        WHERE profileId = :profileId AND packageName = :packageName
+        AND timestamp >= :sinceMs AND method = 'extension'
+        AND dailyDisplayCapAfterMs IS NOT NULL
+        """,
+    )
+    suspend fun maxDailyDisplayCapAfterForPackageSince(
+        profileId: Long,
+        packageName: String,
+        sinceMs: Long,
+    ): Long
+
+    @Query(
+        """
+        SELECT COALESCE(MAX(hourlyDisplayCapAfterMs), 0) FROM override_events
+        WHERE profileId = :profileId AND packageName = :packageName
+        AND timestamp >= :sinceMs AND method = 'extension'
+        AND hourlyDisplayCapAfterMs IS NOT NULL
+        """,
+    )
+    suspend fun maxHourlyDisplayCapAfterForPackageSince(
+        profileId: Long,
+        packageName: String,
+        sinceMs: Long,
+    ): Long
+
+    @Query(
+        """
+        SELECT COALESCE(MAX(weeklyDisplayCapAfterMs), 0) FROM override_events
+        WHERE profileId = :profileId AND packageName = :packageName
+        AND timestamp >= :sinceMs AND method = 'extension'
+        AND weeklyDisplayCapAfterMs IS NOT NULL
+        """,
+    )
+    suspend fun maxWeeklyDisplayCapAfterForPackageSince(
+        profileId: Long,
+        packageName: String,
+        sinceMs: Long,
+    ): Long
+
+    @Query(
+        """
+        SELECT COALESCE(MAX(dailyDisplayCapAfterMs), 0) FROM override_events
+        WHERE profileId = :profileId AND timestamp >= :sinceMs AND method = 'extension'
+        AND dailyDisplayCapAfterMs IS NOT NULL
+        """,
+    )
+    suspend fun maxDailyDisplayCapAfterForProfileSince(profileId: Long, sinceMs: Long): Long
+
+    @Query(
+        """
+        SELECT COALESCE(MAX(hourlyDisplayCapAfterMs), 0) FROM override_events
+        WHERE profileId = :profileId AND timestamp >= :sinceMs AND method = 'extension'
+        AND hourlyDisplayCapAfterMs IS NOT NULL
+        """,
+    )
+    suspend fun maxHourlyDisplayCapAfterForProfileSince(profileId: Long, sinceMs: Long): Long
+
+    @Query(
+        """
+        SELECT COALESCE(MAX(weeklyDisplayCapAfterMs), 0) FROM override_events
+        WHERE profileId = :profileId AND timestamp >= :sinceMs AND method = 'extension'
+        AND weeklyDisplayCapAfterMs IS NOT NULL
+        """,
+    )
+    suspend fun maxWeeklyDisplayCapAfterForProfileSince(profileId: Long, sinceMs: Long): Long
+
+    @Query(
+        """
         DELETE FROM override_events
         WHERE profileId = :profileId AND timestamp >= :sinceMs AND method = 'extension'
         """,

@@ -1,9 +1,9 @@
 package com.gatekeep.app.enforcement
 
 /**
- * Time-range export and duplicate-commit coalescing for [EnforcementTrace].
+ * Time-range export and duplicate-commit coalescing for [GatekeepDebugTrace].
  */
-object EnforcementTraceQuery {
+object GatekeepDebugTraceQuery {
 
     enum class Window(val durationMs: Long?) {
         LAST_15_MIN(15 * 60_000L),
@@ -20,12 +20,12 @@ object EnforcementTraceQuery {
         sinceEpochMs == null || epochMs >= sinceEpochMs
 
     fun filter(
-        entries: List<EnforcementTrace.Entry>,
+        entries: List<GatekeepDebugTrace.Entry>,
         sinceEpochMs: Long?,
-    ): List<EnforcementTrace.Entry> = entries.filter { included(it.epochMs, sinceEpochMs) }
+    ): List<GatekeepDebugTrace.Entry> = entries.filter { included(it.epochMs, sinceEpochMs) }
 
     fun formatExport(
-        entries: List<EnforcementTrace.Entry>,
+        entries: List<GatekeepDebugTrace.Entry>,
         sinceEpochMs: Long?,
     ): String = filter(entries, sinceEpochMs).joinToString("\n") { it.format() }
 
@@ -33,6 +33,7 @@ object EnforcementTraceQuery {
         if (fileText.isBlank()) return ""
         return fileText.lineSequence()
             .filter { line ->
+                if (line.startsWith("#")) return@filter false
                 val epoch = line.substringBefore(' ').toLongOrNull()
                 epoch == null || included(epoch, sinceEpochMs)
             }
@@ -46,17 +47,17 @@ object EnforcementTraceQuery {
         fields: Map<String, String>,
     ): Boolean {
         if (lastEvent != event || lastFields != fields) return false
-        return event == EnforcementTrace.FOREGROUND_COMMIT ||
-            event == EnforcementTrace.OVERLAY_SHOW ||
-            event == EnforcementTrace.OVERLAY_SKIP ||
-            event == EnforcementTrace.DEVICE_PHASE ||
-            event == EnforcementTrace.EVALUATE ||
-            event == EnforcementTrace.SESSION_START
+        return event == GatekeepDebugTrace.FOREGROUND_COMMIT ||
+            event == GatekeepDebugTrace.OVERLAY_SHOW ||
+            event == GatekeepDebugTrace.OVERLAY_SKIP ||
+            event == GatekeepDebugTrace.DEVICE_PHASE ||
+            event == GatekeepDebugTrace.EVALUATE ||
+            event == GatekeepDebugTrace.SESSION_START
     }
 
-    fun parseLine(line: String): EnforcementTrace.Entry? {
+    fun parseLine(line: String): GatekeepDebugTrace.Entry? {
         val trimmed = line.trim()
-        if (trimmed.isEmpty()) return null
+        if (trimmed.isEmpty() || trimmed.startsWith("#")) return null
         val parts = trimmed.split(' ')
         if (parts.size < 2) return null
         val epoch = parts[0].toLongOrNull() ?: return null
@@ -67,6 +68,6 @@ object EnforcementTraceQuery {
             if (eq <= 0) continue
             fields[token.substring(0, eq)] = token.substring(eq + 1)
         }
-        return EnforcementTrace.Entry(epoch, event, fields)
+        return GatekeepDebugTrace.Entry(epoch, event, fields)
     }
 }

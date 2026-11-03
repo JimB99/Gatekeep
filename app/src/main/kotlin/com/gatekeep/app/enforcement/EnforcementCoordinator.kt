@@ -96,7 +96,7 @@ class EnforcementCoordinator @Inject constructor(
     private val enforcementLog: EnforcementLog,
     private val screenStateMonitor: ScreenStateMonitor,
     private val extensionGrantUseCase: ExtensionGrantUseCase,
-    private val enforcementTrace: EnforcementTrace,
+    private val debugTrace: GatekeepDebugTrace,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -401,8 +401,8 @@ class EnforcementCoordinator @Inject constructor(
                 transitionToHiddenForOtherApp()
                 currentForegroundPackage = route.packageName
                 clearPendingForegroundCommit()
-                enforcementTrace.record(
-                    EnforcementTrace.OVERLAY_HIDE,
+                debugTrace.record(
+                    GatekeepDebugTrace.OVERLAY_HIDE,
                     mapOf(
                         "reason" to "home_or_recents",
                         "pkg" to (leaving ?: ""),
@@ -425,8 +425,8 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private fun restoreOverlayForPackage(packageName: String) {
-        enforcementTrace.record(
-            EnforcementTrace.OVERLAY_RESTORE,
+        debugTrace.record(
+            GatekeepDebugTrace.OVERLAY_RESTORE,
             mapOf("pkg" to packageName),
         )
         clearPendingForegroundCommit()
@@ -462,8 +462,8 @@ class EnforcementCoordinator @Inject constructor(
             pendingForegroundFirstSeenMs = now
         }
         pendingForegroundHoldMs = effectiveHoldMs
-        enforcementTrace.record(
-            EnforcementTrace.FOREGROUND_COMMIT,
+        debugTrace.record(
+            GatekeepDebugTrace.FOREGROUND_COMMIT,
             mapOf("pkg" to packageName, "holdMs" to effectiveHoldMs.toString()),
         )
         pendingForegroundConfirmExit = confirmExit
@@ -594,8 +594,8 @@ class EnforcementCoordinator @Inject constructor(
 
     private suspend fun handleForegroundChange(packageName: String, prevPackage: String?) {
         if (prevPackage != null && prevPackage != packageName) {
-            enforcementTrace.record(
-                EnforcementTrace.SESSION_LEAVE,
+            debugTrace.record(
+                GatekeepDebugTrace.SESSION_LEAVE,
                 mapOf("pkg" to prevPackage, "to" to packageName),
             )
         }
@@ -702,8 +702,8 @@ class EnforcementCoordinator @Inject constructor(
     ): Boolean {
         if (reason != BlockPresentationReason.dailyLimit) return false
         if (EnforcementDailyTrace.shouldPresentDailyLimit(lastDailyRemainingMs)) return false
-        enforcementTrace.record(
-            EnforcementTrace.OVERLAY_SKIP,
+        debugTrace.record(
+            GatekeepDebugTrace.OVERLAY_SKIP,
             mapOf(
                 "pkg" to packageName,
                 "reason" to "daily_remaining",
@@ -740,8 +740,8 @@ class EnforcementCoordinator @Inject constructor(
         } else {
             emptyMap()
         }
-        enforcementTrace.record(
-            EnforcementTrace.OVERLAY_SHOW,
+        debugTrace.record(
+            GatekeepDebugTrace.OVERLAY_SHOW,
             mapOf(
                 "pkg" to request.packageName,
                 "reason" to request.reason.name,
@@ -751,16 +751,16 @@ class EnforcementCoordinator @Inject constructor(
         mainHandler.post {
             if (generation != blockGeneration) {
                 overlayShowInFlight = false
-                enforcementTrace.record(
-                    EnforcementTrace.OVERLAY_SKIP,
+                debugTrace.record(
+                    GatekeepDebugTrace.OVERLAY_SKIP,
                     mapOf("pkg" to request.packageName, "reason" to "generation"),
                 )
                 return@post
             }
             if (!shouldPresentBlockOverlay(request.packageName)) {
                 overlayShowInFlight = false
-                enforcementTrace.record(
-                    EnforcementTrace.OVERLAY_SKIP,
+                debugTrace.record(
+                    GatekeepDebugTrace.OVERLAY_SKIP,
                     mapOf(
                         "pkg" to request.packageName,
                         "reason" to "not_present",
@@ -1075,6 +1075,16 @@ class EnforcementCoordinator @Inject constructor(
             )
             when (decision) {
                 is ExtensionPolicyEvaluator.ExtensionDecision.Denied -> {
+                    debugTrace.record(
+                        GatekeepDebugTrace.EXTENSION_DENIED,
+                        mapOf(
+                            "source" to source.name,
+                            "profileId" to profileId.toString(),
+                            "pkg" to packageName,
+                            "minutes" to minutes.toString(),
+                            "reason" to decision.reason.name,
+                        ),
+                    )
                     if (source == ExtensionGrantSource.overlay) {
                         endOverlayGrant()
                         val denialMessage = BlockMessageResolver.extensionDenied(localizedContext, decision.reason)
@@ -1222,8 +1232,8 @@ class EnforcementCoordinator @Inject constructor(
                     ?: SessionTracker.startSession(packageName, now)
                 val updated = OpenGateCompletionPolicy.sessionAfterOpenGatePassed(state, now)
                 usageRepository.saveSessionState(updated, profileId)
-                enforcementTrace.record(
-                    EnforcementTrace.OPEN_GATE_PASSED,
+                debugTrace.record(
+                    GatekeepDebugTrace.OPEN_GATE_PASSED,
                     mapOf("pkg" to packageName, "pendingCleared" to "true"),
                 )
                 evaluate(packageName)
@@ -1280,11 +1290,36 @@ class EnforcementCoordinator @Inject constructor(
                 matchingProfileIds = listOf(profile.id),
             )
             val anchors = ExtensionDisplayLogic.anchorsAtGrant(grantUsage, mergedLimit)
-            usageRepository.logExtensionOverride(
+            val periodStarts = periodStartsAt(now)
+            val sharedPool = profile.limitUsageScope == LimitUsageScope.sharedPool
+            val grantLog = usageRepository.logExtensionOverride(
                 packageName = packageName,
                 profileId = profile.id,
                 extensionMs = plan.extensionMs,
                 anchors = anchors,
+                usage = grantUsage,
+                limit = mergedLimit,
+                dayStartMs = periodStarts.dayStartMs,
+                hourStartMs = periodStarts.hourStartMs,
+                weekStartMs = periodStarts.weekStartMs,
+                sharedPool = sharedPool,
+            )
+            debugTrace.record(
+                GatekeepDebugTrace.EXTENSION_GRANT,
+                mapOf(
+                    "source" to source.name,
+                    "profileId" to profile.id.toString(),
+                    "pkg" to packageName,
+                    "minutes" to minutes.toString(),
+                    "blockedReason" to (blockedReason?.name ?: ""),
+                    "usageDailyMs" to grantUsage.dailyMs.toString(),
+                    "baseDailyMs" to (mergedLimit.dailyLimitMs?.toString() ?: ""),
+                    "displayCapBeforeMs" to (grantLog.displayCapBeforeMs?.toString() ?: ""),
+                    "displayCapAfterMs" to (grantLog.displayCapAfterMs?.toString() ?: ""),
+                    "bonusSumMs" to grantLog.dailyBonusSumMs.toString(),
+                    "anchorMs" to grantLog.dailyAnchorMs.toString(),
+                    "explicitCapMs" to grantLog.dailyMaxExplicitCapMs.toString(),
+                ),
             )
             if (plan.applyPeriodAppUse) {
                 val session = usageRepository.getSessionState(profile.id, packageName)
@@ -1293,11 +1328,12 @@ class EnforcementCoordinator @Inject constructor(
                     session = session,
                     usage = grantUsage,
                     extraMs = plan.extensionMs,
-                    periodStarts = periodStartsAt(now),
+                    periodStarts = periodStarts,
                 )
                 persistPeriodAppUse(profile, updated)
             }
             if (plan.graceUntilEpochMs != null && plan.graceProfileId != null) {
+                // Persist extensionGrace pause when planGrant wires graceUntilEpochMs (not set today).
                 usageRepository.addExtensionGracePause(
                     profileId = plan.graceProfileId!!,
                     packageName = plan.gracePackageName,
@@ -1469,19 +1505,23 @@ class EnforcementCoordinator @Inject constructor(
         clearBlockState()
         screenStateMonitor.resetPauseTracking()
         screenStateMonitor.clearPersistedPause()
-        enforcementTrace.clear()
+        debugTrace.clear()
         _state.value = EnforcementState()
     }
 
-    fun enforcementTraceSnapshot(): List<EnforcementTrace.Entry> {
+    fun debugTraceSnapshot(): List<GatekeepDebugTrace.Entry> {
         if (!BuildConfig.DEBUG) return emptyList()
-        return enforcementTrace.snapshot()
+        return debugTrace.snapshot()
     }
 
-    fun enforcementTraceCount(event: String): Int {
+    fun debugTraceCount(event: String): Int {
         if (!BuildConfig.DEBUG) return 0
-        return enforcementTrace.count(event)
+        return debugTrace.count(event)
     }
+
+    fun enforcementTraceSnapshot(): List<GatekeepDebugTrace.Entry> = debugTraceSnapshot()
+
+    fun enforcementTraceCount(event: String): Int = debugTraceCount(event)
 
     fun onAccessibilityConnected() {
         scope.launch {
@@ -1609,8 +1649,8 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private suspend fun onDeviceUsePaused() {
-        enforcementTrace.record(
-            EnforcementTrace.DEVICE_PHASE,
+        debugTrace.record(
+            GatekeepDebugTrace.DEVICE_PHASE,
             mapOf("to" to DeviceUsePhase.Paused.name),
         )
         freezeSessionHudForDevicePause()
@@ -1618,8 +1658,8 @@ class EnforcementCoordinator @Inject constructor(
         onDeviceUsageNotificationsPaused()
         overlayShowInFlight = false
         mainHandler.post { blockOverlay.hideTemporarily() }
-        enforcementTrace.record(
-            EnforcementTrace.OVERLAY_HIDE,
+        debugTrace.record(
+            GatekeepDebugTrace.OVERLAY_HIDE,
             mapOf("reason" to "device_paused", "pkg" to (lastMonitoredForegroundPackage ?: "")),
         )
     }
@@ -1643,15 +1683,15 @@ class EnforcementCoordinator @Inject constructor(
         if (state.pendingWaitUntilEpochMs != null && paused.pendingWaitUntilEpochMs == null) {
             clearAbandonedWaitOverlay(pkg)
         }
-        enforcementTrace.record(
-            EnforcementTrace.SESSION_PAUSE,
+        debugTrace.record(
+            GatekeepDebugTrace.SESSION_PAUSE,
             mapOf("pkg" to pkg, "at" to pausedAt.toString()),
         )
     }
 
     private suspend fun onDeviceBecameUsing() {
-        enforcementTrace.record(
-            EnforcementTrace.DEVICE_PHASE,
+        debugTrace.record(
+            GatekeepDebugTrace.DEVICE_PHASE,
             mapOf("to" to DeviceUsePhase.Using.name),
         )
         resumeMonitoredForegroundAfterUnlock()
@@ -1677,8 +1717,8 @@ class EnforcementCoordinator @Inject constructor(
         }
         val pausedAtMs = paused.devicePausedAtEpochMs
         usageRepository.saveSessionState(SessionTracker.resumeDeviceUse(paused, now), previousProfileId)
-        enforcementTrace.record(
-            EnforcementTrace.SESSION_RESUME,
+        debugTrace.record(
+            GatekeepDebugTrace.SESSION_RESUME,
             mapOf("pkg" to pkg, "gapMs" to (now - (pausedAtMs ?: now)).toString()),
         )
     }
@@ -1697,8 +1737,8 @@ class EnforcementCoordinator @Inject constructor(
                 pausedRemainingMs = countdownSessionPausedRemainingMs,
             )
             sessionDeadlineMs = null
-            enforcementTrace.record(
-                EnforcementTrace.HUD_FREEZE,
+            debugTrace.record(
+                GatekeepDebugTrace.HUD_FREEZE,
                 mapOf(
                     "pkg" to (countdownPackageName ?: ""),
                     "remainingMs" to (countdownSessionPausedRemainingMs ?: 0L).toString(),
@@ -1715,8 +1755,8 @@ class EnforcementCoordinator @Inject constructor(
         val now = System.currentTimeMillis()
         val target = unlockResumeTarget()
         if (target == null) {
-            enforcementTrace.record(
-                EnforcementTrace.UNLOCK_SKIP,
+            debugTrace.record(
+                GatekeepDebugTrace.UNLOCK_SKIP,
                 mapOf(
                     "current" to (currentForegroundPackage ?: ""),
                     "lastMonitored" to (lastMonitoredForegroundPackage ?: ""),
@@ -1735,8 +1775,8 @@ class EnforcementCoordinator @Inject constructor(
         if (!MonitoredForegroundResumePolicy.shouldForceEvaluateOnScreenResume(input)) {
             return
         }
-        enforcementTrace.record(
-            EnforcementTrace.UNLOCK_RESUME,
+        debugTrace.record(
+            GatekeepDebugTrace.UNLOCK_RESUME,
             mapOf("pkg" to target),
         )
         lastOverlayRestoreAtMs = now
@@ -1970,12 +2010,12 @@ class EnforcementCoordinator @Inject constructor(
                 persistDevicePauseOnCurrentSession()
             }
             freezeSessionHudForDevicePause()
-            enforcementTrace.record(
-                EnforcementTrace.EVALUATE,
+            debugTrace.record(
+                GatekeepDebugTrace.EVALUATE,
                 mapOf("pkg" to packageName),
             )
-            enforcementTrace.record(
-                EnforcementTrace.EVALUATE_SKIP_PAUSED,
+            debugTrace.record(
+                GatekeepDebugTrace.EVALUATE_SKIP_PAUSED,
                 mapOf("pkg" to packageName),
             )
             return
@@ -2025,8 +2065,8 @@ class EnforcementCoordinator @Inject constructor(
                 }
                 screenStateMonitor.clearPersistedPause()
                 val resumed = SessionTracker.resumeDeviceUse(paused, now)
-                enforcementTrace.record(
-                    EnforcementTrace.SESSION_RESUME,
+                debugTrace.record(
+                    GatekeepDebugTrace.SESSION_RESUME,
                     mapOf("pkg" to packageName, "reason" to "unlock"),
                 )
                 resumed
@@ -2110,8 +2150,8 @@ class EnforcementCoordinator @Inject constructor(
                     .toInt().coerceAtLeast(1)
                 when (PendingWaitResumePolicy.surfaceFor(primaryProfile.onOpenAction)) {
                     PendingWaitResumeSurface.OPEN_GATE -> {
-                        enforcementTrace.record(
-                            EnforcementTrace.PENDING_WAIT_RESUME,
+                        debugTrace.record(
+                            GatekeepDebugTrace.PENDING_WAIT_RESUME,
                             mapOf("pkg" to packageName, "surface" to "open_gate", "sec" to remainingSec.toString()),
                         )
                         showPendingOpenGateWait(
@@ -2122,8 +2162,8 @@ class EnforcementCoordinator @Inject constructor(
                         )
                     }
                     PendingWaitResumeSurface.SESSION_LIMIT -> {
-                        enforcementTrace.record(
-                            EnforcementTrace.PENDING_WAIT_RESUME,
+                        debugTrace.record(
+                            GatekeepDebugTrace.PENDING_WAIT_RESUME,
                             mapOf("pkg" to packageName, "surface" to "session_limit", "sec" to remainingSec.toString()),
                         )
                         showPendingWait(
@@ -2174,8 +2214,8 @@ class EnforcementCoordinator @Inject constructor(
             )
         ) {
             // RES-04/05: lock/screen-off must not overlay or burn remaining, even after open gate.
-            enforcementTrace.record(EnforcementTrace.EVALUATE, mapOf("pkg" to packageName))
-            enforcementTrace.record(EnforcementTrace.EVALUATE_SKIP_PAUSED, mapOf("pkg" to packageName))
+            debugTrace.record(GatekeepDebugTrace.EVALUATE, mapOf("pkg" to packageName))
+            debugTrace.record(GatekeepDebugTrace.EVALUATE_SKIP_PAUSED, mapOf("pkg" to packageName))
             freezeSessionHudForDevicePause()
             return
         }
@@ -2183,8 +2223,8 @@ class EnforcementCoordinator @Inject constructor(
         lastDailyUsedMs = fullEvaluation.dailyUsedMs
         lastDailyCapMs = fullEvaluation.dailyCapMs
         lastDailyRemainingMs = fullEvaluation.remainingDailyMs
-        enforcementTrace.record(
-            EnforcementTrace.EVALUATE,
+        debugTrace.record(
+            GatekeepDebugTrace.EVALUATE,
             mapOf("pkg" to packageName) + EnforcementDailyTrace.fields(
                 fullEvaluation.dailyUsedMs,
                 fullEvaluation.dailyCapMs,
@@ -2198,8 +2238,8 @@ class EnforcementCoordinator @Inject constructor(
         )) {
             is RuleResult.Blocked -> ruleResult
             is RuleResult.DelayOpen -> {
-                enforcementTrace.record(
-                    EnforcementTrace.SHOW_DELAY_OPEN,
+                debugTrace.record(
+                    GatekeepDebugTrace.SHOW_DELAY_OPEN,
                     mapOf("pkg" to packageName, "sec" to ruleResult.delaySeconds.toString()),
                 )
                 val postedEpoch = evaluationEpochAtStart
@@ -2537,8 +2577,8 @@ class EnforcementCoordinator @Inject constructor(
         evaluationEpochAtStart: Long = evaluationEpoch,
     ) {
         if (evaluationEpochAtStart != evaluationEpoch) return
-        enforcementTrace.record(
-            EnforcementTrace.SHOW_OPEN_DETERRENT,
+        debugTrace.record(
+            GatekeepDebugTrace.SHOW_OPEN_DETERRENT,
             mapOf(
                 "pkg" to packageName,
                 "method" to deterrent.method.name,
@@ -2764,8 +2804,8 @@ class EnforcementCoordinator @Inject constructor(
         lastLeftAtMs = System.currentTimeMillis()
         freezeSessionHudClock()
         transitionToHiddenForOtherApp()
-        enforcementTrace.record(
-            EnforcementTrace.SESSION_LEAVE,
+        debugTrace.record(
+            GatekeepDebugTrace.SESSION_LEAVE,
             mapOf("pkg" to pkg, "reason" to "usage_paused"),
         )
         val incoming = usageStatsCollector.getForegroundPackageFallback()?.takeIf { it != pkg }
@@ -3165,8 +3205,8 @@ class EnforcementCoordinator @Inject constructor(
         evaluationEpochAtStart: Long = evaluationEpoch,
     ) {
         if (evaluationEpochAtStart != evaluationEpoch) return
-        enforcementTrace.record(
-            EnforcementTrace.SHOW_OPEN_DETERRENT,
+        debugTrace.record(
+            GatekeepDebugTrace.SHOW_OPEN_DETERRENT,
             mapOf("pkg" to packageName, "sec" to waitSeconds.toString(), "pending" to "true"),
         )
         enterBlockState(packageName)
@@ -3200,8 +3240,8 @@ class EnforcementCoordinator @Inject constructor(
         evaluationEpochAtStart: Long = evaluationEpoch,
     ) {
         if (evaluationEpochAtStart != evaluationEpoch) return
-        enforcementTrace.record(
-            EnforcementTrace.SHOW_PENDING_SESSION_WAIT,
+        debugTrace.record(
+            GatekeepDebugTrace.SHOW_PENDING_SESSION_WAIT,
             mapOf("pkg" to packageName, "sec" to waitSeconds.toString()),
         )
         enterBlockState(packageName)
@@ -3298,8 +3338,8 @@ class EnforcementCoordinator @Inject constructor(
             onBreak = onBreak,
             graceMs = settingsRepository.sessionContinuityGraceMs(),
         )
-        enforcementTrace.record(
-            EnforcementTrace.SESSION_START,
+        debugTrace.record(
+            GatekeepDebugTrace.SESSION_START,
             mapOf(
                 "pkg" to packageName,
                 "action" to action.name,
@@ -3439,6 +3479,9 @@ class EnforcementCoordinator @Inject constructor(
             dailyAnchorMs = daily.anchorMs,
             hourlyAnchorMs = hourly.anchorMs,
             weeklyAnchorMs = weekly.anchorMs,
+            dailyMaxExplicitCapMs = daily.maxExplicitCapMs,
+            hourlyMaxExplicitCapMs = hourly.maxExplicitCapMs,
+            weeklyMaxExplicitCapMs = weekly.maxExplicitCapMs,
         )
     }
 

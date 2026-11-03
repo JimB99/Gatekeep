@@ -1,8 +1,12 @@
 package com.gatekeep.app.util
 
 import android.content.Context
+import com.gatekeep.app.enforcement.GatekeepDebugTrace
 
-class EnforcementLog(context: Context) {
+class EnforcementLog(
+    context: Context,
+    private val debugTrace: GatekeepDebugTrace,
+) {
 
     private val dataStore = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -17,6 +21,11 @@ class EnforcementLog(context: Context) {
             .putString(KEY_LAST_ERROR, full)
             .putLong(KEY_LAST_ERROR_TIME, System.currentTimeMillis())
             .apply()
+        val traceMsg = buildString {
+            append(message.take(200))
+            throwable?.message?.let { append(" — ").append(it.take(120)) }
+        }
+        debugTrace.record(GatekeepDebugTrace.APP_ERROR, mapOf("msg" to traceMsg))
     }
 
     fun getLastError(): String? = dataStore.getString(KEY_LAST_ERROR, null)
