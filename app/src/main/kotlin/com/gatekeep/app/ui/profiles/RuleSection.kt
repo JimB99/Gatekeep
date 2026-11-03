@@ -65,3 +65,16 @@ fun RuleDivider(modifier: Modifier = Modifier) {
         color = MaterialTheme.colorScheme.outlineVariant,
     )
 }
+
+@Composable
+fun RuleSubOptions(
+    visible: Boolean,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    if (!visible) return
+    RuleDivider()
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        content = content,
+    )
+}

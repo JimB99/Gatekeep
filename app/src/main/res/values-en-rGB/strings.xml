@@ -196,10 +196,11 @@
     <string name="when_limit_reached_subtitle">(weekly, daily, hourly)</string>
     <string name="when_session_limit_reached">When session limit is reached</string>
     <string name="math_difficulty">Math difficulty</string>
-    <string name="session_refill_inherit">Refill = session limit</string>
-    <string name="session_refill_duration">Refill</string>
-    <string name="period_continue_inherit">Same as session limit</string>
+    <string name="continue_use_session_limit">Use session limit</string>
     <string name="period_continue_duration">Continue</string>
+    <string name="period_continue_hint">Time granted after deterrent or blocker passed</string>
+    <string name="session_continue_duration">Continue</string>
+    <string name="session_continue_hint">Session time granted after deterrent passed</string>
     <string name="wait_before_opening_label">Wait before opening</string>
     <string name="wait_during_use">Wait during use</string>
     <string name="extension_options">Extension options</string>

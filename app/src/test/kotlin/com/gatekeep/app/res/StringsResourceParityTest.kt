@@ -50,6 +50,29 @@ class StringsResourceParityTest {
     }
 
     @Test
+    fun continueGrantCopyIsTranslated() {
+        val base = readStrings(File(locateResDir(), "values/strings.xml"))
+        CONTINUE_COPY_KEYS.forEach { key ->
+            assertTrue("$key must be non-empty in base", base.getValue(key).isNotBlank())
+        }
+        LOCALE_DIRS.forEach { localeDir ->
+            val localeStrings = readStrings(File(locateResDir(), "$localeDir/strings.xml"))
+            CONTINUE_COPY_KEYS.forEach { key ->
+                assertTrue("$key in $localeDir must be non-empty", localeStrings.getValue(key).isNotBlank())
+            }
+        }
+        CONTINUE_MUST_DIFFER_FROM_BASE.forEach { localeDir ->
+            val localeStrings = readStrings(File(locateResDir(), "$localeDir/strings.xml"))
+            CONTINUE_COPY_KEYS.forEach { key ->
+                assertTrue(
+                    "$key in $localeDir still matches English base",
+                    localeStrings.getValue(key) != base.getValue(key),
+                )
+            }
+        }
+    }
+
+    @Test
     fun `localized strings use the same format placeholders as the base locale`() {
         val baseStrings = readStrings(File(locateResDir(), "values/strings.xml"))
         LOCALE_DIRS.forEach { localeDir ->
@@ -94,5 +117,13 @@ class StringsResourceParityTest {
         val LOCALE_DIRS = listOf("values-en-rGB", "values-de-rAT", "values-es-rES")
         val PLACEHOLDER_REGEX = Regex("""%\d+\$[sdfx]|%[sdfx]""")
         val GRACE_FORMAT_KEYS = listOf("session_hard_block_hint", "block_session_hard_block")
+        val CONTINUE_COPY_KEYS = listOf(
+            "continue_use_session_limit",
+            "period_continue_duration",
+            "period_continue_hint",
+            "session_continue_duration",
+            "session_continue_hint",
+        )
+        val CONTINUE_MUST_DIFFER_FROM_BASE = listOf("values-de-rAT", "values-es-rES")
     }
 }

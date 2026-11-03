@@ -15,8 +15,8 @@ android {
         applicationId = "com.gatekeep.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 47
-        versionName = "3.9.0"
+        versionCode = 48
+        versionName = "3.9.1"
         testInstrumentationRunner = "com.gatekeep.app.HiltTestRunner"
         // Fail a stuck test (ANR / waitForIdle) in 3 minutes instead of hanging the suite for hours.
         testInstrumentationRunnerArguments["timeout_msec"] = "180000"

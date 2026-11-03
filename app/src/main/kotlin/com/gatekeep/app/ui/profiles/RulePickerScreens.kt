@@ -704,30 +704,31 @@ internal fun OpenActionRuleEditor(
                 label = { GatekeepFilterChipLabel(openActionLabel(OnOpenAction.pinGate)) },
             )
         }
-        if (onOpen == OnOpenAction.pinGate) {
-            ProfilePinEditor(
-                pin = profilePin,
-                savedPin = savedPin,
-                onPinChange = onPinChange,
-                label = stringResource(R.string.profile_pin),
-                hint = stringResource(R.string.pin_gate_rules_hint),
-                profile = profile,
-                viewModel = viewModel,
-                pinGateActive = true,
-                onSaved = onPinSaved,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-        if (showDifficultyPicker && onOpen == OnOpenAction.deterrentMath) {
-            MathDifficultyPicker(difficulty = difficulty, onDifficultyChange = onDifficultyChange)
-        }
-        if (onOpen == OnOpenAction.deterrentWait) {
-            DurationPickerWithSeconds(
-                label = stringResource(R.string.wait_before_opening_label),
-                totalSeconds = openWaitSeconds,
-                onDurationChange = onOpenWaitChange,
-                modifier = Modifier.padding(top = 8.dp),
-            )
+        val openSubOptions = openRuleSubOptions(onOpen, showDifficultyPicker)
+        RuleSubOptions(visible = openSubOptions.isNotEmpty()) {
+            if (OpenRuleSubOption.PinGate in openSubOptions) {
+                ProfilePinEditor(
+                    pin = profilePin,
+                    savedPin = savedPin,
+                    onPinChange = onPinChange,
+                    label = stringResource(R.string.profile_pin),
+                    hint = stringResource(R.string.pin_gate_rules_hint),
+                    profile = profile,
+                    viewModel = viewModel,
+                    pinGateActive = true,
+                    onSaved = onPinSaved,
+                )
+            }
+            if (OpenRuleSubOption.MathDifficulty in openSubOptions) {
+                MathDifficultyPicker(difficulty = difficulty, onDifficultyChange = onDifficultyChange)
+            }
+            if (OpenRuleSubOption.WaitBeforeOpen in openSubOptions) {
+                DurationPickerWithSeconds(
+                    label = stringResource(R.string.wait_before_opening_label),
+                    totalSeconds = openWaitSeconds,
+                    onDurationChange = onOpenWaitChange,
+                )
+            }
         }
     }
 }
@@ -795,42 +796,43 @@ internal fun LimitActionRuleEditor(
                 label = { GatekeepFilterChipLabel(limitActionLabel(OnLimitAction.hardBlock)) },
             )
         }
-        if (onLimit == OnLimitAction.hardBlock) {
-            Text(
-                stringResource(R.string.limit_hard_block_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (showDifficultyPicker && onLimit == OnLimitAction.deterrentMath) {
-            MathDifficultyPicker(difficulty = difficulty, onDifficultyChange = onDifficultyChange)
-        }
-        if (onLimit == OnLimitAction.deterrentWait) {
-            DurationPickerWithSeconds(
-                label = stringResource(R.string.limit_wait_duration),
-                totalSeconds = limitWaitSeconds,
-                onDurationChange = onLimitWaitChange,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-        if (onLimit == OnLimitAction.mandatoryBreak) {
-            DurationPicker(
-                label = stringResource(R.string.limit_break_duration),
-                totalMs = limitBreakMs,
-                coarseStepMinutes = 15,
-                fineStepMinutes = 1,
-                onDurationChange = onLimitBreakChange,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-        if (showContinuePicker && LimitGrantDefaults.showsPeriodContinue(onLimit)) {
-            PeriodContinueEditor(
-                inherit = continueInherit,
-                customMs = continueMs,
-                sessionLimitMs = sessionLimitMs,
-                onInheritChange = onContinueInheritChange,
-                onCustomMsChange = onContinueMsChange,
-            )
+        val limitSubOptions = limitRuleSubOptions(onLimit, showDifficultyPicker, showContinuePicker)
+        RuleSubOptions(visible = limitSubOptions.isNotEmpty()) {
+            if (LimitRuleSubOption.HardBlockHint in limitSubOptions) {
+                Text(
+                    stringResource(R.string.limit_hard_block_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (LimitRuleSubOption.MathDifficulty in limitSubOptions) {
+                MathDifficultyPicker(difficulty = difficulty, onDifficultyChange = onDifficultyChange)
+            }
+            if (LimitRuleSubOption.WaitDuration in limitSubOptions) {
+                DurationPickerWithSeconds(
+                    label = stringResource(R.string.limit_wait_duration),
+                    totalSeconds = limitWaitSeconds,
+                    onDurationChange = onLimitWaitChange,
+                )
+            }
+            if (LimitRuleSubOption.BreakDuration in limitSubOptions) {
+                DurationPicker(
+                    label = stringResource(R.string.limit_break_duration),
+                    totalMs = limitBreakMs,
+                    coarseStepMinutes = 15,
+                    fineStepMinutes = 1,
+                    onDurationChange = onLimitBreakChange,
+                )
+            }
+            if (LimitRuleSubOption.PeriodContinue in limitSubOptions) {
+                PeriodContinueEditor(
+                    inherit = continueInherit,
+                    customMs = continueMs,
+                    sessionLimitMs = sessionLimitMs,
+                    onInheritChange = onContinueInheritChange,
+                    onCustomMsChange = onContinueMsChange,
+                )
+            }
         }
     }
 }
@@ -899,45 +901,46 @@ internal fun SessionActionRuleEditor(
                 label = { GatekeepFilterChipLabel(sessionActionLabel(OnSessionLimitAction.hardBlock)) },
             )
         }
-        if (onSession == OnSessionLimitAction.hardBlock) {
-            Text(
-                stringResource(
-                    R.string.session_hard_block_hint,
-                    formatDurationMs(LocalContext.current, sessionContinuityGraceMs),
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (showDifficultyPicker && onSession == OnSessionLimitAction.deterrentMath) {
-            MathDifficultyPicker(difficulty = difficulty, onDifficultyChange = onDifficultyChange)
-        }
-        if (onSession == OnSessionLimitAction.deterrentWait) {
-            DurationPickerWithSeconds(
-                label = stringResource(R.string.wait_during_use),
-                totalSeconds = sessionWaitSeconds,
-                onDurationChange = onSessionWaitChange,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-        if (onSession == OnSessionLimitAction.mandatoryBreak) {
-            DurationPicker(
-                label = stringResource(R.string.break_duration_session),
-                totalMs = sessionBreakMs,
-                coarseStepMinutes = 15,
-                fineStepMinutes = 1,
-                onDurationChange = onSessionBreakChange,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-        if (showRefillPicker && LimitGrantDefaults.showsSessionRefill(onSession)) {
-            SessionRefillEditor(
-                overrideMs = refillOverrideMs,
-                sessionLimitMs = sessionLimitMs,
-                expanded = refillExpanded,
-                onExpandedChange = onRefillExpandedChange,
-                onOverrideChange = onRefillOverrideChange,
-            )
+        val sessionSubOptions = sessionRuleSubOptions(onSession, showDifficultyPicker, showRefillPicker)
+        RuleSubOptions(visible = sessionSubOptions.isNotEmpty()) {
+            if (SessionRuleSubOption.HardBlockHint in sessionSubOptions) {
+                Text(
+                    stringResource(
+                        R.string.session_hard_block_hint,
+                        formatDurationMs(LocalContext.current, sessionContinuityGraceMs),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (SessionRuleSubOption.MathDifficulty in sessionSubOptions) {
+                MathDifficultyPicker(difficulty = difficulty, onDifficultyChange = onDifficultyChange)
+            }
+            if (SessionRuleSubOption.WaitDuringUse in sessionSubOptions) {
+                DurationPickerWithSeconds(
+                    label = stringResource(R.string.wait_during_use),
+                    totalSeconds = sessionWaitSeconds,
+                    onDurationChange = onSessionWaitChange,
+                )
+            }
+            if (SessionRuleSubOption.BreakDuration in sessionSubOptions) {
+                DurationPicker(
+                    label = stringResource(R.string.break_duration_session),
+                    totalMs = sessionBreakMs,
+                    coarseStepMinutes = 15,
+                    fineStepMinutes = 1,
+                    onDurationChange = onSessionBreakChange,
+                )
+            }
+            if (SessionRuleSubOption.SessionContinue in sessionSubOptions) {
+                SessionContinueEditor(
+                    overrideMs = refillOverrideMs,
+                    sessionLimitMs = sessionLimitMs,
+                    expanded = refillExpanded,
+                    onExpandedChange = onRefillExpandedChange,
+                    onOverrideChange = onRefillOverrideChange,
+                )
+            }
         }
     }
 }
@@ -950,7 +953,6 @@ private fun MathDifficultyPicker(
     Text(
         stringResource(R.string.math_difficulty),
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(top = 8.dp),
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FrictionDifficulty.entries.forEach { d ->
@@ -976,7 +978,11 @@ internal fun PeriodContinueEditor(
     Text(
         stringResource(R.string.period_continue_duration),
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(top = 8.dp),
+    )
+    Text(
+        stringResource(R.string.period_continue_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     GatekeepFilterChip(
         selected = chipOn,
@@ -989,7 +995,7 @@ internal fun PeriodContinueEditor(
                 onInheritChange(true)
             }
         },
-        label = { GatekeepFilterChipLabel(stringResource(R.string.period_continue_inherit)) },
+        label = { GatekeepFilterChipLabel(stringResource(R.string.continue_use_session_limit)) },
     )
     if (!chipOn) {
         DurationPicker(
@@ -1001,13 +1007,12 @@ internal fun PeriodContinueEditor(
                 onInheritChange(false)
                 onCustomMsChange(it)
             },
-            modifier = Modifier.padding(top = 8.dp),
         )
     }
 }
 
 @Composable
-internal fun SessionRefillEditor(
+internal fun SessionContinueEditor(
     overrideMs: Long?,
     sessionLimitMs: Long?,
     expanded: Boolean,
@@ -1015,39 +1020,122 @@ internal fun SessionRefillEditor(
     onOverrideChange: (Long?) -> Unit,
 ) {
     val inherit = overrideMs == null
-    if (!expanded && inherit) {
+    val hasCap = LimitGrantDefaults.hasSessionCap(sessionLimitMs)
+    val chipOn = LimitGrantDefaults.inheritChipSelected(inherit, sessionLimitMs)
+    if (!expanded && inherit && chipOn) {
         GatekeepFilterChip(
             selected = true,
             onClick = { onExpandedChange(true) },
-            label = { GatekeepFilterChipLabel(stringResource(R.string.session_refill_inherit)) },
-            modifier = Modifier.padding(top = 8.dp),
+            label = { GatekeepFilterChipLabel(stringResource(R.string.continue_use_session_limit)) },
         )
         return
     }
     Text(
-        stringResource(R.string.session_refill_duration),
+        stringResource(R.string.session_continue_duration),
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(top = 8.dp),
+    )
+    Text(
+        stringResource(R.string.session_continue_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     GatekeepFilterChip(
-        selected = inherit,
+        selected = chipOn,
+        enabled = hasCap,
         onClick = {
-            onOverrideChange(null)
-            onExpandedChange(false)
+            if (chipOn) {
+                onOverrideChange(LimitGrantDefaults.seedCustomContinueMs(sessionLimitMs))
+                onExpandedChange(true)
+            } else {
+                onOverrideChange(null)
+            }
         },
-        label = { GatekeepFilterChipLabel(stringResource(R.string.session_refill_inherit)) },
+        label = { GatekeepFilterChipLabel(stringResource(R.string.continue_use_session_limit)) },
     )
-    DurationPicker(
-        label = stringResource(R.string.session_refill_duration),
-        totalMs = overrideMs ?: LimitGrantDefaults.seedCustomContinueMs(sessionLimitMs),
-        coarseStepMinutes = 15,
-        fineStepMinutes = 5,
-        onDurationChange = {
-            onOverrideChange(it)
-            onExpandedChange(true)
-        },
-        modifier = Modifier.padding(top = 8.dp),
-    )
+    if (!chipOn) {
+        DurationPicker(
+            label = stringResource(R.string.session_continue_duration),
+            totalMs = overrideMs ?: LimitGrantDefaults.seedCustomContinueMs(sessionLimitMs),
+            coarseStepMinutes = 15,
+            fineStepMinutes = 5,
+            onDurationChange = {
+                onOverrideChange(it)
+                onExpandedChange(true)
+            },
+        )
+    }
+}
+
+private enum class OpenRuleSubOption {
+    PinGate,
+    MathDifficulty,
+    WaitBeforeOpen,
+}
+
+private enum class LimitRuleSubOption {
+    HardBlockHint,
+    MathDifficulty,
+    WaitDuration,
+    BreakDuration,
+    PeriodContinue,
+}
+
+private enum class SessionRuleSubOption {
+    HardBlockHint,
+    MathDifficulty,
+    WaitDuringUse,
+    BreakDuration,
+    SessionContinue,
+}
+
+private fun openRuleSubOptions(
+    onOpen: OnOpenAction,
+    showDifficultyPicker: Boolean,
+): Set<OpenRuleSubOption> = buildSet {
+    when (onOpen) {
+        OnOpenAction.pinGate -> add(OpenRuleSubOption.PinGate)
+        OnOpenAction.deterrentMath -> if (showDifficultyPicker) add(OpenRuleSubOption.MathDifficulty)
+        OnOpenAction.deterrentWait -> add(OpenRuleSubOption.WaitBeforeOpen)
+        OnOpenAction.none -> Unit
+    }
+}
+
+private fun limitRuleSubOptions(
+    onLimit: OnLimitAction,
+    showDifficultyPicker: Boolean,
+    showContinuePicker: Boolean,
+): Set<LimitRuleSubOption> = buildSet {
+    when (onLimit) {
+        OnLimitAction.hardBlock -> add(LimitRuleSubOption.HardBlockHint)
+        OnLimitAction.deterrentMath -> if (showDifficultyPicker) add(LimitRuleSubOption.MathDifficulty)
+        OnLimitAction.deterrentWait -> add(LimitRuleSubOption.WaitDuration)
+        OnLimitAction.mandatoryBreak -> add(LimitRuleSubOption.BreakDuration)
+        OnLimitAction.notifyOnly,
+        OnLimitAction.limitWithExtensions,
+        -> Unit
+    }
+    if (showContinuePicker && LimitGrantDefaults.showsPeriodContinue(onLimit)) {
+        add(LimitRuleSubOption.PeriodContinue)
+    }
+}
+
+private fun sessionRuleSubOptions(
+    onSession: OnSessionLimitAction,
+    showDifficultyPicker: Boolean,
+    showRefillPicker: Boolean,
+): Set<SessionRuleSubOption> = buildSet {
+    when (onSession) {
+        OnSessionLimitAction.hardBlock -> add(SessionRuleSubOption.HardBlockHint)
+        OnSessionLimitAction.deterrentMath -> if (showDifficultyPicker) add(SessionRuleSubOption.MathDifficulty)
+        OnSessionLimitAction.deterrentWait -> add(SessionRuleSubOption.WaitDuringUse)
+        OnSessionLimitAction.mandatoryBreak -> add(SessionRuleSubOption.BreakDuration)
+        OnSessionLimitAction.notifyOnly,
+        OnSessionLimitAction.limitWithExtensions,
+        -> Unit
+    }
+    if (showRefillPicker && LimitGrantDefaults.showsSessionRefill(onSession)) {
+        add(SessionRuleSubOption.SessionContinue)
+    }
 }
 
 private fun resolveOverrideOnOpen(
