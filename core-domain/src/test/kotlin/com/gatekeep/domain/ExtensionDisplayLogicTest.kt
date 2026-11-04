@@ -11,6 +11,36 @@ class ExtensionDisplayLogicTest {
     fun `ceilToMinute rounds up partial minutes`() {
         assertEquals(15 * 60_000L, ExtensionDisplayLogic.ceilToMinute(14 * 60_000L + 21_000L))
         assertEquals(14 * 60_000L, ExtensionDisplayLogic.ceilToMinute(14 * 60_000L))
+        assertEquals(0L, ExtensionDisplayLogic.ceilToMinute(0L))
+        assertEquals(0L, ExtensionDisplayLogic.ceilToMinute(-1L))
+    }
+
+    @Test
+    fun `capAfterStackedGrant uses display cap when above minute rounded usage`() {
+        val displayCapMs = 127 * 60_000L
+        val usageMs = 117 * 60_000L + 769_64L
+        val extensionMs = 15 * 60_000L
+        assertEquals(
+            displayCapMs + extensionMs,
+            ExtensionDisplayLogic.capAfterStackedGrant(displayCapMs, usageMs, extensionMs),
+        )
+    }
+
+    @Test
+    fun `capAfterStackedGrant uses ceil usage when above display cap`() {
+        val displayCapMs = 4_260_000L
+        val usageMs = 4_784_197L
+        val extensionMs = 5 * 60_000L
+        val ceilUsage = ExtensionDisplayLogic.ceilToMinute(usageMs)
+        assertEquals(
+            ceilUsage + extensionMs,
+            ExtensionDisplayLogic.capAfterStackedGrant(displayCapMs, usageMs, extensionMs),
+        )
+    }
+
+    @Test
+    fun `capAfterStackedGrant adds extension when usage and cap are zero`() {
+        assertEquals(15 * 60_000L, ExtensionDisplayLogic.capAfterStackedGrant(0L, 0L, 15 * 60_000L))
     }
 
     @Test

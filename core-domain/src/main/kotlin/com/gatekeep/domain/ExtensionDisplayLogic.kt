@@ -65,7 +65,11 @@ object ExtensionDisplayLogic {
         displayCapMs != null && usageMs > displayCapMs
 
     fun capAfterOverCapGrant(usageMs: Long, extensionMs: Long): Long =
-        ceilToMinute(usageMs) + extensionMs
+        capAfterStackedGrant(displayCapMs = ceilToMinute(usageMs), usageMs = usageMs, extensionMs = extensionMs)
+
+    /** Each +N while over budget: max(current usage, current display cap) + N. */
+    fun capAfterStackedGrant(displayCapMs: Long, usageMs: Long, extensionMs: Long): Long =
+        maxOf(displayCapMs, ceilToMinute(usageMs)) + extensionMs
 
     /** Matches SQL MAX(dailyDisplayCapAfterMs) after each grant row is inserted. */
     fun maxExplicitCapMs(existingMaxMs: Long, newGrantCapMs: Long?): Long =
@@ -111,11 +115,10 @@ object ExtensionDisplayLogic {
                 periodMs = periodMs,
                 maxExplicitCapMs = prior.maxExplicitCapMs,
             ) ?: return null
-            return if (isOverDisplayCap(usageMs, priorCap)) {
-                capAfterOverCapGrant(usageMs, extensionMs)
-            } else {
-                null
+            if (!isOverDisplayCap(usageMs, priorCap) && prior.maxExplicitCapMs <= 0L) {
+                return null
             }
+            return capAfterStackedGrant(priorCap, usageMs, extensionMs)
         }
         return ExtensionDisplayCapAfter(
             dailyMs = forPeriod(usage.dailyMs, limit.dailyLimitMs, priorDaily, PeriodDuration.dayMs),

@@ -38,7 +38,7 @@ class ExtensionDisplayOverCapGrantTest {
             priorWeekly = ExtensionPeriodDisplay(0L, 0L),
             extensionMs = extensionMs,
         )
-        val expectedCap = ExtensionDisplayLogic.capAfterOverCapGrant(usageOverCapMs, extensionMs)
+        val expectedCap = ExtensionDisplayLogic.capAfterStackedGrant(priorCapMs, usageOverCapMs, extensionMs)
         assertEquals(expectedCap, explicit.dailyMs)
 
         val afterDisplay = ExtensionPeriodDisplay(
@@ -102,7 +102,15 @@ class ExtensionDisplayOverCapGrantTest {
             priorWeekly = ExtensionPeriodDisplay(0L, 0L),
             extensionMs = extensionMs,
         )
-        val secondCap = ExtensionDisplayLogic.capAfterOverCapGrant(higherUsage, extensionMs)
+        val priorCap = EffectiveLimitDisplay.displayLimitMs(
+            baseLimitMs = baseMs,
+            extensionBonusMs = prior.bonusMs,
+            extensionAnchorMs = prior.anchorMs,
+            noLimitToday = false,
+            periodMs = PeriodDuration.dayMs,
+            maxExplicitCapMs = prior.maxExplicitCapMs,
+        )!!
+        val secondCap = ExtensionDisplayLogic.capAfterStackedGrant(priorCap, higherUsage, extensionMs)
         assertEquals(secondCap, second.dailyMs)
         assertEquals(
             secondCap,
@@ -113,6 +121,45 @@ class ExtensionDisplayOverCapGrantTest {
                 noLimitToday = false,
                 periodMs = PeriodDuration.dayMs,
                 maxExplicitCapMs = secondCap,
+            ),
+        )
+    }
+
+    @Test
+    fun `second grant while usage below prior explicit cap stacks on display cap`() {
+        val baseDailyMs = 40 * 60_000L
+        val priorCapMs = 12_720_000L
+        val usageMs = 11_776_964L
+        val extensionMs = 15 * 60_000L
+        val expectedCapMs = priorCapMs + extensionMs
+        val prior = ExtensionPeriodDisplay(
+            bonusMs = 39 * 60_000L,
+            anchorMs = 11_820_000L,
+            maxExplicitCapMs = priorCapMs,
+        )
+        val explicit = ExtensionDisplayLogic.explicitCapsAfterGrant(
+            usage = UsageSnapshot(dailyMs = usageMs),
+            limit = limit.copy(dailyLimitMs = baseDailyMs),
+            priorDaily = prior,
+            priorHourly = ExtensionPeriodDisplay(0L, 0L),
+            priorWeekly = ExtensionPeriodDisplay(0L, 0L),
+            extensionMs = extensionMs,
+        )
+        assertEquals(expectedCapMs, explicit.dailyMs)
+        val afterDisplay = ExtensionPeriodDisplay(
+            bonusMs = prior.bonusMs + extensionMs,
+            anchorMs = prior.anchorMs,
+            maxExplicitCapMs = explicit.dailyMs!!,
+        )
+        assertEquals(
+            expectedCapMs,
+            EffectiveLimitDisplay.displayLimitMs(
+                baseLimitMs = baseDailyMs,
+                extensionBonusMs = afterDisplay.bonusMs,
+                extensionAnchorMs = afterDisplay.anchorMs,
+                noLimitToday = false,
+                periodMs = PeriodDuration.dayMs,
+                maxExplicitCapMs = afterDisplay.maxExplicitCapMs,
             ),
         )
     }
@@ -167,7 +214,14 @@ class ExtensionDisplayOverCapGrantTest {
             priorWeekly = ExtensionPeriodDisplay(0L, 0L),
             extensionMs = extensionMs,
         )
-        val expected = ExtensionDisplayLogic.capAfterOverCapGrant(usageMs, extensionMs)
+        val priorCap = EffectiveLimitDisplay.displayLimitMs(
+            baseLimitMs = hourlyLimitMs,
+            extensionBonusMs = prior.bonusMs,
+            extensionAnchorMs = prior.anchorMs,
+            noLimitToday = false,
+            periodMs = PeriodDuration.hourMs,
+        )!!
+        val expected = ExtensionDisplayLogic.capAfterStackedGrant(priorCap, usageMs, extensionMs)
         assertEquals(expected, explicit.hourlyMs)
         assertNull(explicit.dailyMs)
     }
@@ -191,7 +245,14 @@ class ExtensionDisplayOverCapGrantTest {
             priorWeekly = prior,
             extensionMs = extensionMs,
         )
-        val expected = ExtensionDisplayLogic.capAfterOverCapGrant(usageMs, extensionMs)
+        val priorCap = EffectiveLimitDisplay.displayLimitMs(
+            baseLimitMs = weeklyLimitMs,
+            extensionBonusMs = prior.bonusMs,
+            extensionAnchorMs = prior.anchorMs,
+            noLimitToday = false,
+            periodMs = PeriodDuration.weekMs,
+        )!!
+        val expected = ExtensionDisplayLogic.capAfterStackedGrant(priorCap, usageMs, extensionMs)
         assertEquals(expected, explicit.weeklyMs)
         assertNull(explicit.dailyMs)
     }
