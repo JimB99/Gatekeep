@@ -13,6 +13,9 @@ object GatekeepDebugTraceQuery {
         ALL(null),
     }
 
+    /** Default chip selection on Settings → About before copy. */
+    val DEFAULT_EXPORT_WINDOW: Window = Window.LAST_15_MIN
+
     fun sinceEpochMs(window: Window, nowMs: Long): Long? =
         window.durationMs?.let { nowMs - it }
 

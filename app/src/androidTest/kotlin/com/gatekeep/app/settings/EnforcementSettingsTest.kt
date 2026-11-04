@@ -120,8 +120,8 @@ class EnforcementSettingsTest {
         composeRule.onNodeWithText("Copy debug log", substring = true, ignoreCase = true)
             .assertIsDisplayed()
         composeRule.onNodeWithTag(
-            GatekeepTestTags.debugLogRange(GatekeepDebugTraceQuery.Window.LAST_HOUR.name),
-        ).assertIsDisplayed()
+            GatekeepTestTags.debugLogRange(GatekeepDebugTraceQuery.Window.LAST_15_MIN.name),
+        ).assertIsSelected()
         composeRule.onNodeWithTag(
             GatekeepTestTags.debugLogRange(GatekeepDebugTraceQuery.Window.ALL.name),
         ).assertIsDisplayed()

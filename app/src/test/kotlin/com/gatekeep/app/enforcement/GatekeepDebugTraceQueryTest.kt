@@ -10,6 +10,11 @@ class GatekeepDebugTraceQueryTest {
     private val now = 1_000_000L
 
     @Test
+    fun defaultExportWindow_isLast15Minutes() {
+        assertEquals(GatekeepDebugTraceQuery.Window.LAST_15_MIN, GatekeepDebugTraceQuery.DEFAULT_EXPORT_WINDOW)
+    }
+
+    @Test
     fun filter_lastHour_dropsOlderEvents() {
         val entries = listOf(
             GatekeepDebugTrace.Entry(now - 3_600_000L - 1, "evaluate", mapOf("pkg" to "old")),

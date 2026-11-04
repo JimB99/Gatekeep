@@ -656,7 +656,7 @@ fun AboutSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     var lastError by remember { mutableStateOf(viewModel.lastEnforcementError()) }
-    var logWindow by remember { mutableStateOf(GatekeepDebugTraceQuery.Window.LAST_HOUR) }
+    var logWindow by remember { mutableStateOf(GatekeepDebugTraceQuery.DEFAULT_EXPORT_WINDOW) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
     SettingsDetailScaffold(title = stringResource(R.string.about), onBack = onBack) {
