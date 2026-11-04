@@ -26,4 +26,22 @@ object OpenGatePassPolicy {
 
     fun markOpenGatePassed(session: SessionState, nowEpochMs: Long): SessionState =
         session.copy(openGatePassedEpochMs = nowEpochMs)
+
+    /**
+     * In-memory pass must match persisted session sitting; stale [inMemoryPassedPackage]
+     * after [SessionStartDecision] StartFresh must not skip on-open friction.
+     */
+    fun openGateAlreadySatisfied(
+        session: SessionState?,
+        nowEpochMs: Long,
+        packageName: String,
+        inMemoryPassedPackage: String?,
+        graceMs: Long = DEFAULT_GRACE_MS,
+    ): Boolean {
+        if (shouldSkipOpenGate(session, nowEpochMs, graceMs)) return true
+        if (inMemoryPassedPackage != packageName) return false
+        val s = session ?: return false
+        val passedAt = s.openGatePassedEpochMs ?: return false
+        return passedAt >= s.sessionStartEpochMs
+    }
 }

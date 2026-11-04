@@ -220,6 +220,7 @@ Instrumented tests can assert the same buffer via `EnforcementCoordinator.enforc
 | G-13 | Quick return within session continuity grace (default 1 min) skips open gate | `OpenGateTest.g13_quickReturn_withinGrace_skipsOpenGate` |
 | G-14 | Launcher blip does not reopen open gate | `OpenGateTest.g14_spuriousLauncherBlip_doesNotReopenGate` |
 | G-15 | Quick bounce without passing still shows open gate | `OpenGateTest.g15_quickBounce_neverPassed_stillShowsOpenGate` |
+| G-17 | StartFresh after unlock must not skip on-open (stale memory) | JVM `OpenGateStartFreshRegressionTest` |
 | G-16 | Open wait completes once — no second wait / session pending resume | `OpenGateTest.g16_openWaitComplete_noSecondWaitOrSessionPendingResume` |
 | G-16 | Same-package event re-evaluates when open gate not passed | `ForegroundTransitionPolicyTest.samePackage_reevaluatesWhenOpenGateNotPassed` |
 

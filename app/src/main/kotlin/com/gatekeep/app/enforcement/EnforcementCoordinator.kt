@@ -1248,7 +1248,6 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     fun onOpenGatePassed(packageName: String) {
-        openGatePassedPackage = packageName
         evaluationEpoch++
         lastPostedOverlay = null
         overlayShowInFlight = false
@@ -1264,6 +1263,7 @@ class EnforcementCoordinator @Inject constructor(
                     ?: SessionTracker.startSession(packageName, now)
                 val updated = OpenGateCompletionPolicy.sessionAfterOpenGatePassed(state, now)
                 usageRepository.saveSessionState(updated, profileId)
+                openGatePassedPackage = packageName
                 debugTrace.record(
                     GatekeepDebugTrace.OPEN_GATE_PASSED,
                     mapOf("pkg" to packageName, "pendingCleared" to "true"),
@@ -2168,8 +2168,11 @@ class EnforcementCoordinator @Inject constructor(
                 usageRepository.saveSessionState(sessionForEval, primaryProfile.id)
                 clearAbandonedWaitOverlay(packageName)
             } else {
-                val openAlreadyPassedEarly = openGatePassedPackage == packageName ||
-                    OpenGatePassPolicy.shouldSkipOpenGate(sessionForEval, now, OPEN_GATE_GRACE_MS)
+                val openAlreadyPassedEarly = openGateAlreadySatisfiedFor(
+                    packageName = packageName,
+                    session = sessionForEval,
+                    nowEpochMs = now,
+                )
                 if (!PendingWaitResumePolicy.shouldResume(
                         hasPendingWait = true,
                         openGateAlreadyPassed = openAlreadyPassedEarly,
@@ -2241,8 +2244,11 @@ class EnforcementCoordinator @Inject constructor(
             periodStarts = periodStarts,
         )
 
-        val openAlreadyPassed = openGatePassedPackage == packageName ||
-            OpenGatePassPolicy.shouldSkipOpenGate(sessionForEval, now, OPEN_GATE_GRACE_MS)
+        val openAlreadyPassed = openGateAlreadySatisfiedFor(
+            packageName = packageName,
+            session = sessionForEval,
+            nowEpochMs = now,
+        )
         if (!DeviceUsePolicy.shouldRunEnforcement(
                 screenStateMonitor.deviceUsePhase(
                     hasLeftApp = sessionForEval.lastForegroundEndEpochMs != null,
@@ -2339,7 +2345,13 @@ class EnforcementCoordinator @Inject constructor(
                         return
                     }
                 }
-                if (currentForegroundPackage == packageName) {
+                if (openGateAlreadySatisfiedFor(
+                        packageName = packageName,
+                        session = sessionForEval,
+                        nowEpochMs = now,
+                    ) &&
+                    currentForegroundPackage == packageName
+                ) {
                     openGatePassedPackage = packageName
                 }
                 if (BlockClearOnAllowedPolicy.shouldClearBlockOnAllowed(
@@ -3388,15 +3400,7 @@ class EnforcementCoordinator @Inject constructor(
         val state = when (action) {
             SessionStartDecision.Action.StartFresh -> {
                 screenStateMonitor.clearPersistedPause()
-                if (openGatePassedPackage == packageName &&
-                    !OpenGatePassPolicy.shouldSkipOpenGate(
-                        existingState,
-                        now,
-                        OPEN_GATE_GRACE_MS,
-                    )
-                ) {
-                    openGatePassedPackage = null
-                }
+                openGatePassedPackage = null
                 if (lastLeftPackage == packageName) lastLeftPackage = null
                 if (isBlockingActive && blockedPackage == packageName) {
                     blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
@@ -3532,6 +3536,18 @@ class EnforcementCoordinator @Inject constructor(
             profileId,
         )
     }
+
+    private fun openGateAlreadySatisfiedFor(
+        packageName: String,
+        session: SessionState?,
+        nowEpochMs: Long,
+    ): Boolean = OpenGatePassPolicy.openGateAlreadySatisfied(
+        session = session,
+        nowEpochMs = nowEpochMs,
+        packageName = packageName,
+        inMemoryPassedPackage = openGatePassedPackage,
+        graceMs = OPEN_GATE_GRACE_MS,
+    )
 
     companion object {
         private const val FOREGROUND_POLL_MS = 250L

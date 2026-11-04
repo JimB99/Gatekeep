@@ -84,4 +84,56 @@ class OpenGatePassPolicyTest {
         assertEquals(1_000L, updated.openGatePassedEpochMs)
         assertTrue(OpenGatePassPolicy.shouldSkipOpenGate(updated, nowEpochMs = 2_000L))
     }
+
+    @Test
+    fun staleInMemoryPass_doesNotSatisfyAfterFreshSessionStart() {
+        val fresh = SessionState(packageName = "com.test", sessionStartEpochMs = 100_000L)
+        assertFalse(
+            OpenGatePassPolicy.openGateAlreadySatisfied(
+                session = fresh,
+                nowEpochMs = 100_500L,
+                packageName = "com.test",
+                inMemoryPassedPackage = "com.test",
+            ),
+        )
+    }
+
+    @Test
+    fun inMemoryPass_matchesPersistedPassInSameSitting() {
+        val session = SessionState(
+            packageName = "com.test",
+            sessionStartEpochMs = 1_000L,
+            openGatePassedEpochMs = 2_000L,
+        )
+        assertTrue(
+            OpenGatePassPolicy.openGateAlreadySatisfied(
+                session = session,
+                nowEpochMs = 3_000L,
+                packageName = "com.test",
+                inMemoryPassedPackage = "com.test",
+            ),
+        )
+    }
+
+    @Test
+    fun inMemoryPassBeforePersist_doesNotSatisfyUntilEpochSaved() {
+        val session = SessionState(packageName = "com.test", sessionStartEpochMs = 1_000L)
+        assertFalse(
+            OpenGatePassPolicy.openGateAlreadySatisfied(
+                session = session,
+                nowEpochMs = 2_000L,
+                packageName = "com.test",
+                inMemoryPassedPackage = "com.test",
+            ),
+        )
+        val saved = OpenGatePassPolicy.markOpenGatePassed(session, 2_000L)
+        assertTrue(
+            OpenGatePassPolicy.openGateAlreadySatisfied(
+                session = saved,
+                nowEpochMs = 2_500L,
+                packageName = "com.test",
+                inMemoryPassedPackage = "com.test",
+            ),
+        )
+    }
 }
