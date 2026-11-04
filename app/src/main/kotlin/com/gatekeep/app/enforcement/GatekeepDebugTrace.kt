@@ -140,6 +140,8 @@ class GatekeepDebugTrace @Inject constructor(
         const val SHOW_PENDING_SESSION_WAIT = "show_pending_session_wait"
         const val OPEN_GATE_PASSED = "open_gate_passed"
         const val FOREGROUND_COMMIT = "foreground_commit"
+        const val FOREGROUND_COMMIT_SUPPRESSED = "foreground_commit_suppressed"
+        const val OPEN_GATEKEEP_FROM_OVERLAY = "open_gatekeep_from_overlay"
         const val SHOW_DELAY_OPEN = "show_delay_open"
         const val DEVICE_PHASE = "device_phase"
         const val SESSION_LEAVE = "session_leave"

@@ -19,6 +19,26 @@ class BlockPresentationReducerTest {
     }
 
     @Test
+    fun `gatekeep package without activity class is not ignored while overlay visible`() {
+        val state = BlockPresentationReducer.onBlockEntered(BlockPresentationState(), "com.blocked")
+
+        assertFalse(
+            BlockPresentationReducer.shouldIgnoreGatekeepForegroundEvent(
+                state = state,
+                overlayVisible = true,
+                windowClassName = null,
+            ),
+        )
+        assertFalse(
+            BlockPresentationReducer.shouldIgnoreGatekeepForegroundEvent(
+                state = state,
+                overlayVisible = true,
+                windowClassName = "",
+            ),
+        )
+    }
+
+    @Test
     fun `gatekeep overlay event is ignored while overlay visible and blocking`() {
         val state = BlockPresentationReducer.onBlockEntered(BlockPresentationState(), "com.blocked")
 

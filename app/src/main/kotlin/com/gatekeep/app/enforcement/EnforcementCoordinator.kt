@@ -360,6 +360,7 @@ class EnforcementCoordinator @Inject constructor(
         when (route) {
             ForegroundRoutingPolicy.Route.Ignore -> return
             is ForegroundRoutingPolicy.Route.Commit -> {
+                if (suppressThirdPartyRouteWhileGatekeepForeground(route.packageName)) return
                 // Lock/keyguard is pause, not leave — do not commit launcher while paused.
                 if (paused) return
                 scheduleForegroundCommit(
@@ -369,6 +370,7 @@ class EnforcementCoordinator @Inject constructor(
                 )
             }
             is ForegroundRoutingPolicy.Route.ConfirmExit -> {
+                if (suppressThirdPartyRouteWhileGatekeepForeground(route.packageName)) return
                 if (paused) return
                 scheduleForegroundCommit(
                     route.packageName,
@@ -377,6 +379,7 @@ class EnforcementCoordinator @Inject constructor(
                 )
             }
             is ForegroundRoutingPolicy.Route.HideNow -> {
+                if (suppressThirdPartyRouteWhileGatekeepForeground(route.packageName)) return
                 if (paused) {
                     transitionToHiddenForOtherApp()
                     return
@@ -418,10 +421,27 @@ class EnforcementCoordinator @Inject constructor(
                 }
             }
             is ForegroundRoutingPolicy.Route.Restore -> {
+                if (suppressThirdPartyRouteWhileGatekeepForeground(route.packageName)) return
                 if (paused) return
                 restoreOverlayForPackage(route.packageName)
             }
         }
+    }
+
+    private fun suppressThirdPartyRouteWhileGatekeepForeground(incomingPackage: String): Boolean {
+        if (!GatekeepForegroundGuard.shouldSuppressThirdPartyForegroundRoute(
+                gatekeepPackage = context.packageName,
+                currentForegroundPackage = currentForegroundPackage,
+                incomingPackage = incomingPackage,
+            )
+        ) {
+            return false
+        }
+        debugTrace.record(
+            GatekeepDebugTrace.FOREGROUND_COMMIT_SUPPRESSED,
+            mapOf("pkg" to incomingPackage, "reason" to "gatekeep_foreground"),
+        )
+        return true
     }
 
     private fun restoreOverlayForPackage(packageName: String) {
@@ -498,6 +518,16 @@ class EnforcementCoordinator @Inject constructor(
                     clearPendingForegroundCommit()
                     return@Runnable
                 }
+            }
+            if (GatekeepForegroundGuard.shouldSuppressThirdPartyForegroundRoute(
+                    gatekeepPackage = context.packageName,
+                    currentForegroundPackage = currentForegroundPackage,
+                    incomingPackage = candidate,
+                )
+            ) {
+                suppressThirdPartyRouteWhileGatekeepForeground(candidate)
+                clearPendingForegroundCommit()
+                return@Runnable
             }
             if (candidate == currentForegroundPackage) {
                 val reevaluate = shouldReevaluateSamePackageCommit(candidate)
@@ -593,6 +623,7 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private suspend fun handleForegroundChange(packageName: String, prevPackage: String?) {
+        if (suppressThirdPartyRouteWhileGatekeepForeground(packageName)) return
         if (prevPackage != null && prevPackage != packageName) {
             debugTrace.record(
                 GatekeepDebugTrace.SESSION_LEAVE,
@@ -674,6 +705,7 @@ class EnforcementCoordinator @Inject constructor(
 
     fun shouldPresentBlockOverlay(packageName: String): Boolean {
         if (overlayGrantInProgress) return false
+        if (currentForegroundPackage == context.packageName) return false
         val hasLeft = lastLeftPackage == packageName && currentForegroundPackage != packageName
         if (!DeviceUsePolicy.shouldRunEnforcement(
                 screenStateMonitor.deviceUsePhase(hasLeftApp = hasLeft),
@@ -1384,9 +1416,13 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     fun onOpenGatekeepFromOverlay() {
-        blockPresentationState = BlockPresentationReducer.onBlockCleared(blockPresentationState)
-        blockOverlay.clearFrictionState()
-        mainHandler.post { blockOverlay.removeAfterResolution() }
+        val prev = currentForegroundPackage
+        currentForegroundPackage = context.packageName
+        clearBlockState()
+        debugTrace.record(
+            GatekeepDebugTrace.OPEN_GATEKEEP_FROM_OVERLAY,
+            mapOf("prev" to (prev ?: "")),
+        )
     }
 
     fun onGatekeepActivityForegrounded() {

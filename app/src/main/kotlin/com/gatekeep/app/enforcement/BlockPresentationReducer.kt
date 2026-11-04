@@ -120,6 +120,8 @@ object BlockPresentationReducer {
         windowClassName: String?,
     ): Boolean {
         if (!overlayVisible || !isBlockingActive(state)) return false
+        // UsageStats polls omit activity class; treat as real Gatekeep UI so settings can dismiss the overlay.
+        if (windowClassName.isNullOrBlank()) return false
         if (isGatekeepActivityWindow(windowClassName)) return false
         return true
     }
