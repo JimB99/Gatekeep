@@ -86,6 +86,7 @@ import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.app.admin.GatekeepDeviceAdminReceiver
 
 import com.gatekeep.app.enforcement.GatekeepDebugTraceQuery
+import com.gatekeep.app.legal.LegalUrls
 import com.gatekeep.app.ui.components.GatekeepFilterChip
 import com.gatekeep.app.ui.components.GatekeepFilterChipLabel
 import com.gatekeep.app.ui.components.GatekeepFilterChipRow
@@ -711,6 +712,9 @@ fun AboutSettingsScreen(
         }) {
             Text(stringResource(R.string.copy_debug_log))
         }
+        LegalLinkListItem(R.string.legal_impressum, LegalUrls.IMPRESSUM)
+        LegalLinkListItem(R.string.legal_privacy, LegalUrls.PRIVACY)
+        LegalLinkListItem(R.string.legal_nutzung, LegalUrls.NUTZUNG)
     }
 }
 

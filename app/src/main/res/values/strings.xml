@@ -43,6 +43,9 @@
     <string name="notifications">Notifications</string>
     <string name="enforcement">Enforcement</string>
     <string name="about">About</string>
+    <string name="legal_impressum">Legal notice (Impressum)</string>
+    <string name="legal_privacy">Privacy policy</string>
+    <string name="legal_nutzung">Terms of use</string>
     <string name="pin_set">PIN set</string>
     <string name="pin_not_set">No PIN set</string>
     <string name="pin_required">PIN required</string>

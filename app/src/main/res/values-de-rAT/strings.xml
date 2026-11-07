@@ -40,6 +40,9 @@
     <string name="notifications">Benachrichtigungen</string>
     <string name="enforcement">Durchsetzung</string>
     <string name="about">Über</string>
+    <string name="legal_impressum">Impressum</string>
+    <string name="legal_privacy">Datenschutz</string>
+    <string name="legal_nutzung">Nutzungshinweise</string>
     <string name="pin_set">PIN gesetzt</string>
     <string name="pin_required">PIN erforderlich</string>
     <string name="pin_set_not_required">PIN gesetzt, nicht erforderlich</string>
