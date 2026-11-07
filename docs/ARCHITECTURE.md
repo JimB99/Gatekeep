@@ -62,3 +62,14 @@ Room migrations are explicit — no `fallbackToDestructiveMigration()`. If upgra
 
 - Foreground service only when enforcement is enabled and accessibility is unavailable
 
+
+
+## In-app usage UI (live numbers)
+
+
+
+Home, current usage, and stats (current period only) refresh about **once per second** while the destination is **RESUMED**, via `ForegroundPeriodicRefreshEffect` and existing ViewModel `load*` paths (`repeatOnLifecycle` stops the timer when backgrounded).
+
+
+
+**Pull (ViewModel reload), not push from enforcement:** Usage bars match what users expect from the same repositories the screens already use; the enforcement coordinator is not coupled to Compose lifecycle. Overlapping ticks are dropped with `SingleFlightGate` so a slow `loadStats` / `loadSummaries` / `loadCurrentUsage` does not stack concurrent work. A coordinator-driven push would reduce duplicate reads but adds wiring and test surface — reasonable follow-up if profiling shows jank on large profiles.

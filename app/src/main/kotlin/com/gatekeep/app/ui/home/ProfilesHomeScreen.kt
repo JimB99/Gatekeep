@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.gatekeep.app.R
+import com.gatekeep.app.ui.components.ForegroundPeriodicRefreshEffect
 import com.gatekeep.app.data.ProfileUsageSummary
 import com.gatekeep.app.ui.GatekeepTestTags
 import com.gatekeep.app.ui.components.AppIcon
@@ -100,9 +101,11 @@ fun ProfilesHomeScreen(
     }
 
     LifecycleResumeEffect(Unit) {
-        viewModel.refreshAll()
+        viewModel.refreshPermissions()
         onPauseOrDispose { }
     }
+
+    ForegroundPeriodicRefreshEffect(onRefresh = viewModel::refreshSummaries)
 
     Scaffold(
         modifier = Modifier.testTag(GatekeepTestTags.DASHBOARD_ROOT),

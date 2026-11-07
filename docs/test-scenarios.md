@@ -418,6 +418,7 @@ See also `docs/test-run-report.md` for latest run summary.
 
 | ID | Scenario | Automated test |
 |----|----------|----------------|
+| CU-00 | Usage bars/counters refresh every 1s while screen is foreground (home, current usage, stats current period) | Manual; JVM `StatsPeriodicRefreshPolicyTest` |
 | CU-01 | Extend daily limit in-app | `CurrentUsageActionsTest.cu01_extendDaily_inApp` |
 | CU-02 | Extend session in-app | `CurrentUsageActionsTest.cu02_extendSession_inApp` |
 | CU-03 | Reset usage in-app | `CurrentUsageActionsTest.cu03_resetUsage_inApp` |

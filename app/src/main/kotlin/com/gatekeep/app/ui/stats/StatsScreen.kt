@@ -95,6 +95,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 
 import com.gatekeep.app.data.AppUsageStat
 import com.gatekeep.app.ui.GatekeepTestTags
+import com.gatekeep.app.ui.components.ForegroundPeriodicRefreshEffect
+import com.gatekeep.app.ui.stats.StatsPeriodicRefreshPolicy
 
 import com.gatekeep.app.data.ProfileStatsOverview
 
@@ -151,6 +153,11 @@ fun StatsScreen(
     val scrollState = rememberScrollState()
 
     val disabledIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+
+    ForegroundPeriodicRefreshEffect(
+        enabled = StatsPeriodicRefreshPolicy.shouldRefreshPeriodically(viewingCurrentPeriod = !canGoForward),
+        onRefresh = viewModel::refreshNow,
+    )
 
 
 

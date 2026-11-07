@@ -18,6 +18,7 @@ import com.gatekeep.app.ui.components.buildPermissionState
 import com.gatekeep.app.enforcement.GatekeepDebugTraceQuery
 import com.gatekeep.app.util.EnforcementLog
 import com.gatekeep.app.util.LocaleController
+import com.gatekeep.app.util.SingleFlightGate
 import com.gatekeep.app.util.UsageStatsCollector
 import com.gatekeep.app.util.PinStorage
 import com.gatekeep.app.worker.WeeklyReportWorker
@@ -75,6 +76,8 @@ class ProfilesHomeViewModel @Inject constructor(
 ) : ViewModel() {
 
     private var lastPermissionBannerLogKey: String? = null
+
+    private val summariesLoadGate = SingleFlightGate()
 
     val profiles = profileRepository.observeProfiles()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -149,15 +152,17 @@ class ProfilesHomeViewModel @Inject constructor(
     }
 
     private suspend fun loadSummaries(list: List<Profile>) {
-        val map = mutableMapOf<Long, ProfileUsageSummary>()
-        val packagesMap = mutableMapOf<Long, List<String>>()
-        list.forEach { profile ->
-            map[profile.id] = statsRepository.profileUsageSummary(profile.id, profile.name)
-            packagesMap[profile.id] = profileRepository.observeMonitoredApps(profile.id).first()
-                .map { it.packageName }
+        summariesLoadGate.runIfIdle {
+            val map = mutableMapOf<Long, ProfileUsageSummary>()
+            val packagesMap = mutableMapOf<Long, List<String>>()
+            list.forEach { profile ->
+                map[profile.id] = statsRepository.profileUsageSummary(profile.id, profile.name)
+                packagesMap[profile.id] = profileRepository.observeMonitoredApps(profile.id).first()
+                    .map { it.packageName }
+            }
+            _summaries.value = map
+            _monitoredPackages.value = packagesMap
         }
-        _summaries.value = map
-        _monitoredPackages.value = packagesMap
     }
 
     fun createProfile(name: String) {
@@ -387,7 +392,7 @@ class ProfileViewModel @Inject constructor(
             anyGranted
         }
         if (granted) {
-            loadCurrentUsage(profileId)
+            currentUsageLoadGate.runIfIdle { loadCurrentUsage(profileId) }
         }
         return granted
     }
@@ -435,8 +440,12 @@ class ProfileViewModel @Inject constructor(
     private val _currentUsage = MutableStateFlow<CurrentUsageState?>(null)
     val currentUsage = _currentUsage.asStateFlow()
 
+    private val currentUsageLoadGate = SingleFlightGate()
+
     fun refreshCurrentUsage(profileId: Long) {
-        viewModelScope.launch { loadCurrentUsage(profileId) }
+        viewModelScope.launch {
+            currentUsageLoadGate.runIfIdle { loadCurrentUsage(profileId) }
+        }
     }
 
     private suspend fun usageSnapshotForDisplay(
@@ -1116,6 +1125,8 @@ class StatsViewModel @Inject constructor(
 
     private var lastStatsKey: String? = null
 
+    private val statsLoadGate = SingleFlightGate()
+
     private val _trackedApps = MutableStateFlow<List<AppUsageStat>>(emptyList())
     val trackedApps = _trackedApps.asStateFlow()
 
@@ -1163,6 +1174,16 @@ class StatsViewModel @Inject constructor(
         anchorMs: Long,
         profileList: List<com.gatekeep.domain.model.Profile>,
     ) {
+        statsLoadGate.runIfIdle {
+            loadStatsBody(kind, anchorMs, profileList)
+        }
+    }
+
+    private suspend fun loadStatsBody(
+        kind: StatsRangeKind,
+        anchorMs: Long,
+        profileList: List<com.gatekeep.domain.model.Profile>,
+    ) {
         val statsKey = "$kind:$anchorMs"
         if (statsKey != lastStatsKey) {
             lastStatsKey = statsKey
@@ -1198,6 +1219,12 @@ class StatsViewModel @Inject constructor(
                     }.awaitAll()
             }
             _profileOverviews.value = profileOverviewsDeferred.await()
+        }
+    }
+
+    fun refreshNow() {
+        viewModelScope.launch {
+            loadStats(_rangeKind.value, _anchorMs.value, profiles.value)
         }
     }
 

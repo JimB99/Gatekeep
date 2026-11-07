@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeep.app.R
 import com.gatekeep.app.ui.components.AppIcon
+import com.gatekeep.app.ui.components.ForegroundPeriodicRefreshEffect
 import com.gatekeep.app.ui.components.GatekeepFilterChip
 import com.gatekeep.app.ui.components.GatekeepFilterChipRow
 import com.gatekeep.app.ui.pause.PauseResetBlock
@@ -93,6 +94,8 @@ fun ProfileCurrentUsageScreen(
         viewModel.bindProfile(profileId)
         viewModel.refreshCurrentUsage(profileId)
     }
+
+    ForegroundPeriodicRefreshEffect(onRefresh = { viewModel.refreshCurrentUsage(profileId) })
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
