@@ -42,21 +42,19 @@ class GatekeepDebugTrace @Inject constructor(
     }
 
     fun record(event: String, fields: Map<String, String> = emptyMap()) {
-        val skipped = synchronized(lock) {
-            val last = buffer.lastOrNull()
-            if (GatekeepDebugTraceQuery.shouldCoalesce(last?.event, last?.fields, event, fields)) {
-                true
-            } else {
-                val entry = Entry(System.currentTimeMillis(), event, fields)
-                if (BuildConfig.DEBUG) {
-                    Log.d(TAG, entry.format())
-                }
-                if (buffer.size >= MAX_ENTRIES) buffer.removeFirst()
-                buffer.addLast(entry)
-                false
-            }
+        val entry = synchronized(lock) {
+            GatekeepDebugTraceQuery.appendRecord(
+                buffer = buffer,
+                event = event,
+                fields = fields,
+                epochMs = System.currentTimeMillis(),
+                maxEntries = MAX_ENTRIES,
+            )
         }
-        if (!skipped) persistSnapshot()
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, entry.format())
+        }
+        persistSnapshot()
     }
 
     fun snapshot(): List<Entry> = synchronized(lock) { buffer.toList() }

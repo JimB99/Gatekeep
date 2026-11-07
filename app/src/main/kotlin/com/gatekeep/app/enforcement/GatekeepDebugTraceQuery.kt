@@ -49,13 +49,59 @@ object GatekeepDebugTraceQuery {
         event: String,
         fields: Map<String, String>,
     ): Boolean {
-        if (lastEvent != event || lastFields != fields) return false
-        return event == GatekeepDebugTrace.FOREGROUND_COMMIT ||
-            event == GatekeepDebugTrace.OVERLAY_SHOW ||
+        if (lastEvent != event) return false
+        if (event == GatekeepDebugTrace.FOREGROUND_COMMIT) {
+            return lastFields?.get("pkg") == fields["pkg"]
+        }
+        if (lastFields != fields) return false
+        return event == GatekeepDebugTrace.OVERLAY_SHOW ||
             event == GatekeepDebugTrace.OVERLAY_SKIP ||
             event == GatekeepDebugTrace.DEVICE_PHASE ||
             event == GatekeepDebugTrace.EVALUATE ||
             event == GatekeepDebugTrace.SESSION_START
+    }
+
+    fun mergeCoalescedFields(
+        lastFields: Map<String, String>,
+        newFields: Map<String, String>,
+        event: String,
+    ): Map<String, String> {
+        if (event != GatekeepDebugTrace.FOREGROUND_COMMIT) return newFields
+        val count = (lastFields["count"]?.toLongOrNull() ?: 1L) + 1L
+        return newFields + mapOf("count" to count.toString())
+    }
+
+    fun normalizeRecordFields(event: String, fields: Map<String, String>): Map<String, String> =
+        if (event == GatekeepDebugTrace.FOREGROUND_COMMIT && "count" !in fields) {
+            fields + mapOf("count" to "1")
+        } else {
+            fields
+        }
+
+    /**
+     * Applies one debug event to an in-memory buffer (coalesce rules included). Returns the entry kept.
+     */
+    fun appendRecord(
+        buffer: ArrayDeque<GatekeepDebugTrace.Entry>,
+        event: String,
+        fields: Map<String, String>,
+        epochMs: Long,
+        maxEntries: Int,
+    ): GatekeepDebugTrace.Entry {
+        val normalized = normalizeRecordFields(event, fields)
+        val last = buffer.lastOrNull()
+        val entry = if (last != null &&
+            shouldCoalesce(last.event, last.fields, event, normalized)
+        ) {
+            val merged = mergeCoalescedFields(last.fields, normalized, event)
+            buffer.removeLast()
+            GatekeepDebugTrace.Entry(epochMs, event, merged)
+        } else {
+            GatekeepDebugTrace.Entry(epochMs, event, normalized)
+        }
+        if (buffer.size >= maxEntries) buffer.removeFirst()
+        buffer.addLast(entry)
+        return entry
     }
 
     fun parseLine(line: String): GatekeepDebugTrace.Entry? {

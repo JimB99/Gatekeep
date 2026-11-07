@@ -46,12 +46,35 @@ class GatekeepDebugTraceQueryTest {
                 fields = mapOf("pkg" to "com.sec.android.app.launcher", "holdMs" to "500"),
             ),
         )
+        assertTrue(
+            GatekeepDebugTraceQuery.shouldCoalesce(
+                lastEvent = GatekeepDebugTrace.FOREGROUND_COMMIT,
+                lastFields = mapOf("pkg" to "yt", "holdMs" to "500", "count" to "1"),
+                event = GatekeepDebugTrace.FOREGROUND_COMMIT,
+                fields = mapOf("pkg" to "yt", "holdMs" to "0"),
+            ),
+        )
         assertFalse(
             GatekeepDebugTraceQuery.shouldCoalesce(
                 lastEvent = GatekeepDebugTrace.FOREGROUND_COMMIT,
                 lastFields = mapOf("pkg" to "com.sec.android.app.launcher", "holdMs" to "500"),
                 event = GatekeepDebugTrace.FOREGROUND_COMMIT,
                 fields = mapOf("pkg" to "com.whatsapp", "holdMs" to "500"),
+            ),
+        )
+        assertEquals(
+            mapOf("pkg" to "yt", "holdMs" to "0", "count" to "3"),
+            GatekeepDebugTraceQuery.mergeCoalescedFields(
+                lastFields = mapOf("pkg" to "yt", "holdMs" to "500", "count" to "2"),
+                newFields = mapOf("pkg" to "yt", "holdMs" to "0", "count" to "1"),
+                event = GatekeepDebugTrace.FOREGROUND_COMMIT,
+            ),
+        )
+        assertEquals(
+            mapOf("pkg" to "yt", "holdMs" to "500", "count" to "1"),
+            GatekeepDebugTraceQuery.normalizeRecordFields(
+                GatekeepDebugTrace.FOREGROUND_COMMIT,
+                mapOf("pkg" to "yt", "holdMs" to "500"),
             ),
         )
         assertTrue(
@@ -94,6 +117,49 @@ class GatekeepDebugTraceQueryTest {
                 fields = mapOf("pkg" to "yt", "action" to "StartFresh", "gapMs" to "61000"),
             ),
         )
+    }
+
+    @Test
+    fun appendRecord_coalescesForegroundCommitByPkg() {
+        val buffer = ArrayDeque<GatekeepDebugTrace.Entry>()
+        GatekeepDebugTraceQuery.appendRecord(
+            buffer = buffer,
+            event = GatekeepDebugTrace.FOREGROUND_COMMIT,
+            fields = mapOf("pkg" to "yt", "holdMs" to "500"),
+            epochMs = 100L,
+            maxEntries = 10,
+        )
+        val second = GatekeepDebugTraceQuery.appendRecord(
+            buffer = buffer,
+            event = GatekeepDebugTrace.FOREGROUND_COMMIT,
+            fields = mapOf("pkg" to "yt", "holdMs" to "0"),
+            epochMs = 200L,
+            maxEntries = 10,
+        )
+        assertEquals(1, buffer.size)
+        assertEquals("2", second.fields["count"])
+        assertEquals("0", second.fields["holdMs"])
+        assertEquals(200L, second.epochMs)
+    }
+
+    @Test
+    fun appendRecord_doesNotCoalesceDifferentPackages() {
+        val buffer = ArrayDeque<GatekeepDebugTrace.Entry>()
+        GatekeepDebugTraceQuery.appendRecord(
+            buffer = buffer,
+            event = GatekeepDebugTrace.FOREGROUND_COMMIT,
+            fields = mapOf("pkg" to "a", "holdMs" to "500"),
+            epochMs = 100L,
+            maxEntries = 10,
+        )
+        GatekeepDebugTraceQuery.appendRecord(
+            buffer = buffer,
+            event = GatekeepDebugTrace.FOREGROUND_COMMIT,
+            fields = mapOf("pkg" to "b", "holdMs" to "500"),
+            epochMs = 200L,
+            maxEntries = 10,
+        )
+        assertEquals(2, buffer.size)
     }
 
     @Test

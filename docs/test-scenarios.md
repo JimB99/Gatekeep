@@ -52,7 +52,7 @@ export ANDROID_HOME="$LOCALAPPDATA/Android/Sdk"
 (`evaluate`, `unlock_skip`, `unlock_resume`, `open_gate_passed`, `pending_wait_resume`, `show_open_deterrent`, …).
 
 The **`dist/gatekeep-*.apk` on your phone is a release (minified) build** — it does **not** write that tag to logcat.
-The in-memory buffer is still filled, persisted to `gatekeep-debug.log` (legacy `enforcement-trace.log` is read on import), and exportable from **Settings → About → Copy debug log** (choose a time range first). Repeated identical `foreground_commit` lines are coalesced.
+The in-memory buffer is still filled, persisted to `gatekeep-debug.log` (legacy `enforcement-trace.log` is read on import), and exportable from **Settings → About → Copy debug log** (choose a time range first). Repeated `foreground_commit` lines for the same `pkg` are coalesced (ignoring flickering `holdMs`), with a `count` field on export.
 To also stream traces live, install a debug APK:
 `./gradlew :app:assembleDebug` then `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
 

@@ -469,19 +469,32 @@ class EnforcementCoordinator @Inject constructor(
         confirmExit: Boolean = false,
     ) {
         val now = System.currentTimeMillis()
-        val effectiveHoldMs = if (
-            packageName in monitoredPackagesCache &&
-            openGatePassedPackage != packageName
+        if (PendingForegroundCommitPolicy.shouldClearStaleInMemoryOpenGatePass(
+                candidatePackage = packageName,
+                openGatePassedPackage = openGatePassedPackage,
+                sessionStartedForPackage = sessionStartedForPackage,
+            )
         ) {
-            0L
-        } else {
-            holdMs
+            openGatePassedPackage = null
         }
+        val routeHoldMs = PendingForegroundCommitPolicy.effectiveHoldMs(
+            routeHoldMs = holdMs,
+            packageName = packageName,
+            monitoredPackages = monitoredPackagesCache,
+            currentForegroundPackage = currentForegroundPackage,
+            openGatePassedPackage = openGatePassedPackage,
+        )
         if (pendingForegroundPackage != packageName) {
             pendingForegroundPackage = packageName
             pendingForegroundFirstSeenMs = now
+            pendingForegroundHoldMs = routeHoldMs
+        } else {
+            pendingForegroundHoldMs = PendingForegroundCommitPolicy.rescheduleHoldMs(
+                pendingForegroundHoldMs,
+                routeHoldMs,
+            )
         }
-        pendingForegroundHoldMs = effectiveHoldMs
+        val effectiveHoldMs = pendingForegroundHoldMs
         debugTrace.record(
             GatekeepDebugTrace.FOREGROUND_COMMIT,
             mapOf("pkg" to packageName, "holdMs" to effectiveHoldMs.toString()),
@@ -493,13 +506,18 @@ class EnforcementCoordinator @Inject constructor(
             val nowMs = System.currentTimeMillis()
             val debounceMs = pendingForegroundHoldMs
             val confirmExitAtCommit = pendingForegroundConfirmExit
-            if (!ForegroundStabilizationPolicy.debounceConfirmed(
-                    candidatePackage = candidate,
-                    candidateFirstSeenMs = pendingForegroundFirstSeenMs,
-                    nowMs = nowMs,
-                    debounceMs = debounceMs,
-                )
-            ) {
+            val debounceReady = PendingForegroundCommitPolicy.debounceConfirmed(
+                candidateFirstSeenMs = pendingForegroundFirstSeenMs,
+                nowMs = nowMs,
+                debounceMs = debounceMs,
+            )
+            val forceCommit = PendingForegroundCommitPolicy.forceCommitNow(
+                candidatePackage = candidate,
+                monitoredPackages = monitoredPackagesCache,
+                candidateFirstSeenMs = pendingForegroundFirstSeenMs,
+                nowMs = nowMs,
+            )
+            if (!debounceReady && !forceCommit) {
                 val remaining = debounceMs - (nowMs - pendingForegroundFirstSeenMs)
                 mainHandler.postDelayed(
                     pendingForegroundRunnable!!,
