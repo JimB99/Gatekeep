@@ -15,6 +15,7 @@ import com.gatekeep.data.repository.SettingsRepository
 import com.gatekeep.data.repository.UsageRepository
 import com.gatekeep.domain.OpenGateCompletionPolicy
 import com.gatekeep.domain.OpenGatePassPolicy
+import com.gatekeep.domain.SessionFrictionStartPolicy
 import com.gatekeep.domain.PendingWaitResumePolicy
 import com.gatekeep.domain.PendingWaitResumeSurface
 import com.gatekeep.domain.SessionContinuityPolicy
@@ -455,6 +456,7 @@ class EnforcementCoordinator @Inject constructor(
         restoreVisibleBlockIfNeeded(packageName)
         scope.launch {
             try {
+                syncOverlayVisibility()
                 evaluate(packageName)
                 syncOverlayVisibility()
             } catch (e: Exception) {
@@ -1274,8 +1276,7 @@ class EnforcementCoordinator @Inject constructor(
         blockOverlay.removeAfterResolution()
         scope.launch {
             try {
-                val profiles = profileRepository.observeActiveProfiles().first()
-                val profileId = profiles.firstOrNull()?.id ?: return@launch
+                val profileId = primaryProfileIdForPackage(packageName) ?: return@launch
                 val now = System.currentTimeMillis()
                 val state = usageRepository.getSessionState(profileId, packageName)
                     ?: SessionTracker.startSession(packageName, now)
@@ -1291,6 +1292,14 @@ class EnforcementCoordinator @Inject constructor(
                 enforcementLog.logError("Open gate passed failed", e)
             }
         }
+    }
+
+    private suspend fun primaryProfileIdForPackage(packageName: String): Long? {
+        val activeProfiles = profileRepository.getActiveProfiles()
+        val monitoring = activeProfiles.filter { profile ->
+            profileRepository.getMonitoredApps(profile.id).any { it.packageName == packageName }
+        }
+        return MonitoredPackageProfilePolicy.primaryProfileId(monitoring)
     }
 
     private suspend fun persistOpenGatePassed(packageName: String, profileId: Long) {
@@ -2314,8 +2323,7 @@ class EnforcementCoordinator @Inject constructor(
                     ) {
                         openGatePassedPackage = packageName
                         scope.launch {
-                            val profiles = profileRepository.observeActiveProfiles().first()
-                            val profileId = profiles.firstOrNull()?.id
+                            val profileId = primaryProfileIdForPackage(packageName)
                             if (profileId != null) {
                                 persistOpenGatePassed(packageName, profileId)
                             }
@@ -2625,9 +2633,11 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private suspend fun recordFrictionStart(packageName: String, profileId: Long) {
+        val now = System.currentTimeMillis()
         val state = usageRepository.getSessionState(profileId, packageName)
-            ?: SessionTracker.startSession(packageName, System.currentTimeMillis())
-        usageRepository.saveSessionState(SessionTracker.startFriction(state, System.currentTimeMillis()), profileId)
+            ?: SessionTracker.startSession(packageName, now)
+        val updated = SessionFrictionStartPolicy.startFrictionIfNeeded(state, now) ?: return
+        usageRepository.saveSessionState(updated, profileId)
     }
 
     private suspend fun recordFrictionEnd(packageName: String, profileId: Long) {
@@ -2643,6 +2653,25 @@ class EnforcementCoordinator @Inject constructor(
         evaluationEpochAtStart: Long = evaluationEpoch,
     ) {
         if (evaluationEpochAtStart != evaluationEpoch) return
+        val now = System.currentTimeMillis()
+        val session = usageRepository.getSessionState(profile.id, packageName)
+        if (OpenGateDeterrentSuppressPolicy.shouldReshowInsteadOfNewDeterrent(
+                packageName = packageName,
+                session = session,
+                nowEpochMs = now,
+                lastPosted = lastPostedOverlay,
+                isBlockingActive = isBlockingActive,
+                blockedPackage = blockedPackage,
+            )
+        ) {
+            debugTrace.record(
+                GatekeepDebugTrace.OVERLAY_SKIP,
+                mapOf("pkg" to packageName, "reason" to "open_gate_in_progress"),
+            )
+            restoreVisibleBlockIfNeeded(packageName)
+            syncOverlayVisibility()
+            return
+        }
         debugTrace.record(
             GatekeepDebugTrace.SHOW_OPEN_DETERRENT,
             mapOf(
@@ -2667,7 +2696,7 @@ class EnforcementCoordinator @Inject constructor(
             ),
             generation,
         )
-        scope.launch { recordFrictionStart(packageName, profile.id) }
+        recordFrictionStart(packageName, profile.id)
     }
 
     private suspend fun buildMonitoredPackageSet(profiles: List<Profile>): Set<String> {
