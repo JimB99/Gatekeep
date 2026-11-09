@@ -397,6 +397,12 @@
     <string name="overlay_chrome_daily">Límite diario</string>
     <string name="overlay_chrome_hourly">Límite por hora</string>
     <string name="overlay_chrome_weekly">Límite semanal</string>
+    <string name="overlay_chrome_schedule">Horario</string>
+    <string name="overlay_chrome_focus">Modo enfoque</string>
+    <string name="overlay_chrome_break">Descanso</string>
+    <string name="overlay_chrome_extension">Extensión</string>
+    <string name="overlay_chrome_profile_pin">PIN del perfil</string>
+    <string name="overlay_chrome_blocked">Bloqueado</string>
     <string name="extension_minutes_format">+%1$dm</string>
     <string name="countdown_seconds_format">%1$ds</string>
 

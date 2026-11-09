@@ -44,20 +44,30 @@ class OverlayChromePolicyTest {
     }
 
     @Test
-    fun otherReasons_useDefaultAccentAndExistingReasonLabel() {
-        val others = listOf(
-            BlockPresentationReason.scheduleBlock,
-            BlockPresentationReason.outsideSchedule,
-            BlockPresentationReason.focusMode,
-            BlockPresentationReason.onBreak,
-            BlockPresentationReason.extensionDenied,
-            BlockPresentationReason.profilePin,
+    fun scheduleAndOutside_useScheduleChromeTitle() {
+        assertEquals(
+            OverlayChromeTitle.Schedule,
+            OverlayChromePolicy.chrome(BlockPresentationReason.scheduleBlock).title,
         )
+        assertEquals(
+            OverlayChromeTitle.Schedule,
+            OverlayChromePolicy.chrome(BlockPresentationReason.outsideSchedule).title,
+        )
+    }
 
-        others.forEach { reason ->
+    @Test
+    fun defaultFamilyReasons_useDedicatedChromeTitles() {
+        val expected = mapOf(
+            BlockPresentationReason.focusMode to OverlayChromeTitle.Focus,
+            BlockPresentationReason.onBreak to OverlayChromeTitle.Break,
+            BlockPresentationReason.extensionDenied to OverlayChromeTitle.Extension,
+            BlockPresentationReason.profilePin to OverlayChromeTitle.ProfilePin,
+            BlockPresentationReason.unknown to OverlayChromeTitle.Blocked,
+        )
+        expected.forEach { (reason, title) ->
             val chrome = OverlayChromePolicy.chrome(reason)
-            assertEquals(reason.name, OverlayAccentFamily.Default, chrome.accent)
-            assertEquals(reason.name, OverlayChromeTitle.ReasonLabel, chrome.title)
+            assertEquals(OverlayAccentFamily.Default, chrome.accent)
+            assertEquals(title, chrome.title)
         }
     }
 }

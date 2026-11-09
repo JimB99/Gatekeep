@@ -15,7 +15,12 @@ enum class OverlayChromeTitle {
     DailyLimit,
     HourlyLimit,
     WeeklyLimit,
-    ReasonLabel,
+    Schedule,
+    Focus,
+    Break,
+    Extension,
+    ProfilePin,
+    Blocked,
 }
 
 data class OverlayChrome(
@@ -24,8 +29,8 @@ data class OverlayChrome(
 )
 
 /**
- * One overlay frame: title names the reason, accent groups on-open / session / period.
- * Daily, hourly, and weekly share the period look.
+ * Overlay frame: [OverlayChromeTitle] is the short category on [overlay_title];
+ * body copy comes from [com.gatekeep.app.util.BlockMessageResolver.blockMessage].
  */
 object OverlayChromePolicy {
 
@@ -50,9 +55,29 @@ object OverlayChromePolicy {
             OverlayAccentFamily.Period,
             OverlayChromeTitle.WeeklyLimit,
         )
-        else -> OverlayChrome(
+        BlockPresentationReason.scheduleBlock,
+        BlockPresentationReason.outsideSchedule,
+        -> OverlayChrome(OverlayAccentFamily.Default, OverlayChromeTitle.Schedule)
+        BlockPresentationReason.focusMode -> OverlayChrome(
             OverlayAccentFamily.Default,
-            OverlayChromeTitle.ReasonLabel,
+            OverlayChromeTitle.Focus,
         )
+        BlockPresentationReason.onBreak -> OverlayChrome(
+            OverlayAccentFamily.Default,
+            OverlayChromeTitle.Break,
+        )
+        BlockPresentationReason.extensionDenied -> OverlayChrome(
+            OverlayAccentFamily.Default,
+            OverlayChromeTitle.Extension,
+        )
+        BlockPresentationReason.profilePin -> OverlayChrome(
+            OverlayAccentFamily.Default,
+            OverlayChromeTitle.ProfilePin,
+        )
+        BlockPresentationReason.notMonitored,
+        BlockPresentationReason.profilePaused,
+        BlockPresentationReason.appPaused,
+        BlockPresentationReason.unknown,
+        -> OverlayChrome(OverlayAccentFamily.Default, OverlayChromeTitle.Blocked)
     }
 }

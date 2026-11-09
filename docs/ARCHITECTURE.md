@@ -32,6 +32,8 @@ core-data/     Room database, repositories, DataStore
 
 The coordinator maintains foreground package history, session deadlines (daily/hourly/weekly/session), grace periods, and notification copy deduplication. Cross-app instrumentation tests live under `app/src/androidTest/` (see [test-scenarios.md](test-scenarios.md)).
 
+Block overlays use a short category on `overlay_title` (`overlay_chrome_*` via `OverlayChromePolicy`) and situation-specific copy on `block_message` (`block_*`, friction, or extension denial strings).
+
 
 
 ## Database upgrades

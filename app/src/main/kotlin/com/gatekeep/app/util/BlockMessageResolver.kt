@@ -96,9 +96,15 @@ object BlockMessageResolver {
             OverlayChromeTitle.DailyLimit -> context.getString(R.string.overlay_chrome_daily)
             OverlayChromeTitle.HourlyLimit -> context.getString(R.string.overlay_chrome_hourly)
             OverlayChromeTitle.WeeklyLimit -> context.getString(R.string.overlay_chrome_weekly)
-            OverlayChromeTitle.ReasonLabel -> reasonLabel(context, reason)
+            OverlayChromeTitle.Schedule -> context.getString(R.string.overlay_chrome_schedule)
+            OverlayChromeTitle.Focus -> context.getString(R.string.overlay_chrome_focus)
+            OverlayChromeTitle.Break -> context.getString(R.string.overlay_chrome_break)
+            OverlayChromeTitle.Extension -> context.getString(R.string.overlay_chrome_extension)
+            OverlayChromeTitle.ProfilePin -> context.getString(R.string.overlay_chrome_profile_pin)
+            OverlayChromeTitle.Blocked -> context.getString(R.string.overlay_chrome_blocked)
         }
 
+    /** Legacy helper; overlay titles use [chromeTitle] and `overlay_chrome_*` strings. */
     fun reasonLabel(context: Context, reason: BlockPresentationReason): String = when (reason) {
         BlockPresentationReason.outsideSchedule -> context.getString(R.string.block_outside_schedule)
         BlockPresentationReason.scheduleBlock -> context.getString(R.string.block_schedule_block)
