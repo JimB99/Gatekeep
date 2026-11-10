@@ -297,6 +297,7 @@ These cases launch with `am start` and read `block_message` / `wait_countdown`. 
 | RES-06 | Lock past session-continuity grace starts a fresh session | `ResumeEnforcementTest.customGrace_lockPastFifteenSeconds_startsFresh` (injects `MIN_MS`); 60s default math is JVM `SessionStartDecisionTest` |
 | RES-07 | Lock ~5s mid-session continues the same session with remaining frozen | `ResumeEnforcementTest.res07_shortLock_continuesSameSessionRemainingFrozen` |
 | RES-08 | Unlock on home / launcher must not flash open wait for the last monitored app | `ResumeEnforcementTest.res08_unlockOnHome_doesNotFlashOpenWait`, `UnlockOverlayPolicyTest` |
+| RES-09 | Long pause (≥60m): unlock on home then launch monitored app shows overlay without opening Gatekeep | `ResumeEnforcementTest.res09_longPause_unlockOnHome_thenLaunchMonitoredApp_showsOverlay`, `PostLongPauseUnlockBoostPolicyTest` |
 
 ---
 

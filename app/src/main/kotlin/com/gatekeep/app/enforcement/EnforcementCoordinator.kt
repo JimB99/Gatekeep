@@ -192,6 +192,9 @@ class EnforcementCoordinator @Inject constructor(
     private var enforcementPeriodHourStartMs: Long? = null
     private var enforcementPeriodDayStartMs: Long? = null
     private var accessibilityRevokedNotified = false
+    private var postPauseBoostStartedAtMs: Long = 0L
+    private var postPauseBoostLastReconcileAtMs: Long = 0L
+    private var postPauseBoostRunnable: Runnable? = null
 
     private val isBlockingActive: Boolean
         get() = BlockPresentationReducer.isBlockingActive(blockPresentationState)
@@ -643,6 +646,7 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private suspend fun handleForegroundChange(packageName: String, prevPackage: String?) {
+        maybeStopPostPauseBoostForMonitoredCommit(packageName)
         if (suppressThirdPartyRouteWhileGatekeepForeground(packageName)) return
         if (prevPackage != null && prevPackage != packageName) {
             debugTrace.record(
@@ -676,6 +680,7 @@ class EnforcementCoordinator @Inject constructor(
 
         restoreVisibleBlockIfNeeded(packageName)
         evaluate(packageName)
+        maybeStopPostPauseBoostForMonitoredCommit(packageName)
         syncOverlayVisibility()
     }
 
@@ -1568,6 +1573,7 @@ class EnforcementCoordinator @Inject constructor(
         clearBlockState()
         screenStateMonitor.resetPauseTracking()
         screenStateMonitor.clearPersistedPause()
+        stopPostPauseUnlockBoost(reason = null)
         debugTrace.clear()
         _state.value = EnforcementState()
     }
@@ -1712,6 +1718,7 @@ class EnforcementCoordinator @Inject constructor(
     }
 
     private suspend fun onDeviceUsePaused() {
+        stopPostPauseUnlockBoost(reason = "device_paused")
         debugTrace.record(
             GatekeepDebugTrace.DEVICE_PHASE,
             mapOf("to" to DeviceUsePhase.Paused.name),
@@ -1810,6 +1817,137 @@ class EnforcementCoordinator @Inject constructor(
         }
     }
 
+    fun overwritePersistedDevicePauseForTests(pausedAtEpochMs: Long) {
+        if (!BuildConfig.DEBUG) return
+        screenStateMonitor.overwritePersistedPauseForTests(pausedAtEpochMs)
+    }
+
+    private fun handleUnlockSkipAfterLongPause(now: Long) {
+        val pausedAt = screenStateMonitor.persistedPausedAtEpochMs() ?: return
+        val pauseDuration =
+            PostLongPauseUnlockBoostPolicy.pauseDurationMs(now, pausedAt) ?: return
+        if (!PostLongPauseUnlockBoostPolicy.shouldStartBoost(pauseDuration, unlockSkipped = true)) {
+            return
+        }
+        val leavePackage = resolveLeaveSurfaceAfterUnlockSkip() ?: return
+        commitLeaveSurfaceBaseline(leavePackage, now)
+        startPostPauseUnlockBoost(pauseDuration, now)
+    }
+
+    private fun resolveLeaveSurfaceAfterUnlockSkip(): String? {
+        val current = currentForegroundPackage
+        if (current != null && ForegroundRoutingPolicy.isCommittedLeaveSurface(current)) {
+            return current
+        }
+        val top = unlockTopWindow()
+        val kind = top?.let {
+            OverlayWindowClassifier.classify(it.packageName, it.className, blockedPackage)
+        }
+        if (top != null &&
+            (kind == OverlayWindowKind.Launcher || kind == OverlayWindowKind.Recents)
+        ) {
+            return top.packageName
+        }
+        if (current != null &&
+            UnlockOverlayPolicy.isLeaveOrUntracked(
+                current,
+                null,
+                monitoredPackagesCache,
+                context.packageName,
+            )
+        ) {
+            return current
+        }
+        return null
+    }
+
+    /** Sets leave timestamps for usage-open detection without evaluate on the leave surface. */
+    private fun commitLeaveSurfaceBaseline(leavePackage: String, now: Long) {
+        if (!ForegroundRoutingPolicy.isCommittedLeaveSurface(leavePackage)) return
+        val prev = currentForegroundPackage
+        if (prev != null &&
+            prev != leavePackage &&
+            prev !in ignoredForegroundPackages &&
+            !ForegroundStabilizationPolicy.isTransientForegroundPackage(prev)
+        ) {
+            lastLeftPackage = prev
+        }
+        lastLeftAtMs = now
+        if (currentForegroundPackage != leavePackage) {
+            currentForegroundPackage = leavePackage
+        }
+    }
+
+    private fun startPostPauseUnlockBoost(pauseDurationMs: Long, now: Long) {
+        stopPostPauseUnlockBoost(reason = null)
+        postPauseBoostStartedAtMs = now
+        postPauseBoostLastReconcileAtMs = 0L
+        debugTrace.record(
+            GatekeepDebugTrace.POST_PAUSE_BOOST_START,
+            mapOf(
+                "pauseDurationMs" to pauseDurationMs.toString(),
+                "unlockSkipped" to "true",
+            ),
+        )
+        startForegroundPolling()
+        reconcileForegroundFromUsageStats()
+        postPauseBoostLastReconcileAtMs = now
+        schedulePostPauseBoostReconcile()
+    }
+
+    private fun schedulePostPauseBoostReconcile() {
+        postPauseBoostRunnable?.let { mainHandler.removeCallbacks(it) }
+        postPauseBoostRunnable = object : Runnable {
+            override fun run() {
+                val start = postPauseBoostStartedAtMs
+                if (start <= 0L) return
+                val nowMs = System.currentTimeMillis()
+                if (!PostLongPauseUnlockBoostPolicy.boostActive(nowMs, start)) {
+                    stopPostPauseUnlockBoost(reason = "timeout")
+                    return
+                }
+                if (PostLongPauseUnlockBoostPolicy.shouldScheduleNextReconcile(
+                        nowEpochMs = nowMs,
+                        boostStartedAtEpochMs = start,
+                        lastReconcileAtEpochMs = postPauseBoostLastReconcileAtMs,
+                    )
+                ) {
+                    reconcileForegroundFromUsageStats()
+                    postPauseBoostLastReconcileAtMs = nowMs
+                }
+                mainHandler.postDelayed(
+                    this,
+                    PostLongPauseUnlockBoostPolicy.BOOST_RECONCILE_INTERVAL_MS,
+                )
+            }
+        }
+        mainHandler.postDelayed(
+            postPauseBoostRunnable!!,
+            PostLongPauseUnlockBoostPolicy.BOOST_RECONCILE_INTERVAL_MS,
+        )
+    }
+
+    private fun stopPostPauseUnlockBoost(reason: String?) {
+        postPauseBoostRunnable?.let { mainHandler.removeCallbacks(it) }
+        postPauseBoostRunnable = null
+        if (postPauseBoostStartedAtMs > 0L && reason != null) {
+            debugTrace.record(
+                GatekeepDebugTrace.POST_PAUSE_BOOST_END,
+                mapOf("reason" to reason),
+            )
+        }
+        postPauseBoostStartedAtMs = 0L
+        postPauseBoostLastReconcileAtMs = 0L
+    }
+
+    private fun maybeStopPostPauseBoostForMonitoredCommit(packageName: String) {
+        if (postPauseBoostStartedAtMs <= 0L) return
+        val monitored = packageName in monitoredPackagesCache ||
+            packageName == lastMonitoredForegroundPackage
+        if (!monitored) return
+        stopPostPauseUnlockBoost(reason = "monitored_committed")
+    }
+
     /**
      * Unlock (Paused → Using): re-run enforcement only when the confirmed foreground is
      * a monitored app. Do not pretend lastMonitored is in front (home/untracked flash).
@@ -1826,6 +1964,7 @@ class EnforcementCoordinator @Inject constructor(
                     "top" to (unlockTopWindowPackage() ?: ""),
                 ),
             )
+            mainHandler.post { handleUnlockSkipAfterLongPause(now) }
             return
         }
         val input = MonitoredForegroundResumePolicy.Input(

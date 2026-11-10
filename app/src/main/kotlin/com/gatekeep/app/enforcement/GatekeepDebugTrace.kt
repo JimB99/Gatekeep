@@ -153,6 +153,8 @@ class GatekeepDebugTrace @Inject constructor(
         const val HUD_FREEZE = "hud_freeze"
         const val UNLOCK_SKIP = "unlock_skip"
         const val UNLOCK_RESUME = "unlock_resume"
+        const val POST_PAUSE_BOOST_START = "post_pause_boost_start"
+        const val POST_PAUSE_BOOST_END = "post_pause_boost_end"
 
         const val EXTENSION_GRANT = "extension_grant"
         const val EXTENSION_DENIED = "extension_denied"

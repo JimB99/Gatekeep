@@ -108,6 +108,10 @@ class ScreenStateMonitor @Inject constructor(
         devicePauseStore.clear()
     }
 
+    fun overwritePersistedPauseForTests(pausedAtEpochMs: Long) {
+        devicePauseStore.overwritePausedAt(pausedAtEpochMs)
+    }
+
     fun deviceUsePhase(hasLeftApp: Boolean): DeviceUsePhase =
         DeviceUsePolicy.phase(
             screenOn = currentScreenOn(),

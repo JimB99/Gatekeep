@@ -29,6 +29,11 @@ class DevicePauseStore @Inject constructor(
         prefs.edit().remove(KEY_PAUSED_AT).apply()
     }
 
+    /** Instrumented tests only — simulates overnight pause without a real multi-hour sleep. */
+    fun overwritePausedAt(epochMs: Long) {
+        prefs.edit().putLong(KEY_PAUSED_AT, epochMs).apply()
+    }
+
     private companion object {
         const val PREFS = "device_use_pause"
         const val KEY_PAUSED_AT = "pausedAtEpochMs"

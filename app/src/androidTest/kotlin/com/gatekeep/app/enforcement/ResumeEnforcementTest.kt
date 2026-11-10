@@ -385,4 +385,70 @@ class ResumeEnforcementTest : EnforcementCrossAppTestBase() {
                 harness.overlayMessageText() == null,
         )
     }
+
+    /**
+     * RES-09: After a long device pause, unlock on home must not flash the open wait (RES-08),
+     * but launching the monitored app should show enforcement without opening Gatekeep.
+     */
+    @Test
+    fun res09_longPause_unlockOnHome_thenLaunchMonitoredApp_showsOverlay() {
+        val pkg = EnforcementTestPackages.TARGET_A
+        runSeed {
+            GatekeepTestFixtures.seedProfileWithMonitoredApp(
+                profileRepository = profileRepository,
+                config = GatekeepTestFixtures.ProfileSeedConfig(
+                    onOpenAction = OnOpenAction.deterrentWait,
+                    sessionLimitMs = GatekeepTestFixtures.TestDurations.SESSION_LIMIT_MS,
+                    dailyLimitMs = null,
+                    openWaitDurationSeconds = GatekeepTestFixtures.TestDurations.OPEN_WAIT_SEC,
+                ),
+            )
+        }
+        harness.wakeDevice()
+        harness.launchTargetA()
+        assertTrue(
+            "open wait should start ${harness.screenDiagnostics()}",
+            harness.waitForOverlay(timeoutMs = 8_000),
+        )
+        harness.useRealForegroundDetection()
+        harness.pressHome()
+        assertTrue(
+            "home must hide overlay first ${harness.screenDiagnostics()}",
+            harness.waitForOverlayGone(2_000),
+        )
+        harness.sleepDevice()
+        val pausedAt =
+            System.currentTimeMillis() - PostLongPauseUnlockBoostPolicy.LONG_DEVICE_PAUSE_MS - 60_000L
+        enforcementCoordinator.overwritePersistedDevicePauseForTests(pausedAt)
+        val wakeAt = System.currentTimeMillis()
+        harness.wakeDevice()
+        harness.sleepMs(500)
+        val afterUnlock = enforcementCoordinator.enforcementTraceSnapshot().filter { it.epochMs >= wakeAt }
+        assertFalse(
+            "must not overlay_show after unlock on home: $afterUnlock ${harness.screenDiagnostics()}",
+            afterUnlock.any { it.event == GatekeepDebugTrace.OVERLAY_SHOW },
+        )
+        assertTrue(
+            "post-pause boost should start after long pause unlock_skip: $afterUnlock",
+            afterUnlock.any { it.event == GatekeepDebugTrace.POST_PAUSE_BOOST_START },
+        )
+        harness.launchTargetA()
+        assertTrue(
+            "overlay must return after long-pause home unlock without opening Gatekeep ${harness.screenDiagnostics()}",
+            harness.waitForOverlay(10_000),
+        )
+        val afterLaunch = enforcementCoordinator.enforcementTraceSnapshot().filter { it.epochMs >= wakeAt }
+        assertTrue(
+            "boost should end when monitored app commits: $afterLaunch",
+            afterLaunch.any {
+                it.event == GatekeepDebugTrace.POST_PAUSE_BOOST_END &&
+                    it.fields["reason"] == "monitored_committed"
+            },
+        )
+        assertTrue(
+            "must evaluate monitored app after launch: $afterLaunch",
+            afterLaunch.any { it.event == GatekeepDebugTrace.SHOW_OPEN_DETERRENT && it.fields["pkg"] == pkg } ||
+                afterLaunch.any { it.event == GatekeepDebugTrace.OVERLAY_SHOW && it.fields["pkg"] == pkg },
+        )
+    }
 }
