@@ -538,7 +538,6 @@ class BlockOverlayManager @Inject constructor(
                 countdown.visibility = View.VISIBLE
                 val totalMs = request.waitDurationSeconds * 1000L
                 if (totalMs <= 0L) {
-                    coordinator.get().onWaitCompleted(request.packageName)
                     onFrictionSuccess(request)
                     return
                 }
@@ -566,7 +565,6 @@ class BlockOverlayManager @Inject constructor(
                             frictionInProgress = false
                             waitActive = false
                             waitStopwatch = null
-                            coordinator.get().onWaitCompleted(request.packageName)
                             onFrictionSuccess(request)
                         } else {
                             countdown.text = localizedContext.getString(R.string.countdown_seconds_format, remainingSec)
@@ -592,9 +590,12 @@ class BlockOverlayManager @Inject constructor(
     }
 
     private fun onFrictionSuccess(request: BlockOverlayRequest) {
-        when (OverlayFrictionGrantPolicy.grant(request)) {
+        val grant = OverlayFrictionGrantPolicy.grant(request)
+        if (OpenGateWaitCompletionPolicy.shouldClearPendingOnWaitTimer(grant)) {
+            coordinator.get().onWaitCompleted(request.packageName)
+        }
+        when (grant) {
             OverlayFrictionGrantPolicy.Grant.OpenGate -> {
-                coordinator.get().onFrictionCompleted(request.packageName)
                 coordinator.get().onOpenGatePassed(request.packageName)
             }
             OverlayFrictionGrantPolicy.Grant.SessionRefill ->

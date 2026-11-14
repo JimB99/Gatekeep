@@ -1281,18 +1281,22 @@ class EnforcementCoordinator @Inject constructor(
         blockOverlay.removeAfterResolution()
         scope.launch {
             try {
-                val profileId = primaryProfileIdForPackage(packageName) ?: return@launch
-                val now = System.currentTimeMillis()
-                val state = usageRepository.getSessionState(profileId, packageName)
-                    ?: SessionTracker.startSession(packageName, now)
-                val updated = OpenGateCompletionPolicy.sessionAfterOpenGatePassed(state, now)
-                usageRepository.saveSessionState(updated, profileId)
-                openGatePassedPackage = packageName
-                debugTrace.record(
-                    GatekeepDebugTrace.OPEN_GATE_PASSED,
-                    mapOf("pkg" to packageName, "pendingCleared" to "true"),
-                )
-                evaluate(packageName)
+                evaluateMutex.withLock {
+                    val profileId = primaryProfileIdForPackage(packageName) ?: return@withLock
+                    val now = System.currentTimeMillis()
+                    recordFrictionEnd(packageName, profileId)
+                    val state = usageRepository.getSessionState(profileId, packageName)
+                        ?: SessionTracker.startSession(packageName, now)
+                    val updated = OpenGateCompletionPolicy.sessionAfterOpenGatePassed(state, now)
+                    usageRepository.saveSessionState(updated, profileId)
+                    openGatePassedPackage = packageName
+                    debugTrace.record(
+                        GatekeepDebugTrace.OPEN_GATE_PASSED,
+                        mapOf("pkg" to packageName, "pendingCleared" to "true"),
+                    )
+                    evaluateInternal(packageName)
+                    syncOverlayVisibility()
+                }
             } catch (e: Exception) {
                 enforcementLog.logError("Open gate passed failed", e)
             }
@@ -1429,8 +1433,7 @@ class EnforcementCoordinator @Inject constructor(
 
     fun onFrictionCompleted(packageName: String) {
         scope.launch {
-            val profiles = profileRepository.observeActiveProfiles().first()
-            val profileId = profiles.firstOrNull()?.id ?: return@launch
+            val profileId = primaryProfileIdForPackage(packageName) ?: return@launch
             recordFrictionEnd(packageName, profileId)
         }
     }
@@ -3405,14 +3408,15 @@ class EnforcementCoordinator @Inject constructor(
     fun onWaitStarted(packageName: String, waitUntilEpochMs: Long) {
         scope.launch {
             try {
-                val profiles = profileRepository.observeActiveProfiles().first()
-                val profileId = profiles.firstOrNull()?.id ?: return@launch
-                val state = usageRepository.getSessionState(profileId, packageName)
-                    ?: SessionTracker.startSession(packageName, System.currentTimeMillis())
-                usageRepository.saveSessionState(
-                    SessionTracker.setPendingWait(state, waitUntilEpochMs),
-                    profileId,
-                )
+                evaluateMutex.withLock {
+                    val profileId = primaryProfileIdForPackage(packageName) ?: return@withLock
+                    val state = usageRepository.getSessionState(profileId, packageName)
+                        ?: SessionTracker.startSession(packageName, System.currentTimeMillis())
+                    usageRepository.saveSessionState(
+                        SessionTracker.setPendingWait(state, waitUntilEpochMs),
+                        profileId,
+                    )
+                }
             } catch (e: Exception) {
                 enforcementLog.logError("Persist wait failed", e)
             }
@@ -3422,10 +3426,14 @@ class EnforcementCoordinator @Inject constructor(
     fun onWaitCompleted(packageName: String) {
         scope.launch {
             try {
-                val profiles = profileRepository.observeActiveProfiles().first()
-                val profileId = profiles.firstOrNull()?.id ?: return@launch
-                val state = usageRepository.getSessionState(profileId, packageName) ?: return@launch
-                usageRepository.saveSessionState(SessionTracker.clearPendingWait(state), profileId)
+                evaluateMutex.withLock {
+                    val profileId = primaryProfileIdForPackage(packageName) ?: return@withLock
+                    val state = usageRepository.getSessionState(profileId, packageName) ?: return@withLock
+                    if (OpenGatePassPolicy.shouldSkipOpenGate(state, System.currentTimeMillis(), OPEN_GATE_GRACE_MS)) {
+                        return@withLock
+                    }
+                    usageRepository.saveSessionState(SessionTracker.clearPendingWait(state), profileId)
+                }
             } catch (e: Exception) {
                 enforcementLog.logError("Clear wait failed", e)
             }
