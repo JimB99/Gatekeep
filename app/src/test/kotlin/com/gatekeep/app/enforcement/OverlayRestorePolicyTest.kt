@@ -1,5 +1,6 @@
 package com.gatekeep.app.enforcement
 
+import com.gatekeep.app.support.GATEKEEP_TEST_APPLICATION_ID
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -7,7 +8,7 @@ import org.junit.Test
 class OverlayRestorePolicyTest {
 
     private val blocked = "com.instagram.android"
-    private val owner = "com.gatekeep.app"
+    private val owner = GATEKEEP_TEST_APPLICATION_ID
     private val systemUi = "com.android.systemui"
     private val launcher = "com.android.launcher3"
     private val chrome = "com.android.chrome"

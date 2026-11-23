@@ -1,5 +1,6 @@
 package com.gatekeep.app.enforcement
 
+import com.gatekeep.app.support.GATEKEEP_TEST_APPLICATION_ID
 import com.gatekeep.app.util.formatDurationMinutes
 import com.gatekeep.domain.ExtensionPeriodDisplay
 import com.gatekeep.domain.PauseManager
@@ -32,7 +33,7 @@ class UsageDisplayLimitsTest {
         val now = 1_000_000L
         val pause = Pause(
             profileId = 1L,
-            packageName = "com.gatekeep.app",
+            packageName = GATEKEEP_TEST_APPLICATION_ID,
             type = PauseType.noLimitToday,
             untilEpochMs = now + 60_000L,
         )
@@ -40,7 +41,7 @@ class UsageDisplayLimitsTest {
             PauseManager.isNoLimitTodayActive(
                 pauses = listOf(pause),
                 profileId = 1L,
-                packageName = "com.gatekeep.app",
+                packageName = GATEKEEP_TEST_APPLICATION_ID,
                 nowEpochMs = now,
                 sharedPool = false,
             ),

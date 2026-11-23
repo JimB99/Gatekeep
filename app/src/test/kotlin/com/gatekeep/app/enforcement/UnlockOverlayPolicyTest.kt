@@ -1,5 +1,6 @@
 package com.gatekeep.app.enforcement
 
+import com.gatekeep.app.support.GATEKEEP_TEST_APPLICATION_ID
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -16,7 +17,7 @@ class UnlockOverlayPolicyTest {
     private val launcher = "com.sec.android.app.launcher"
     private val whatsapp = "com.whatsapp"
     private val dialer = "com.samsung.android.dialer"
-    private val owner = "com.gatekeep.app"
+    private val owner = GATEKEEP_TEST_APPLICATION_ID
     private val monitored = setOf(youtube)
     private val ignored = setOf("com.android.systemui")
 

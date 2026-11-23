@@ -12,7 +12,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.gatekeep.app"
+        applicationId = "at.BenAndJimmys.Gatekeep"
         minSdk = 29
         targetSdk = 35
         versionCode = 55

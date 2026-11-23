@@ -1,5 +1,7 @@
 package com.gatekeep.app.enforcement
 
+import com.gatekeep.app.support.GATEKEEP_TEST_APPLICATION_ID
+
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -128,7 +130,7 @@ class OverlayWindowClassifierTest {
 
     @Test
     fun pickTopRelevantWindow_skipsOverlayAndVolume() {
-        val overlayOwner = "com.gatekeep.app"
+        val overlayOwner = GATEKEEP_TEST_APPLICATION_ID
         val windows = listOf(
             OverlayWindowSnapshot(overlayOwner, "android.widget.FrameLayout", isOverlay = true),
             OverlayWindowSnapshot(
@@ -152,7 +154,7 @@ class OverlayWindowClassifierTest {
             ),
             OverlayWindowSnapshot(blocked, "com.instagram.android.MainActivity", isOverlay = false),
         )
-        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, "com.gatekeep.app")
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, GATEKEEP_TEST_APPLICATION_ID)
         assertEquals("com.android.systemui", top?.packageName)
         assertEquals(
             OverlayWindowKind.Recents,
@@ -178,7 +180,7 @@ class OverlayWindowClassifierTest {
                 isActive = true,
             ),
         )
-        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, "com.gatekeep.app")
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, GATEKEEP_TEST_APPLICATION_ID)
         assertEquals("com.android.systemui", top?.packageName)
     }
 
@@ -200,7 +202,7 @@ class OverlayWindowClassifierTest {
                 isActive = true,
             ),
         )
-        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, "com.gatekeep.app")
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, GATEKEEP_TEST_APPLICATION_ID)
         assertEquals(blocked, top?.packageName)
     }
 
@@ -222,7 +224,7 @@ class OverlayWindowClassifierTest {
                 isActive = true,
             ),
         )
-        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, "com.gatekeep.app")
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, GATEKEEP_TEST_APPLICATION_ID)
         assertEquals(blocked, top?.packageName)
     }
 
@@ -244,7 +246,7 @@ class OverlayWindowClassifierTest {
                 isActive = true,
             ),
         )
-        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, "com.gatekeep.app")
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, GATEKEEP_TEST_APPLICATION_ID)
         assertEquals("com.sec.android.app.launcher", top?.packageName)
     }
 
@@ -266,7 +268,7 @@ class OverlayWindowClassifierTest {
                 isActive = true,
             ),
         )
-        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, "com.gatekeep.app")
+        val top = OverlayWindowClassifier.pickTopRelevantWindow(windows, blocked, GATEKEEP_TEST_APPLICATION_ID)
         assertEquals("com.google.android.apps.nexuslauncher", top?.packageName)
     }
 
@@ -293,7 +295,7 @@ class OverlayWindowClassifierTest {
 
     @Test
     fun pickTopRelevantWindow_ownerSystemOverlay_doesNotBeatFocusedLauncher() {
-        val owner = "com.gatekeep.app"
+        val owner = GATEKEEP_TEST_APPLICATION_ID
         val launcher = "com.google.android.apps.nexuslauncher"
         val windows = listOf(
             OverlayWindowSnapshot(
