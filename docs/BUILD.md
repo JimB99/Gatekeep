@@ -1,6 +1,6 @@
 # Building Gatekeep
 
-Requirements: **JDK 17**, **Android SDK 35** (`compileSdk` / `targetSdk` as in `app/build.gradle`).
+Requirements: **JDK 17**, **Android SDK 36** (`compileSdk` / `targetSdk` in `app/build.gradle.kts`).
 
 ## Standard toolchain
 
@@ -9,9 +9,10 @@ Set `JAVA_HOME` to JDK 17 and `ANDROID_HOME` to your Android SDK, then:
 ```bash
 ./gradlew :core-domain:test :core-data:test :app:testDebugUnitTest
 bash scripts/build_apk.sh
+bash scripts/build_aab.sh
 ```
 
-APK output: **`dist/gatekeep-<version>.apk`** (arm64-v8a).
+APK: **`dist/gatekeep-<version>.apk`** · AAB (Play): **`dist/gatekeep-<version>.aab`**
 
 ## Private workspace toolchain
 

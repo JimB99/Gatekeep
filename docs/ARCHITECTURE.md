@@ -40,7 +40,7 @@ Block overlays use a short category on `overlay_title` (`overlay_chrome_*` via `
 
 
 
-Room migrations are explicit — no `fallbackToDestructiveMigration()`. If upgrade fails schema validation (for example an index-name mismatch), Gatekeep logs the error, deletes `gatekeep.db` (and WAL/SHM sidecars), and opens a fresh database **once**. Local enforcement history may reset; restore profiles from Settings JSON backup.
+Room migrations are explicit — no `fallbackToDestructiveMigration()`. If upgrade fails schema validation (for example an index-name mismatch), Gatekeep logs the error, deletes `gatekeep.db` (and WAL/SHM sidecars), and opens a fresh database **once**. Local enforcement history may reset; profile data can be restored from a JSON backup if you have one (there is no in-app export UI yet).
 
 
 

@@ -14,24 +14,23 @@ Gatekeep enforces limits in real time on the foreground app: accessibility-drive
 
 ## Features
 
-- Select and categorize apps
-- Daily, weekly, hourly, and per-session limits with mandatory breaks
-- Multiple profiles with optional PIN lock
-- Schedule windows (multiple per day)
-- Pause 5/15/60 min, focus mode, emergency bypass
-- Math / phrase / hold-button / password friction to continue
+- Select apps to monitor per profile
+- Daily, weekly, hourly, and per-session limits with mandatory breaks (where configured)
+- Multiple profiles with optional per-profile PIN lock
+- Schedule windows (multiple per day) with per-window policy modes
+- Pause 5/15/60 min, focus block, emergency bypass
+- Math, timed wait, or app password to continue past blockers; on-open math or wait optional
 - Session HUD overlay (Digital Wellbeing-style bottom timer bar)
 - Statistics with streaks and charts
 - Home screen widget
-- Backup/restore profiles (JSON)
 - Strict mode and optional device admin deterrent
-- Gradual limit tightening
+- Weekly usage report (optional)
 
 ---
 
 ## Build
 
-Requirements: JDK 17, Android SDK 35. See **[docs/BUILD.md](docs/BUILD.md)** for signing and workspace toolchain paths.
+Requirements: JDK 17, Android SDK 36. See **[docs/BUILD.md](docs/BUILD.md)** for signing and workspace toolchain paths. Play listing (en/de/es) and graphics: **`docs/play-store/`**.
 
 ```bash
 ./gradlew :core-domain:test :core-data:test :app:testDebugUnitTest
@@ -56,7 +55,7 @@ Project conventions: `.cursor/rules/gatekeep-*.mdc`.
 
 ## Database upgrades
 
-Room migrations are explicit — the app does **not** use `fallbackToDestructiveMigration()`. Recovery behavior is documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Profile JSON backups from Settings preserve configuration across a failed upgrade.
+Room migrations are explicit — the app does **not** use `fallbackToDestructiveMigration()`. Recovery behavior is documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 

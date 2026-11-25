@@ -9,12 +9,12 @@ plugins {
 
 android {
     namespace = "com.gatekeep.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "at.BenAndJimmys.Gatekeep"
         minSdk = 29
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 55
         versionName = "3.9.6"
         testInstrumentationRunner = "com.gatekeep.app.HiltTestRunner"
@@ -63,7 +63,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
         }
+    }
+
+    lint {
+        disable += "MissingTranslation"
     }
 
     compileOptions {
