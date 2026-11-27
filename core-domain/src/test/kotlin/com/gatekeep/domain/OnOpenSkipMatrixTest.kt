@@ -247,6 +247,38 @@ class OnOpenSkipMatrixTest {
     }
 
     @Test
+    fun startFreshExpiredPeriodBreakContinue_stillShowsOnOpen() {
+        val profile = profileBase.copy(
+            onOpenAction = OnOpenAction.deterrentWait,
+            onLimitAction = OnLimitAction.mandatoryBreak,
+        )
+        val breakUntil = now - 1L
+        val persisted = SessionTracker.applyBreak(
+            SessionTracker.startSession(pkg, now - 45 * 60_000L),
+            breakUntil,
+        )
+        val afterStartFresh = SessionTracker.startSession(pkg, now).copy(
+            periodAppUse = persisted.periodAppUse,
+        )
+        val usage = UsageSnapshot(dailyMs = dailyCap + 1)
+        val resolution = PeriodContinuePolicy.resolveAfterExpiredBreakDeadline(
+            sessionState = afterStartFresh,
+            persistedBeforeSessionStart = persisted,
+            nowEpochMs = now,
+            limit = limit(),
+            config = profile.enforcementConfig(),
+            usage = usage,
+            periodStarts = PeriodStarts(),
+        )
+        assertNotNull(resolution)
+        assertFalse(resolution!!.session.limitFrictionPaidThisSitting)
+        val result = RuleEngine.evaluate(
+            context(profile, usage = usage, sessionState = resolution.session),
+        )
+        assertInstanceOf(RuleResult.OpenDeterrent::class.java, result)
+    }
+
+    @Test
     fun afterBreakPaid_skipsOnOpenEvenOnFreshSessionClock() {
         val profile = profileBase.copy(
             onOpenAction = OnOpenAction.deterrentWait,

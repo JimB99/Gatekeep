@@ -15,12 +15,25 @@ import com.gatekeep.domain.model.UsageSnapshot
  */
 object PeriodContinuePolicy {
 
+    /** Unattended lock/leave this long: do not auto-grant period continue on StartFresh. */
+    const val LONG_UNATTENDED_PAUSE_MS = 60 * 60 * 1000L
+
     fun continueMs(config: ProfileEnforcementConfig, sessionLimitMs: Long?): Long =
         LimitGrantDefaults.periodContinueMs(
             sessionLimitMs = sessionLimitMs,
             inheritSessionCap = config.periodContinueInheritSessionCap,
             customMs = config.periodContinueDurationMs,
         )
+
+    fun wasLongUnattendedPause(
+        persistedBeforeSessionStart: SessionState?,
+        nowEpochMs: Long,
+        longPauseMs: Long = LONG_UNATTENDED_PAUSE_MS,
+    ): Boolean {
+        val inactiveAt = SessionContinuityPolicy.lastInactiveAtEpochMs(persistedBeforeSessionStart)
+            ?: return false
+        return nowEpochMs - inactiveAt >= longPauseMs
+    }
 
     fun shouldSilentAutoContinue(config: ProfileEnforcementConfig): Boolean =
         when (config.onLimitAction) {
@@ -133,16 +146,22 @@ object PeriodContinuePolicy {
         val needsPeriodContinue = config.onLimitAction == OnLimitAction.mandatoryBreak &&
             periodOver &&
             resolved.periodAppUse.remainingMs(usage, periodStarts, limit) <= 0L
+        var grantedPeriodContinue = false
         if (needsPeriodContinue) {
+            if (wasLongUnattendedPause(persistedBeforeSessionStart, nowEpochMs)) {
+                return ExpiredBreakResolution(resolved, persistPeriodAppUse = false)
+            }
             resolved = applyContinue(
                 session = resolved,
                 usage = usage,
                 continueMs = continueMs(config, limit?.sessionLimitMs),
                 periodStarts = periodStarts,
+                markFrictionPaid = false,
             )
+            grantedPeriodContinue = true
         }
         if (resolved == sessionState) return null
-        return ExpiredBreakResolution(resolved, needsPeriodContinue)
+        return ExpiredBreakResolution(resolved, grantedPeriodContinue)
     }
 
     fun applyContinue(

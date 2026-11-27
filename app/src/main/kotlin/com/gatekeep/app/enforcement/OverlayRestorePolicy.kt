@@ -61,12 +61,6 @@ object OverlayRestorePolicy {
                 topWindowKind = kind,
             )
             if (openedFromLeave != null) {
-                if (input.blockingActive &&
-                    input.presentation is BlockPresentation.HiddenForOtherApp &&
-                    openedFromLeave == input.blockedPackage
-                ) {
-                    return ForegroundRoutingPolicy.Route.Restore(openedFromLeave)
-                }
                 if (input.blockingActive && input.presentation is BlockPresentation.Visible) {
                     return ForegroundRoutingPolicy.Route.HideNow(top.packageName)
                 }

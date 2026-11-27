@@ -699,21 +699,26 @@ fun AboutSettingsScreen(
                 )
             }
         }
-        TextButton(onClick = {
-            val log = viewModel.debugTraceExport(logWindow)
-            val text = log.ifBlank { context.getString(R.string.debug_log_empty) }
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Gatekeep debug log", text))
-            android.widget.Toast.makeText(
-                context,
-                context.getString(R.string.debug_log_copied),
-                android.widget.Toast.LENGTH_SHORT,
-            ).show()
-        }) {
+        TextButton(
+            onClick = {
+                val log = viewModel.debugTraceExport(logWindow)
+                val text = log.ifBlank { context.getString(R.string.debug_log_empty) }
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Gatekeep debug log", text))
+                android.widget.Toast.makeText(
+                    context,
+                    context.getString(R.string.debug_log_copied),
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            },
+            modifier = Modifier.padding(start = 12.dp),
+        ) {
             Text(stringResource(R.string.copy_debug_log))
         }
-        LegalLinkListItem(R.string.legal_impressum, LegalUrls.IMPRESSUM)
-        LegalLinkListItem(R.string.legal_privacy, LegalUrls.PRIVACY)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LegalLinkListItem(R.string.legal_impressum, LegalUrls.IMPRESSUM)
+            LegalLinkListItem(R.string.legal_privacy, LegalUrls.PRIVACY)
+        }
     }
 }
 

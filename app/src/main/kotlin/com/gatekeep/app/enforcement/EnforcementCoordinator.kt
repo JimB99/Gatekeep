@@ -1825,6 +1825,23 @@ class EnforcementCoordinator @Inject constructor(
         screenStateMonitor.overwritePersistedPauseForTests(pausedAtEpochMs)
     }
 
+    private fun clearLeftoverBlockAfterUnlockSkip() {
+        val top = unlockTopWindow()
+        val kind = top?.let {
+            OverlayWindowClassifier.classify(it.packageName, it.className, blockedPackage)
+        }
+        if (!UnlockSkipLeftoverBlockPolicy.shouldClearLeftoverBlock(
+                presentation = blockPresentationState.presentation,
+                lastMonitoredPackage = lastMonitoredForegroundPackage,
+                currentForegroundPackage = currentForegroundPackage,
+                topWindowKind = kind,
+            )
+        ) {
+            return
+        }
+        clearBlockState()
+    }
+
     private fun handleUnlockSkipAfterLongPause(now: Long) {
         val pausedAt = screenStateMonitor.persistedPausedAtEpochMs() ?: return
         val pauseDuration =
@@ -1967,7 +1984,10 @@ class EnforcementCoordinator @Inject constructor(
                     "top" to (unlockTopWindowPackage() ?: ""),
                 ),
             )
-            mainHandler.post { handleUnlockSkipAfterLongPause(now) }
+            mainHandler.post {
+                clearLeftoverBlockAfterUnlockSkip()
+                handleUnlockSkipAfterLongPause(now)
+            }
             return
         }
         val input = MonitoredForegroundResumePolicy.Input(

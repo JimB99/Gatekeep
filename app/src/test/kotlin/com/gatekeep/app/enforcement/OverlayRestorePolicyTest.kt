@@ -386,7 +386,7 @@ class OverlayRestorePolicyTest {
     }
 
     @Test
-    fun hiddenFocusedHome_newerBlockedUsage_restoresOpen() {
+    fun hiddenFocusedHome_newerBlockedUsage_doesNotRestore() {
         val home = OverlayWindowSnapshot(
             packageName = launcher,
             className = "com.android.launcher3.Launcher",
@@ -404,8 +404,9 @@ class OverlayRestorePolicyTest {
                 currentResumeAt = 8_000L,
             ),
         )
-        assertTrue(route is ForegroundRoutingPolicy.Route.Restore)
-        assertEquals(blocked, (route as ForegroundRoutingPolicy.Route.Restore).packageName)
+        assertTrue(route !is ForegroundRoutingPolicy.Route.Restore)
+        assertTrue(route is ForegroundRoutingPolicy.Route.HideNow)
+        assertEquals(launcher, (route as ForegroundRoutingPolicy.Route.HideNow).packageName)
     }
 
     @Test

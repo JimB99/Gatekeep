@@ -240,6 +240,46 @@ class PeriodContinuePolicyTest {
             PeriodContinuePolicy.continueMs(p.enforcementConfig(), p.sessionLimitMs),
             remainingDaily(evaluated),
         )
+        assertFalse(resolution.session.limitFrictionPaidThisSitting)
+    }
+
+    @Test
+    fun `StartFresh after long unattended pause clears expired break without granting continue`() {
+        val p = profile(action = OnLimitAction.mandatoryBreak, breakMs = 30 * 60_000L)
+        val pausedAt = now - PeriodContinuePolicy.LONG_UNATTENDED_PAUSE_MS - 60_000L
+        val breakUntil = now - 60_000L
+        val persisted = SessionTracker.applyBreak(
+            SessionTracker.startSession(pkg, pausedAt - 10 * 60_000L),
+            breakUntil,
+        ).copy(devicePausedAtEpochMs = pausedAt)
+        val afterStartFresh = SessionTracker.startSession(pkg, now).copy(
+            breakUntilEpochMs = null,
+            periodAppUse = persisted.periodAppUse,
+        )
+        val usage = overCap()
+        val resolution = PeriodContinuePolicy.resolveAfterExpiredBreakDeadline(
+            sessionState = afterStartFresh,
+            persistedBeforeSessionStart = persisted,
+            nowEpochMs = now,
+            limit = limit().copy(sessionLimitMs = p.sessionLimitMs),
+            config = p.enforcementConfig(),
+            usage = usage,
+            periodStarts = periodStarts,
+        )
+        assertNotNull(resolution)
+        assertFalse(resolution!!.persistPeriodAppUse)
+        assertNull(resolution.session.breakUntilEpochMs)
+        assertFalse(resolution.session.limitFrictionPaidThisSitting)
+        assertEquals(
+            0L,
+            resolution.session.periodAppUse.remainingMs(usage, periodStarts, limit()),
+        )
+        val evaluated = RuleEngine.evaluate(
+            context(p, usage, resolution.session),
+            openAlreadyPassed = true,
+        )
+        assertTrue(evaluated is RuleResult.Blocked)
+        assertEquals(BlockReason.dailyLimit, (evaluated as RuleResult.Blocked).reason)
     }
 
     @Test

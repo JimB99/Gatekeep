@@ -1,5 +1,7 @@
 package com.gatekeep.app.enforcement
 
+import com.gatekeep.domain.PeriodContinuePolicy
+
 /**
  * After a long screen-off pause, unlock often hits [UnlockOverlayPolicy] skip (home in front).
  * A short reconcile boost helps Usage Stats and window polling adopt the next monitored app
@@ -7,7 +9,7 @@ package com.gatekeep.app.enforcement
  */
 object PostLongPauseUnlockBoostPolicy {
 
-    const val LONG_DEVICE_PAUSE_MS = 60 * 60 * 1000L
+    const val LONG_DEVICE_PAUSE_MS = PeriodContinuePolicy.LONG_UNATTENDED_PAUSE_MS
     const val BOOST_DURATION_MS = 90_000L
     const val BOOST_RECONCILE_INTERVAL_MS = 750L
 
